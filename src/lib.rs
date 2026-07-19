@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod awp;
 pub mod bench;
+pub mod benchmark;
 pub mod cache;
 pub mod cdp;
 pub mod coverage;
@@ -9,6 +10,7 @@ pub mod js;
 pub mod network;
 pub mod plugin;
 pub mod process_supervisor;
+pub mod release_manifest;
 pub mod screenshot;
 pub mod session;
 pub mod som;

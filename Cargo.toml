@@ -49,6 +49,7 @@ xxhash-rust = { version = "0.8", features = ["xxh3"] }
 uuid = { version = "1", features = ["v4"] }
 regex = "1"
 thiserror = "2"
+toml = "0.8"
 
 # TLS configuration (direct rustls access for fingerprint tuning)
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }

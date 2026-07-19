@@ -12,6 +12,8 @@ import subprocess
 import threading
 from typing import Any, Optional
 
+SDK_VERSION = "0.4.1"
+
 
 def _extract_last_json(text: str) -> Any:
     """Extract the last complete JSON object from text that may contain mixed output.
@@ -108,7 +110,7 @@ class Plasmate:
         self._rpc("initialize", {
             "protocolVersion": "2024-11-05",
             "capabilities": {},
-            "clientInfo": {"name": "plasmate-python-sdk", "version": "0.2.0"},
+            "clientInfo": {"name": "plasmate-python-sdk", "version": SDK_VERSION},
         })
 
         # Send initialized notification
@@ -335,7 +337,7 @@ class AsyncPlasmate:
         await self._rpc("initialize", {
             "protocolVersion": "2024-11-05",
             "capabilities": {},
-            "clientInfo": {"name": "plasmate-python-sdk", "version": "0.2.0"},
+            "clientInfo": {"name": "plasmate-python-sdk", "version": SDK_VERSION},
         })
 
         await self._send({

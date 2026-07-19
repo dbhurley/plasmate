@@ -193,6 +193,42 @@ enum Commands {
         #[arg(long, default_value = "15000")]
         timeout: u64,
     },
+    /// Run the versioned, deterministic product benchmark suite.
+    BenchmarkV1 {
+        /// Output path for the machine-readable v1 JSON report.
+        #[arg(long, default_value = "benchmark-v1.json")]
+        output: String,
+        /// Execute inline JavaScript before compiling fixture pages.
+        #[arg(long)]
+        js: bool,
+        /// Maximum allowed cold end-to-end latency per successful task.
+        #[arg(long, default_value = "2000")]
+        max_cold_ms: u64,
+        /// Maximum allowed warm end-to-end latency per successful task.
+        #[arg(long, default_value = "2000")]
+        max_warm_ms: u64,
+        /// Hard wall timeout for each supervised JS task worker.
+        #[arg(long, default_value = "15000")]
+        worker_timeout_ms: u64,
+        /// Address-space limit per supervised JS worker in MB (Linux; 0 disables).
+        #[arg(long, default_value = "0")]
+        worker_memory_mb: u64,
+        /// Maximum stdout/stderr captured from each JS worker in KB.
+        #[arg(long, default_value = "2048")]
+        worker_output_kb: usize,
+    },
+    /// Internal deterministic benchmark worker. Input/output are JSON over stdio.
+    #[command(name = "__benchmark-worker", hide = true)]
+    BenchmarkWorker,
+    /// Validate all independently versioned release artifacts without publishing.
+    ReleaseValidate {
+        /// Repository release manifest.
+        #[arg(long, default_value = "release-manifest.json")]
+        manifest: String,
+        /// Optional path for the machine-readable validation report.
+        #[arg(long)]
+        output: Option<String>,
+    },
     /// Run the real-world coverage suite and write a public scorecard JSON
     Coverage {
         /// File containing URLs (one per line)
@@ -534,6 +570,65 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             timeout,
         } => {
             cmd_bench(&urls, &output, timeout).await?;
+        }
+        Commands::BenchmarkV1 {
+            output,
+            js,
+            max_cold_ms,
+            max_warm_ms,
+            worker_timeout_ms,
+            worker_memory_mb,
+            worker_output_kb,
+        } => {
+            let options = plasmate::benchmark::v1::BenchmarkOptions {
+                js_enabled: js,
+                max_cold_ms,
+                max_warm_ms,
+                worker_timeout_ms,
+                worker_memory_bytes: worker_memory_mb.saturating_mul(1024 * 1024),
+                worker_output_bytes: worker_output_kb.saturating_mul(1024),
+                worker_executable: None,
+            };
+            let report = plasmate::benchmark::v1::run_deterministic_suite(&options).await?;
+            std::fs::write(&output, serde_json::to_string_pretty(&report)?)?;
+            println!(
+                "Benchmark v1: {}/{} task contracts passed; threshold gate: {}",
+                report.summary.tasks_passed,
+                report.summary.inputs_total,
+                if report.threshold_evaluation.passed {
+                    "pass"
+                } else {
+                    "fail"
+                }
+            );
+            if !report.threshold_evaluation.passed {
+                for violation in &report.threshold_evaluation.violations {
+                    eprintln!("threshold violation: {violation}");
+                }
+                std::process::exit(2);
+            }
+        }
+        Commands::BenchmarkWorker => {
+            use std::io::Read;
+            let mut input = Vec::new();
+            std::io::stdin().read_to_end(&mut input)?;
+            let request: plasmate::benchmark::v1::BenchmarkWorkerRequest =
+                serde_json::from_slice(&input)?;
+            let result = plasmate::benchmark::v1::run_worker(request).await?;
+            println!("{}", serde_json::to_string(&result)?);
+        }
+        Commands::ReleaseValidate { manifest, output } => {
+            let repository_root = std::env::current_dir()?;
+            let report = plasmate::release_manifest::validate(&repository_root, &manifest)?;
+            let json = serde_json::to_string_pretty(&report)?;
+            if let Some(output) = output {
+                std::fs::write(output, &json)?;
+            } else {
+                println!("{json}");
+            }
+            if !report.valid {
+                std::process::exit(2);
+            }
         }
         Commands::Coverage {
             urls,

@@ -32,12 +32,23 @@ impl OutboundUrlPolicy {
         }
     }
 
-    /// Explicit policy for loopback fixtures. Never use in production paths.
-    #[cfg(test)]
-    pub const fn for_test_fixtures() -> Self {
+    /// Explicit policy for deterministic local fixtures. Never use in product paths.
+    pub(crate) const fn for_local_fixtures() -> Self {
         Self {
             allow_private_network: true,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn deny_private_network() -> Self {
+        Self {
+            allow_private_network: false,
+        }
+    }
+
+    #[cfg(test)]
+    pub const fn for_test_fixtures() -> Self {
+        Self::for_local_fixtures()
     }
 
     pub fn allows_private_network(&self) -> bool {
@@ -136,6 +147,10 @@ impl PolicyDnsResolver {
         Self {
             policy: OutboundUrlPolicy::from_environment(),
         }
+    }
+
+    pub(crate) const fn with_policy(policy: OutboundUrlPolicy) -> Self {
+        Self { policy }
     }
 }
 

@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "artifacts": [
+    {
+      "id": "plasmate-rust",
+      "package": "plasmate",
+      "version": "0.5.1",
+      "publications": ["crates_io", "github_release", "ghcr", "mcp_registry"],
+      "sources": [
+        { "path": "Cargo.toml", "kind": "toml_key", "selector": "package.version" },
+        { "path": "Cargo.lock", "kind": "toml_package", "selector": "plasmate" },
+        { "path": "server.json", "kind": "json_pointer", "selector": "/version" }
+      ]
+    },
+    {
+      "id": "plasmate-node-sdk",
+      "package": "plasmate",
+      "version": "0.4.0",
+      "publications": ["npm"],
+      "sources": [
+        { "path": "sdk/node/package.json", "kind": "json_pointer", "selector": "/version" },
+        { "path": "sdk/node/package-lock.json", "kind": "json_pointer", "selector": "/version" },
+        { "path": "sdk/node/package-lock.json", "kind": "json_pointer", "selector": "/packages//version" },
+        { "path": "sdk/node/src/index.ts", "kind": "text_regex", "selector": "const SDK_VERSION = '([^']+)'" },
+        { "path": "server.json", "kind": "json_pointer", "selector": "/packages/0/version" }
+      ]
+    },
+    {
+      "id": "plasmate-python-sdk",
+      "package": "plasmate",
+      "version": "0.4.1",
+      "publications": ["pypi"],
+      "sources": [
+        { "path": "sdk/python/pyproject.toml", "kind": "toml_key", "selector": "project.version" },
+        { "path": "sdk/python/uv.lock", "kind": "toml_package", "selector": "plasmate" },
+        { "path": "sdk/python/src/plasmate/client.py", "kind": "text_regex", "selector": "SDK_VERSION = \"([^\"]+)\"" },
+        { "path": "server.json", "kind": "json_pointer", "selector": "/packages/1/version" }
+      ]
+    },
+    {
+      "id": "som-parser-node",
+      "package": "som-parser",
+      "version": "0.3.0",
+      "publications": ["npm"],
+      "sources": [
+        { "path": "packages/som-parser-node/package.json", "kind": "json_pointer", "selector": "/version" },
+        { "path": "packages/som-parser-node/package-lock.json", "kind": "json_pointer", "selector": "/version" },
+        { "path": "packages/som-parser-node/package-lock.json", "kind": "json_pointer", "selector": "/packages//version" }
+      ]
+    },
+    {
+      "id": "som-parser-python",
+      "package": "som-parser",
+      "version": "0.3.0",
+      "publications": ["pypi"],
+      "sources": [
+        { "path": "packages/som-parser-python/pyproject.toml", "kind": "toml_key", "selector": "project.version" }
+      ]
+    },
+    {
+      "id": "browser-use-adapter",
+      "package": "plasmate-browser-use",
+      "version": "0.5.0",
+      "publications": ["pypi"],
+      "sources": [
+        { "path": "integrations/browser-use/pyproject.toml", "kind": "toml_key", "selector": "project.version" }
+      ]
+    },
+    {
+      "id": "langchain-adapter",
+      "package": "langchain-plasmate",
+      "version": "0.5.0",
+      "publications": ["pypi"],
+      "sources": [
+        { "path": "integrations/langchain/pyproject.toml", "kind": "toml_key", "selector": "project.version" }
+      ]
+    },
+    {
+      "id": "vercel-ai-adapter",
+      "package": "@plasmate/ai",
+      "version": "0.5.1",
+      "publications": ["npm"],
+      "sources": [
+        { "path": "integrations/vercel-ai/package.json", "kind": "json_pointer", "selector": "/version" }
+      ]
+    },
+    {
+      "id": "awp-cdp-proxy",
+      "package": "awp-cdp-proxy",
+      "version": "0.1.0",
+      "publications": ["pypi"],
+      "sources": [
+        { "path": "tools/awp-cdp-proxy/pyproject.toml", "kind": "toml_key", "selector": "project.version" }
+      ]
+    }
+  ]
+}
