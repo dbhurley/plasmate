@@ -70,9 +70,11 @@ Real-world compression across 100 agent-relevant websites. Plasmate's SOM compil
 
     const s = data.summary || {};
     const parseable = (s.urls_total || 0) - (s.blocked || 0);
+    const overallPercent = s.urls_total ? (s.ok / s.urls_total * 100) : 0;
     summaryEl.innerHTML = `
       <div style="display:flex; flex-wrap:wrap; gap: 14px; align-items:baseline;">
-        <div><strong>Parsed</strong>: ${fmt(s.ok)} / ${fmt(parseable)} sites (${fmt((s.parsed_percent || 0).toFixed ? s.parsed_percent.toFixed(1) : s.parsed_percent)}%)</div>
+        <div><strong>Overall success</strong>: ${fmt(s.ok)} / ${fmt(s.urls_total)} sites (${overallPercent.toFixed(1)}%)</div>
+        <div><strong>Parseable-site success</strong>: ${fmt(s.ok)} / ${fmt(parseable)} sites (${fmt((s.parsed_percent || 0).toFixed ? s.parsed_percent.toFixed(1) : s.parsed_percent)}%; excludes blocked sites)</div>
         <div><strong>Median compression</strong>: ${fmtRatio(s.median_ratio)}</div>
         <div><strong>Mean compression</strong>: ${fmtRatio(s.mean_ratio)}</div>
         <div><strong>Blocked</strong>: ${fmt(s.blocked)} <span style="color: rgba(240,237,232,0.52); font-size: 11px;">(sites that returned 403/401)</span></div>

@@ -9,14 +9,14 @@ use tracing::{info, warn};
 use super::messages::{ErrorCode, Response};
 use super::session::Session;
 use crate::cdp::cookies::{cookie_from_cdp_params, Cookie};
-use crate::network::proxy::{pool_from_params, proxy_from_params, ProxyPool};
-use crate::som::diff::{diff_soms, SomDiff};
 use crate::network::intercept::{
     ErrorReason, FulfillParams, InterceptAction, InterceptRule, RequestOverrides, RequestPattern,
     RequestStage, ResourceType, ResponseOverrides, ResponseRule,
 };
+use crate::network::proxy::{pool_from_params, proxy_from_params, ProxyPool};
 use crate::network::tls::TlsConfig;
 use crate::plugin::PluginManager;
+use crate::som::diff::diff_soms;
 use crate::som::types::{Element, ElementRole};
 
 /// Shared plugin manager handle (thread-safe, optional).
@@ -192,9 +192,7 @@ fn handle_session_create(
         Some(explicit)
     } else if use_pool {
         // Get next proxy from pool (for sticky strategy, use target domain if available)
-        let target_domain = params
-            .get("target_domain")
-            .and_then(|v| v.as_str());
+        let target_domain = params.get("target_domain").and_then(|v| v.as_str());
         state
             .proxy_pool
             .as_ref()
@@ -203,7 +201,10 @@ fn handle_session_create(
         None
     };
 
-    let has_proxy = proxy_config.as_ref().map(|p| p.is_enabled()).unwrap_or(false);
+    let has_proxy = proxy_config
+        .as_ref()
+        .map(|p| p.is_enabled())
+        .unwrap_or(false);
     let from_pool = use_pool && has_proxy;
 
     match Session::new_with_proxy(
@@ -222,7 +223,10 @@ fn handle_session_create(
             } else {
                 state.sessions.insert(session_id.clone(), session);
             }
-            Response::success(id, json!({"session_id": session_id, "from_pool": from_pool}))
+            Response::success(
+                id,
+                json!({"session_id": session_id, "from_pool": from_pool}),
+            )
         }
         Err(e) => Response::error(id, ErrorCode::Internal, &e),
     }
@@ -367,9 +371,7 @@ fn handle_page_observe(
         .unwrap_or("snapshot");
 
     // Optional cursor for mutation mode - only return mutations after this cursor
-    let since_cursor = params
-        .get("cursor")
-        .and_then(|v| v.as_u64());
+    let since_cursor = params.get("cursor").and_then(|v| v.as_u64());
 
     let session = match state.get_session(session_id) {
         Some(s) => s,
@@ -390,43 +392,52 @@ fn handle_page_observe(
                     // Check cursor - if client already has this cursor, return no changes
                     if let Some(client_cursor) = since_cursor {
                         if client_cursor >= session.som_cursor {
-                            return Response::success(id, json!({
-                                "mode": "mutations",
-                                "cursor": session.som_cursor,
-                                "changed": false,
-                                "diff": null
-                            }));
+                            return Response::success(
+                                id,
+                                json!({
+                                    "mode": "mutations",
+                                    "cursor": session.som_cursor,
+                                    "changed": false,
+                                    "diff": null
+                                }),
+                            );
                         }
                     }
 
                     let diff = diff_soms(prev, curr, false);
                     let diff_json = serde_json::to_value(&diff).unwrap_or(json!(null));
 
-                    Response::success(id, json!({
-                        "mode": "mutations",
-                        "cursor": session.som_cursor,
-                        "changed": diff.summary.total_changes > 0,
-                        "diff": diff_json,
-                        "summary": {
-                            "total_changes": diff.summary.total_changes,
-                            "elements_added": diff.summary.elements_added,
-                            "elements_removed": diff.summary.elements_removed,
-                            "elements_modified": diff.summary.elements_modified,
-                            "has_price_changes": diff.summary.has_price_changes,
-                            "has_content_changes": diff.summary.has_content_changes,
-                            "has_structural_changes": diff.summary.has_structural_changes
-                        }
-                    }))
+                    Response::success(
+                        id,
+                        json!({
+                            "mode": "mutations",
+                            "cursor": session.som_cursor,
+                            "changed": diff.summary.total_changes > 0,
+                            "diff": diff_json,
+                            "summary": {
+                                "total_changes": diff.summary.total_changes,
+                                "elements_added": diff.summary.elements_added,
+                                "elements_removed": diff.summary.elements_removed,
+                                "elements_modified": diff.summary.elements_modified,
+                                "has_price_changes": diff.summary.has_price_changes,
+                                "has_content_changes": diff.summary.has_content_changes,
+                                "has_structural_changes": diff.summary.has_structural_changes
+                            }
+                        }),
+                    )
                 }
                 (None, Some(curr)) => {
                     // No previous SOM - this is the first observation, return full snapshot
                     let som_json = serde_json::to_value(curr).unwrap_or(json!(null));
-                    Response::success(id, json!({
-                        "mode": "snapshot",
-                        "cursor": session.som_cursor,
-                        "reason": "no_previous_som",
-                        "som": som_json
-                    }))
+                    Response::success(
+                        id,
+                        json!({
+                            "mode": "snapshot",
+                            "cursor": session.som_cursor,
+                            "reason": "no_previous_som",
+                            "som": som_json
+                        }),
+                    )
                 }
                 _ => Response::error(id, ErrorCode::NotFound, "No page loaded yet"),
             }
@@ -436,11 +447,14 @@ fn handle_page_observe(
             match &session.current_som {
                 Some(som) => {
                     let som_json = serde_json::to_value(som).unwrap_or(json!(null));
-                    Response::success(id, json!({
-                        "mode": "snapshot",
-                        "cursor": session.som_cursor,
-                        "som": som_json
-                    }))
+                    Response::success(
+                        id,
+                        json!({
+                            "mode": "snapshot",
+                            "cursor": session.som_cursor,
+                            "som": som_json
+                        }),
+                    )
                 }
                 None => Response::error(id, ErrorCode::NotFound, "No page loaded yet"),
             }
@@ -1193,23 +1207,24 @@ fn handle_cookies_get(
         }
     };
 
-    let cookies: Vec<serde_json::Value> = if let Some(url) = params.get("url").and_then(|v| v.as_str()) {
-        // Get cookies matching the URL
-        session
-            .cookies
-            .get_cookies(url)
-            .iter()
-            .map(cookie_to_json)
-            .collect()
-    } else {
-        // Get all cookies
-        session
-            .cookies
-            .get_all_cookies()
-            .iter()
-            .map(cookie_to_json)
-            .collect()
-    };
+    let cookies: Vec<serde_json::Value> =
+        if let Some(url) = params.get("url").and_then(|v| v.as_str()) {
+            // Get cookies matching the URL
+            session
+                .cookies
+                .get_cookies(url)
+                .iter()
+                .map(cookie_to_json)
+                .collect()
+        } else {
+            // Get all cookies
+            session
+                .cookies
+                .get_all_cookies()
+                .iter()
+                .map(cookie_to_json)
+                .collect()
+        };
 
     let count = cookies.len();
     Response::success(id, json!({ "cookies": cookies, "count": count }))
@@ -1320,7 +1335,9 @@ fn handle_cookies_clear(
         count
     } else if let Some(cookie_name) = name {
         // Delete specific cookies
-        session.cookies.delete_cookies(cookie_name, url, domain, None)
+        session
+            .cookies
+            .delete_cookies(cookie_name, url, domain, None)
     } else {
         // Domain/URL only filter - need to iterate and clear matching
         let cookies_to_check = if let Some(url_str) = url {
@@ -1335,10 +1352,12 @@ fn handle_cookies_clear(
                 .map(|d| cookie.domain.contains(d) || d.contains(&cookie.domain))
                 .unwrap_or(true);
 
-            if domain_matches {
-                if session.cookies.remove_cookie(&cookie.name, &cookie.domain, Some(&cookie.path)) {
-                    cleared += 1;
-                }
+            if domain_matches
+                && session
+                    .cookies
+                    .remove_cookie(&cookie.name, &cookie.domain, Some(&cookie.path))
+            {
+                cleared += 1;
             }
         }
         cleared
@@ -1741,19 +1760,25 @@ fn handle_proxy_pool_stats(id: &str, state: &ConnectionState) -> Response {
     match &state.proxy_pool {
         Some(pool) => {
             let stats = pool.stats();
-            Response::success(id, json!({
-                "total": stats.total,
-                "healthy": stats.healthy,
-                "unhealthy": stats.unhealthy,
-                "strategy": format!("{:?}", pool.strategy)
-            }))
+            Response::success(
+                id,
+                json!({
+                    "total": stats.total,
+                    "healthy": stats.healthy,
+                    "unhealthy": stats.unhealthy,
+                    "strategy": format!("{:?}", pool.strategy)
+                }),
+            )
         }
-        None => Response::success(id, json!({
-            "total": 0,
-            "healthy": 0,
-            "unhealthy": 0,
-            "strategy": null
-        })),
+        None => Response::success(
+            id,
+            json!({
+                "total": 0,
+                "healthy": 0,
+                "unhealthy": 0,
+                "strategy": null
+            }),
+        ),
     }
 }
 

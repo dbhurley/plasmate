@@ -42,7 +42,7 @@ impl HeadingTracker {
 
     /// Record a heading and determine if it's redundant.
     /// Returns true if the heading adds value (not a duplicate or same text as parent).
-    fn track(&mut self, level: u8, text: &str, id: &str) -> bool {
+    fn track(&mut self, level: u8, _text: &str, id: &str) -> bool {
         // Pop headings at same or lower level
         while let Some((l, _)) = self.stack.last() {
             if *l >= level {
@@ -53,16 +53,6 @@ impl HeadingTracker {
         }
         self.stack.push((level, id.to_string()));
         true
-    }
-
-    /// Build a breadcrumb path from the heading stack.
-    /// e.g. "Introduction > History > Early development"
-    fn breadcrumb(&self) -> Option<String> {
-        if self.stack.len() <= 1 {
-            None
-        } else {
-            None // For now, don't emit breadcrumbs; the hierarchy is implicit from level attrs
-        }
     }
 }
 
@@ -565,6 +555,7 @@ fn normalize_href(href: &str) -> String {
     s
 }
 
+#[allow(clippy::too_many_arguments)]
 fn collect_regions(
     node: &Handle,
     origin: &str,
@@ -887,6 +878,7 @@ fn collect_regions(
 }
 
 /// Helper to create a landmark region from detected role.
+#[allow(clippy::too_many_arguments)]
 fn create_landmark_region(
     node: &Handle,
     role_str: &str,
@@ -959,6 +951,7 @@ fn create_landmark_region(
 }
 
 /// Extract contents from a layout table, treating it as a container rather than data.
+#[allow(clippy::too_many_arguments)]
 fn extract_layout_table_contents(
     node: &Handle,
     origin: &str,
@@ -971,6 +964,7 @@ fn extract_layout_table_contents(
     inherited_inert: bool,
 ) {
     // Recursively process table contents, extracting semantic elements
+    #[allow(clippy::too_many_arguments)]
     fn visit_layout_table(
         node: &Handle,
         origin: &str,
@@ -1047,6 +1041,7 @@ fn extract_layout_table_contents(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn extract_elements(
     node: &Handle,
     origin: &str,
@@ -1160,6 +1155,7 @@ fn extract_elements(
 }
 
 /// Extract elements from a layout table, treating it as a container.
+#[allow(clippy::too_many_arguments)]
 fn extract_layout_table_elements(
     node: &Handle,
     origin: &str,
@@ -1170,6 +1166,7 @@ fn extract_layout_table_elements(
     inherited_disabled: bool,
     inherited_inert: bool,
 ) {
+    #[allow(clippy::too_many_arguments)]
     fn visit(
         node: &Handle,
         origin: &str,
@@ -1230,6 +1227,7 @@ fn extract_layout_table_elements(
 }
 
 /// Extract only interactive elements from a subtree (for finding links inside paragraphs, etc.)
+#[allow(clippy::too_many_arguments)]
 fn extract_interactive_children(
     node: &Handle,
     origin: &str,
@@ -1866,10 +1864,8 @@ fn build_element_attrs(
             if inherited_disabled || has_attr(attrs, "disabled") {
                 map.insert("disabled".into(), json!(true));
             }
-            if input_type == "checkbox" || input_type == "radio" {
-                if has_attr(attrs, "checked") {
-                    map.insert("checked".into(), json!(true));
-                }
+            if (input_type == "checkbox" || input_type == "radio") && has_attr(attrs, "checked") {
+                map.insert("checked".into(), json!(true));
             }
             if has_attr(attrs, "multiple") {
                 map.insert("multiple".into(), json!(true));
@@ -2722,7 +2718,7 @@ fn contains_descendant_tag(node: &Handle, tags: &[&str], max_depth: usize) -> bo
         }
         if let NodeData::Element { name, .. } = &node.data {
             let tag = name.local.as_ref();
-            if tags.iter().any(|t| *t == tag) {
+            if tags.contains(&tag) {
                 return true;
             }
         }

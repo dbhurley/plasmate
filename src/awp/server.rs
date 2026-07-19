@@ -73,7 +73,7 @@ async fn handle_connection(
                     )
                 });
 
-                if let Err(e) = sink.send(Message::Text(response_json.into())).await {
+                if let Err(e) = sink.send(Message::Text(response_json)).await {
                     error!(%peer, "Failed to send response: {}", e);
                     break;
                 }

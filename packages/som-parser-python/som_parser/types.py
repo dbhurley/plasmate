@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel
 
@@ -91,7 +91,7 @@ class SomElementAttrs(BaseModel):
     hreflang: Optional[str] = None
     type: Optional[str] = None
     referrerpolicy: Optional[str] = None
-    download: Optional[bool | str] = None
+    download: Optional[Union[bool, str]] = None
     input_type: Optional[str] = None
     value: Optional[str] = None
     placeholder: Optional[str] = None
@@ -104,7 +104,7 @@ class SomElementAttrs(BaseModel):
     multiple: Optional[bool] = None
     options: Optional[List[SelectOption]] = None
     selected_values: Optional[List[str]] = None
-    size: Optional[int | str] = None
+    size: Optional[Union[int, str]] = None
     level: Optional[int] = None
     alt: Optional[str] = None
     src: Optional[str] = None
@@ -116,17 +116,17 @@ class SomElementAttrs(BaseModel):
     legend: Optional[str] = None
     open: Optional[bool] = None
     summary: Optional[str] = None
-    contenteditable: Optional[bool | str] = None
-    tabindex: Optional[int | str] = None
+    contenteditable: Optional[Union[bool, str]] = None
+    tabindex: Optional[Union[int, str]] = None
     accesskey: Optional[str] = None
     title: Optional[str] = None
     source_role: Optional[str] = None
     test_id: Optional[str] = None
-    spellcheck: Optional[bool | str] = None
-    draggable: Optional[bool | str] = None
+    spellcheck: Optional[Union[bool, str]] = None
+    draggable: Optional[Union[bool, str]] = None
     name: Optional[str] = None
     accept: Optional[str] = None
-    capture: Optional[bool | str] = None
+    capture: Optional[Union[bool, str]] = None
     autocomplete: Optional[str] = None
     inputmode: Optional[str] = None
     enterkeyhint: Optional[str] = None
@@ -145,14 +145,14 @@ class SomElementAttrs(BaseModel):
     formenctype: Optional[str] = None
     formtarget: Optional[str] = None
     formnovalidate: Optional[bool] = None
-    minlength: Optional[int | str] = None
-    maxlength: Optional[int | str] = None
-    min: Optional[int | str] = None
-    max: Optional[int | str] = None
+    minlength: Optional[Union[int, str]] = None
+    maxlength: Optional[Union[int, str]] = None
+    min: Optional[Union[int, str]] = None
+    max: Optional[Union[int, str]] = None
     step: Optional[str] = None
     pattern: Optional[str] = None
     description: Optional[str] = None
-    aria: Optional[Dict[str, bool | str]] = None
+    aria: Optional[Dict[str, Union[bool, str]]] = None
     has_srcdoc: Optional[bool] = None
     srcdoc_preview: Optional[str] = None
     sandbox: Optional[str] = None

@@ -9,12 +9,11 @@
 
 use html5ever::serialize::{serialize, SerializeOpts, TraversalScope};
 use html5ever::tendril::TendrilSink;
-use html5ever::{local_name, namespace_url, ns, LocalName, Namespace, Prefix, QualName};
+use html5ever::{ns, LocalName, Prefix, QualName};
 use markup5ever_rcdom::{Handle, Node, NodeData, RcDom, SerializableHandle};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use tracing::debug;
 
 /// Maps integer IDs to rcdom tree nodes for V8 interop.
 pub struct NodeRegistry {
@@ -23,6 +22,12 @@ pub struct NodeRegistry {
     next_id: u32,
     document_id: Option<u32>,
     body_id: Option<u32>,
+}
+
+impl Default for NodeRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl NodeRegistry {
@@ -672,7 +677,7 @@ impl NodeRegistry {
 
             for part in &parts {
                 let matched = match part.chars().next() {
-                    Some('#') => id_attr == &part[1..],
+                    Some('#') => id_attr == part[1..],
                     Some('.') => {
                         let cls = &part[1..];
                         class_attr.split_whitespace().any(|c| c == cls)

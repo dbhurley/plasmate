@@ -53,7 +53,9 @@ fn visit_scripts(node: &Handle, scripts: &mut Vec<ScriptBlock>, index: &mut usiz
                 Some("module") => true,
                 Some("application/json") | Some("application/ld+json") => true,
                 Some("text/html") | Some("text/template") => true,
-                Some(t) if t != "text/javascript" && t != "application/javascript" && t != "" => {
+                Some(t)
+                    if t != "text/javascript" && t != "application/javascript" && !t.is_empty() =>
+                {
                     true
                 }
                 _ => false,

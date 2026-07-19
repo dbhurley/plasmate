@@ -51,7 +51,7 @@ async fn start_test_server() -> (String, oneshot::Sender<()>) {
                             status,
                             if status == 200 { "OK" } else { "Not Found" },
                             content_type,
-                            body.as_bytes().len(),
+                            body.len(),
                             body
                         );
 
@@ -299,7 +299,7 @@ async fn test_observe_after_navigate() {
     let result = get_result(&resp);
     let som = &result["som"];
     assert_eq!(som["som_version"], "0.1");
-    assert!(som["regions"].as_array().unwrap().len() > 0);
+    assert!(!som["regions"].as_array().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -594,7 +594,7 @@ async fn test_full_agent_workflow() {
     .await;
     assert!(is_success(&resp));
     let som = &get_result(&resp)["som"];
-    assert!(som["regions"].as_array().unwrap().len() > 0);
+    assert!(!som["regions"].as_array().unwrap().is_empty());
 
     // 5. Extract interactive elements
     let resp = send(

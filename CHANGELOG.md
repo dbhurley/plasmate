@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- Post-v0.5.1 work remains unreleased and is being brought back behind required formatting, all-feature lint, test, conformance, and smoke gates.
+- Current development includes expanded SOM action metadata, cache/session observability, proxy and cookie surfaces, iframe and Shadow DOM extraction, and broader SDK/adapter conformance.
+- ES module execution is not yet complete; module scripts remain skipped pending the module-runtime work.
+
+## v0.5.1 (2026-04-05)
+
+- Added selector-aware MCP fetching and the `extract_links` tool.
+- Added custom fetch headers, additional CLI formats/selectors, SOM diff support, and hardened V8 fetch bridging.
+- Added the Vercel AI SDK integration and MCP Registry manifest.
+
+## v0.5.0 (2026-03-28)
+
+- Added direct HTML-to-SOM compilation with `plasmate compile`.
+- Added `html_id`, details/summary semantics, expanded ARIA state, consent-banner filtering, and authenticated-browsing documentation.
+
 ## v0.3.0 (2026-03-22)
 
 ### SPA Rendering Bridge
@@ -30,8 +47,8 @@
 
 ### Coverage & Benchmarks
 - 100-URL benchmark suite (98 sites tested)
-- HTML coverage: 95.9% full rendering
-- JS coverage: 95.9% full rendering
+- HTML coverage: 95.9% parseable-site success (blocked sites excluded)
+- JS coverage: 95.9% parseable-site success (blocked sites excluded)
 - Median SOM compression: 9.05x
 - Nightly HTML + weekly JS coverage CI
 

@@ -162,15 +162,14 @@ pub fn should_strip(node: &Handle) -> bool {
             if role_val == "dialog" || role_val == "alertdialog" {
                 // Only strip if it looks like a consent dialog (has consent-related text in class/id)
                 // or is a generic dialog element. Be conservative: only strip if tag is div/aside/section.
-                if matches!(tag, "div" | "aside" | "section") {
-                    if class_val.contains("modal")
+                if matches!(tag, "div" | "aside" | "section")
+                    && (class_val.contains("modal")
                         || class_val.contains("overlay")
                         || class_val.contains("popup")
                         || id_val.contains("modal")
-                        || id_val.contains("overlay")
-                    {
-                        return true;
-                    }
+                        || id_val.contains("overlay"))
+                {
+                    return true;
                 }
             }
 
@@ -286,7 +285,7 @@ pub fn smart_truncate(text: &str, max_chars: usize) -> String {
     let window = &text[..safe_end];
 
     // Try to find last sentence boundary (. ! ?)
-    let sentence_end = window.rfind(|c: char| c == '.' || c == '!' || c == '?');
+    let sentence_end = window.rfind(['.', '!', '?']);
     if let Some(pos) = sentence_end {
         // Only use sentence boundary if it captures at least 40% of the budget
         if pos >= max_chars * 2 / 5 {
@@ -570,26 +569,12 @@ pub fn is_collapsible_wrapper(tag: &str, node: &Handle) -> bool {
     let children = node.children.borrow();
     let mut element_count = 0;
     let mut text_only = true;
-    let mut interactive_count = 0;
 
     for child in children.iter() {
         match &child.data {
-            NodeData::Element { name, attrs, .. } => {
+            NodeData::Element { .. } => {
                 element_count += 1;
                 text_only = false;
-                let child_tag = name.local.as_ref();
-                // Check if interactive
-                if matches!(child_tag, "a" | "button" | "input" | "select" | "textarea") {
-                    let attrs = attrs.borrow();
-                    // For <a>, only count if it has href
-                    if child_tag == "a" {
-                        if attrs.iter().any(|a| a.name.local.as_ref() == "href") {
-                            interactive_count += 1;
-                        }
-                    } else {
-                        interactive_count += 1;
-                    }
-                }
             }
             NodeData::Text { contents } => {
                 let text = contents.borrow();

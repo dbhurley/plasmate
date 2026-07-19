@@ -1285,7 +1285,7 @@ fn test_wiki_paragraph_summarization() {
     let has_summary = main.elements.iter().any(|e| {
         e.text
             .as_ref()
-            .map_or(false, |t| t.contains("more paragraphs"))
+            .is_some_and(|t| t.contains("more paragraphs"))
     });
     assert!(
         has_summary,
@@ -1342,7 +1342,7 @@ fn test_paragraph_text_truncation() {
             e.role == ElementRole::Paragraph
                 && e.text
                     .as_ref()
-                    .map_or(false, |t| !t.contains("more paragraphs"))
+                    .is_some_and(|t| !t.contains("more paragraphs"))
         })
         .collect();
 

@@ -41,7 +41,10 @@ impl BenchReport {
         let mut md = String::new();
         md.push_str("# Plasmate SOM Benchmark Report\n\n");
         md.push_str(&format!("Date: {}\n", self.date));
-        md.push_str(&format!("Engine: plasmate v{}\n", env!("CARGO_PKG_VERSION")));
+        md.push_str(&format!(
+            "Engine: plasmate v{}\n",
+            env!("CARGO_PKG_VERSION")
+        ));
         md.push_str(&format!("URLs tested: {}\n", total));
         md.push_str(&format!(
             "Successful: {} ({:.0}%)\n\n",
