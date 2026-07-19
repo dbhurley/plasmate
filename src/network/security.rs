@@ -32,6 +32,14 @@ impl OutboundUrlPolicy {
         }
     }
 
+    /// Fail-closed policy for discovery and other product surfaces that must
+    /// never inherit the process-wide private-network development escape hatch.
+    pub(crate) const fn public_network_only() -> Self {
+        Self {
+            allow_private_network: false,
+        }
+    }
+
     /// Explicit policy for deterministic local fixtures. Never use in product paths.
     pub(crate) const fn for_local_fixtures() -> Self {
         Self {
@@ -41,9 +49,7 @@ impl OutboundUrlPolicy {
 
     #[cfg(test)]
     pub(crate) const fn deny_private_network() -> Self {
-        Self {
-            allow_private_network: false,
-        }
+        Self::public_network_only()
     }
 
     #[cfg(test)]
@@ -299,6 +305,14 @@ mod tests {
     fn explicit_fixture_policy_allows_loopback() {
         let policy = OutboundUrlPolicy::for_test_fixtures();
         assert!(policy.validate_url_syntax("http://127.0.0.1:1234").is_ok());
+    }
+
+    #[test]
+    fn public_network_only_policy_cannot_be_relaxed() {
+        let policy = OutboundUrlPolicy::public_network_only();
+        assert!(!policy.allows_private_network());
+        assert!(policy.validate_url_syntax("https://127.0.0.1/").is_err());
+        assert!(policy.validate_url_syntax("https://10.0.0.1/").is_err());
     }
 
     #[test]

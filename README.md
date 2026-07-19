@@ -105,6 +105,7 @@ This exposes Plasmate over stdio as MCP tools:
 - `fetch_page` - get structured SOM from any URL
 - `extract_text` - get clean readable text
 - `extract_links` - get deduplicated links from a page
+- `ard_discover` - inspect bounded static ARD v0.9 draft catalog signals without invoking them
 - `cache_status` - inspect MCP SOM cache reuse and restorable page-state entries
 - `session_status` - inspect active sessions, loaded URLs, HTML/SOM/node inventory
 - `trace_status` - inspect bounded action-trace retention for one session
@@ -180,7 +181,7 @@ Config file locations:
 - **VS Code Copilot** — `.vscode/mcp.json` (workspace) or user settings
 - **Windsurf** — `~/.codeium/windsurf/mcp_config.json`
 
-Once connected, 23 tools are available: `fetch_page`, `extract_text`, `extract_links`, `cache_status`, `session_status`, `trace_status`, `trace_export`, `trace_clear`, `replay_validate`, `screenshot_page`, `open_page`, `navigate_to`, `click`, `type_text`, `select_option`, `scroll`, `toggle`, `clear`, `evaluate`, `close_page`, `get_cookies`, `set_cookies`, `clear_cookies`.
+Once connected, 24 tools are available: `fetch_page`, `extract_text`, `extract_links`, `ard_discover`, `cache_status`, `session_status`, `trace_status`, `trace_export`, `trace_clear`, `replay_validate`, `screenshot_page`, `open_page`, `navigate_to`, `click`, `type_text`, `select_option`, `scroll`, `toggle`, `clear`, `evaluate`, `close_page`, `get_cookies`, `set_cookies`, `clear_cookies`.
 
 **Tip:** use `selector="main"` to strip nav/footer, `selector="interactive"`
 to return only actionable elements, or `selector="action:click"` to build a
@@ -197,6 +198,26 @@ then use `trace_status`, `trace_export`, and side-effect-free
 `replay_validate`. Typed values and page bodies are never exported. See
 [`docs/session-tracing.md`](docs/session-tracing.md) for the privacy contract,
 bounds, drift classes, and validation-only limitation.
+
+### Static ARD discovery (draft)
+
+Inspect the three static Agentic Resource Discovery signals supported by
+Plasmate—the well-known catalog, an HTML `rel="ai-catalog"` link, and a
+robots.txt `Agentmap` directive:
+
+```bash
+plasmate ard-discover https://example.com/ --output ard-report.json
+```
+
+The versioned `plasmate.ard.discovery.v1` report validates bounded catalog
+envelopes and labels all publisher metadata, inline data, trust manifests,
+attestations, and signatures as untrusted and unverified. It does not search a
+registry, invoke entries, fetch entry endpoints, follow nested catalogs, or
+verify identity. HTTPS and same-origin catalog discovery references are
+mandatory, and the ARD path cannot use Plasmate's private-network development
+override. Standalone reports and fully wrapped MCP tool results each have an
+independently measured 512 KiB serialized bound. See
+[docs/ARD.md](docs/ARD.md) for limits and protocol scope.
 
 ### Vercel AI SDK
 
@@ -228,7 +249,7 @@ const { text } = await generateText({
 await mcp.close()
 ```
 
-This wires all 23 Plasmate tools directly into any Vercel AI SDK agent. See [Vercel AI SDK MCP docs](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling#mcp-tools) for details.
+This wires all 24 Plasmate tools directly into any Vercel AI SDK agent. See [Vercel AI SDK MCP docs](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling#mcp-tools) for details.
 
 ### LLM context
 
@@ -363,7 +384,7 @@ docker run --rm -p 9222:9222 plasmate
 ## Tests
 
 ```bash
-cargo test --workspace    # 252 tests
+cargo test --workspace    # all workspace tests
 ./scripts/action-manifest-conformance.sh
 ```
 

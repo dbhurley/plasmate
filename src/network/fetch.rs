@@ -101,6 +101,24 @@ pub(crate) fn build_client_for_local_fixture(cookie_jar: Arc<Jar>) -> Result<Cli
     )
 }
 
+/// Build a client whose DNS resolver is permanently restricted to public
+/// destinations. Unlike the general browser client, this never reads the
+/// process-wide private-network development escape hatch.
+#[derive(Debug)]
+pub(crate) struct PublicOnlyClient(Client);
+
+pub(crate) fn build_client_public_only(
+    cookie_jar: Arc<Jar>,
+) -> Result<PublicOnlyClient, FetchError> {
+    build_client_with_policy(
+        None,
+        cookie_jar,
+        None,
+        OutboundUrlPolicy::public_network_only(),
+    )
+    .map(PublicOnlyClient)
+}
+
 fn build_client_with_policy(
     user_agent: Option<&str>,
     cookie_jar: Arc<Jar>,
@@ -253,6 +271,25 @@ pub async fn fetch_url(
     fetch_url_inner(client, url, timeout_ms, None, FetchLimits::default()).await
 }
 
+/// Fetch with caller-owned resource limits and a policy that cannot be relaxed
+/// by `PLASMATE_UNSAFE_ALLOW_PRIVATE_NETWORK`.
+pub(crate) async fn fetch_url_public_only_with_limits(
+    client: &PublicOnlyClient,
+    url: &str,
+    timeout_ms: u64,
+    limits: FetchLimits,
+) -> Result<FetchResult, FetchError> {
+    fetch_url_inner_with_policy(
+        &client.0,
+        url,
+        timeout_ms,
+        None,
+        limits,
+        OutboundUrlPolicy::public_network_only(),
+    )
+    .await
+}
+
 /// Fetch from a deterministic local fixture with an explicit private-network policy.
 /// The ordinary `fetch_url` path remains fail-closed.
 pub(crate) async fn fetch_url_for_local_fixture(
@@ -266,6 +303,25 @@ pub(crate) async fn fetch_url_for_local_fixture(
         timeout_ms,
         None,
         FetchLimits::default(),
+        OutboundUrlPolicy::for_local_fixtures(),
+    )
+    .await
+}
+
+/// Test-only counterpart for deterministic loopback discovery fixtures.
+#[cfg(test)]
+pub(crate) async fn fetch_url_for_local_fixture_with_limits(
+    client: &Client,
+    url: &str,
+    timeout_ms: u64,
+    limits: FetchLimits,
+) -> Result<FetchResult, FetchError> {
+    fetch_url_inner_with_policy(
+        client,
+        url,
+        timeout_ms,
+        None,
+        limits,
         OutboundUrlPolicy::for_local_fixtures(),
     )
     .await
@@ -583,6 +639,26 @@ mod security_tests {
             OutboundUrlPolicy::deny_private_network(),
         )
         .await;
+        assert!(matches!(result, Err(FetchError::UrlBlocked(_))));
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn public_only_client_ignores_private_network_environment_opt_in() {
+        let previous = std::env::var_os(super::super::security::UNSAFE_PRIVATE_NETWORK_ENV);
+        std::env::set_var(super::super::security::UNSAFE_PRIVATE_NETWORK_ENV, "1");
+        let client = build_client_public_only(Arc::new(Jar::default())).unwrap();
+        let url = fixture_server(
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}",
+        )
+        .await;
+        let result =
+            fetch_url_public_only_with_limits(&client, &url, 1_000, FetchLimits::default()).await;
+        if let Some(value) = previous {
+            std::env::set_var(super::super::security::UNSAFE_PRIVATE_NETWORK_ENV, value);
+        } else {
+            std::env::remove_var(super::super::security::UNSAFE_PRIVATE_NETWORK_ENV);
+        }
         assert!(matches!(result, Err(FetchError::UrlBlocked(_))));
     }
 

@@ -6,6 +6,7 @@
 - Current development includes expanded SOM action metadata, cache/session observability, proxy and cookie surfaces, iframe and Shadow DOM extraction, and broader SDK/adapter conformance.
 - ES module execution is not yet complete; module scripts remain skipped pending the module-runtime work.
 - Added opt-in, bounded, memory-only `plasmate.trace.v1` session action traces plus four MCP tools for status, privacy-safe export, clearing, and exact validation-before-replay. Replay is validation-only and never executes an action in this release.
+- Added bounded, static Agentic Resource Discovery v0.9 draft inspection through `plasmate ard-discover` and the read-only `ard_discover` MCP tool. The implementation checks the well-known, HTML link, and robots.txt signals; rejects unsafe or cross-origin catalog fetches; validates catalog envelopes; and labels all discovered data and trust claims as untrusted and unverified. Registry search, DNS discovery, nested crawling, endpoint fetching, invocation, and trust/signature verification are not included.
 
 ## v0.5.1 (2026-04-05)
 
