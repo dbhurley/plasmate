@@ -1816,6 +1816,7 @@ dependencies = [
  "futures-util",
  "hex",
  "html5ever",
+ "libc",
  "markup5ever",
  "markup5ever_rcdom",
  "rand 0.8.5",

@@ -40,7 +40,9 @@ jobs:
             --output website/docs/coverage-js.json \
             --timeout 15000 \
             --concurrency 1 \
-            --js-heap-mb 2048 \
+            --js-heap-mb 512 \
+            --worker-memory-mb 0 \
+            --worker-output-kb 256 \
             --max-external-scripts 3 \
             --max-external-script-kb 64 \
             --max-external-total-kb 128 \

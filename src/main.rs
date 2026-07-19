@@ -228,10 +228,19 @@ enum Commands {
         /// Timeout per external script fetch in milliseconds.
         #[arg(long, default_value = "5000")]
         external_script_timeout_ms: u64,
+        /// Address-space limit per isolated JS worker in MB (Linux; 0 disables).
+        #[arg(long, default_value = "0")]
+        worker_memory_mb: u64,
+        /// Maximum stdout/stderr captured from each isolated JS worker in KB.
+        #[arg(long, default_value = "256")]
+        worker_output_kb: usize,
         /// Max URLs to run from the file
         #[arg(long, default_value = "100")]
         max: usize,
     },
+    /// Internal single-page coverage worker. Input/output are JSON over stdio.
+    #[command(name = "__coverage-worker", hide = true)]
+    CoverageWorker,
     /// Throughput benchmark: fetch+compile N pages from a local server.
     /// Matches Lightpanda's benchmark methodology (local server, no external latency).
     ThroughputBench {
@@ -388,6 +397,7 @@ enum DaemonAction {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    plasmate::process_supervisor::prepare_current_process()?;
     // Configure tracing to write to stderr, not stdout
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
@@ -537,6 +547,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_external_script_kb,
             max_external_total_kb,
             external_script_timeout_ms,
+            worker_memory_mb,
+            worker_output_kb,
             max,
         } => {
             cmd_coverage(
@@ -551,9 +563,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 max_external_script_kb,
                 max_external_total_kb,
                 external_script_timeout_ms,
+                worker_memory_mb,
+                worker_output_kb,
                 max,
             )
             .await?;
+        }
+        Commands::CoverageWorker => {
+            use std::io::Read;
+            let mut input = Vec::new();
+            std::io::stdin().read_to_end(&mut input)?;
+            let request: coverage::runner::CoverageWorkerRequest = serde_json::from_slice(&input)?;
+            let result = coverage::runner::run_worker(request).await;
+            println!("{}", serde_json::to_string(&result)?);
         }
         Commands::ThroughputBench {
             base_url,
@@ -1422,6 +1444,8 @@ async fn cmd_coverage(
     max_external_script_kb: usize,
     max_external_total_kb: usize,
     external_script_timeout_ms: u64,
+    worker_memory_mb: u64,
+    worker_output_kb: usize,
     max_urls: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let content = std::fs::read_to_string(urls_file)?;
@@ -1437,6 +1461,8 @@ async fn cmd_coverage(
         max_external_script_bytes: max_external_script_kb.saturating_mul(1024),
         max_external_total_bytes: max_external_total_kb.saturating_mul(1024),
         external_script_timeout_ms,
+        worker_memory_bytes: worker_memory_mb.saturating_mul(1024 * 1024),
+        worker_output_bytes: worker_output_kb.saturating_mul(1024),
         max_urls: Some(max_urls),
         ..Default::default()
     };
@@ -1458,7 +1484,7 @@ async fn cmd_coverage(
         report.summary.ok as f64 / report.summary.urls_total as f64 * 100.0
     };
     println!(
-        "Coverage: overall {} / {} ({:.1}%); parseable-site {} / {} ({:.1}%, excludes blocked); blocked {}; failed {}; median compression {:.1}x",
+        "Coverage: overall {} / {} ({:.1}%); parseable-site {} / {} ({:.1}%, excludes blocked); blocked {}; failed {}; worker crashes {}; worker exits {}; infrastructure failures {}; median compression {:.1}x",
         report.summary.ok,
         report.summary.urls_total,
         overall_percent,
@@ -1467,8 +1493,19 @@ async fn cmd_coverage(
         report.summary.parsed_percent,
         report.summary.blocked,
         report.summary.failed,
+        report.summary.worker_crashes,
+        report.summary.worker_exits,
+        report.summary.infrastructure_failures,
         report.summary.median_ratio
     );
+
+    if report.summary.infrastructure_failures > 0 {
+        return Err(std::io::Error::other(format!(
+            "coverage completed with {} isolated worker infrastructure failure(s); report was written to {output}",
+            report.summary.infrastructure_failures
+        ))
+        .into());
+    }
 
     Ok(())
 }
