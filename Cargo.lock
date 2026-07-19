@@ -1810,6 +1810,7 @@ version = "0.5.1"
 dependencies = [
  "aes-gcm",
  "axum",
+ "base64 0.22.1",
  "brotli",
  "clap",
  "flate2",

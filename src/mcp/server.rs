@@ -24,41 +24,41 @@ const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// JSON-RPC 2.0 request structure.
 #[derive(Debug, Deserialize)]
-struct JsonRpcRequest {
-    jsonrpc: String,
+pub(super) struct JsonRpcRequest {
+    pub(super) jsonrpc: String,
     #[serde(default)]
-    id: Option<Value>,
-    method: String,
+    pub(super) id: Option<Value>,
+    pub(super) method: String,
     #[serde(default)]
-    params: Option<Value>,
+    pub(super) params: Option<Value>,
 }
 
 /// JSON-RPC 2.0 response structure.
 #[derive(Debug, Serialize)]
-struct JsonRpcResponse {
-    jsonrpc: String,
+pub(super) struct JsonRpcResponse {
+    pub(super) jsonrpc: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    id: Option<Value>,
+    pub(super) id: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    result: Option<Value>,
+    pub(super) result: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<JsonRpcError>,
+    pub(super) error: Option<JsonRpcError>,
 }
 
 /// JSON-RPC 2.0 error structure.
 #[derive(Debug, Serialize)]
-struct JsonRpcError {
-    code: i32,
-    message: String,
+pub(super) struct JsonRpcError {
+    pub(super) code: i32,
+    pub(super) message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    data: Option<Value>,
+    pub(super) data: Option<Value>,
 }
 
 // Standard JSON-RPC error codes
-const PARSE_ERROR: i32 = -32700;
-const INVALID_REQUEST: i32 = -32600;
-const METHOD_NOT_FOUND: i32 = -32601;
-const INVALID_PARAMS: i32 = -32602;
+pub(super) const PARSE_ERROR: i32 = -32700;
+pub(super) const INVALID_REQUEST: i32 = -32600;
+pub(super) const METHOD_NOT_FOUND: i32 = -32601;
+pub(super) const INVALID_PARAMS: i32 = -32602;
 #[allow(dead_code)]
 const INTERNAL_ERROR: i32 = -32603;
 
@@ -158,7 +158,7 @@ fn write_response(
 }
 
 /// Handle a JSON-RPC request and return a response.
-async fn handle_request(
+pub(super) async fn handle_request(
     request: &JsonRpcRequest,
     client: &reqwest::Client,
     sessions: &Arc<SessionManager>,

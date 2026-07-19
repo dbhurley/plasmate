@@ -341,8 +341,24 @@ enum Commands {
         #[arg(long)]
         selector: Option<String>,
     },
-    /// Start the MCP (Model Context Protocol) server over stdio
-    Mcp,
+    /// Start the MCP (Model Context Protocol) server
+    Mcp {
+        /// Transport: stdio (default) or http (authenticated Streamable HTTP)
+        #[arg(long, default_value = "stdio")]
+        transport: String,
+        /// Streamable HTTP bind host. Only loopback hosts are accepted.
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+        /// Streamable HTTP port
+        #[arg(long, default_value_t = mcp::streamable_http::DEFAULT_PORT)]
+        port: u16,
+        /// Streamable HTTP bearer capability token (prefer PLASMATE_MCP_HTTP_TOKEN)
+        #[arg(long)]
+        token: Option<String>,
+        /// Exact HTTP Origin allowed to pass request validation (repeatable)
+        #[arg(long = "allow-origin")]
+        allowed_origins: Vec<String>,
+    },
     /// Manage authentication profiles for cookie-based browsing
     Auth {
         #[command(subcommand)]
@@ -768,9 +784,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             cmd_compile(file, url, output, &format, selector.as_deref())?;
         }
-        Commands::Mcp => {
-            mcp::run_server().await?;
-        }
+        Commands::Mcp {
+            transport,
+            host,
+            port,
+            token,
+            allowed_origins,
+        } => match transport.as_str() {
+            "stdio" => mcp::run_server().await?,
+            "http" | "streamable-http" => {
+                mcp::run_http_server(mcp::McpHttpConfig {
+                    host,
+                    port,
+                    token,
+                    allowed_origins,
+                })
+                .await?;
+            }
+            _ => return Err("unsupported MCP transport; expected 'stdio' or 'http'".into()),
+        },
         Commands::Auth { action } => {
             cmd_auth(action).await?;
         }

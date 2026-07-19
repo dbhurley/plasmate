@@ -122,6 +122,22 @@ This exposes Plasmate over stdio as MCP tools:
 - `set_cookies` - add or update session cookies
 - `clear_cookies` - remove session cookies
 
+For an authenticated local Streamable HTTP endpoint, set a capability token
+and select the HTTP transport explicitly:
+
+```bash
+PLASMATE_MCP_HTTP_TOKEN="$(openssl rand -hex 32)" \
+  plasmate mcp --transport http --host 127.0.0.1 --port 9272
+```
+
+The endpoint is `http://127.0.0.1:9272/mcp`. Every request must include
+`Authorization: Bearer <token>`. The server implements JSON response mode for
+the stateful MCP `2025-11-25` transport and the stateless `2026-07-28` release
+candidate. It deliberately returns HTTP 405 for GET rather than claiming an
+SSE notification stream it does not implement. See
+[`docs/mcp-streamable-http.md`](docs/mcp-streamable-http.md) for lifecycle,
+headers, and browser-Origin policy.
+
 Example Claude Desktop config:
 
 ```json
