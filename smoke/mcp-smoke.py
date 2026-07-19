@@ -153,6 +153,26 @@ def main():
             except json.JSONDecodeError:
                 continue
 
+    def notify(method, params=None):
+        """Send an MCP notification, which intentionally has no response id."""
+        if proc.poll() is not None:
+            raise RuntimeError(
+                f"MCP process exited before {method} (status {proc.returncode}): "
+                f"{stderr_tail() or '<no stderr>'}"
+            )
+
+        req = {"jsonrpc": "2.0", "method": method}
+        if params is not None:
+            req["params"] = params
+        try:
+            proc.stdin.write(json.dumps(req) + "\n")
+            proc.stdin.flush()
+        except (BrokenPipeError, OSError) as exc:
+            raise RuntimeError(
+                f"MCP process closed stdin during {method}: "
+                f"{stderr_tail() or '<no stderr>'}"
+            ) from exc
+
     passed = 0
     failed = 0
 
@@ -179,6 +199,7 @@ def main():
         })
         check("server responds", r.get("result") is not None)
         check("server name", r["result"]["serverInfo"]["name"] == "plasmate")
+        notify("notifications/initialized")
 
         # 2. fetch_page (stateless)
         print("\n2. fetch_page (stateless)")
