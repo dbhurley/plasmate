@@ -804,7 +804,7 @@ pub async fn handle_screenshot_page(arguments: &Value, client: &reqwest::Client)
         ..Default::default()
     };
 
-    match screenshot::capture_url(&params.url, &opts) {
+    match screenshot::capture_html(&page_result.effective_html, &fetch_result.url, &opts) {
         Ok(data) => {
             let base64 = base64_encode_simple(&data);
             json!({

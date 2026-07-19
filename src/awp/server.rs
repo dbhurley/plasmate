@@ -13,6 +13,11 @@ pub async fn start(
     port: u16,
     plugins: SharedPlugins,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if !crate::network::security::is_loopback_bind_host(host) {
+        return Err(
+            format!("refusing unauthenticated AWP exposure on non-loopback host '{host}'").into(),
+        );
+    }
     let addr = format!("{}:{}", host, port);
     let listener = TcpListener::bind(&addr).await?;
     info!("AWP server listening on ws://{}", addr);

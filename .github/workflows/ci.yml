@@ -59,6 +59,8 @@ jobs:
 
       - name: CDP smoke test (Puppeteer)
         if: ${{ matrix.os == 'ubuntu-latest' }}
+        env:
+          PLASMATE_UNSAFE_ALLOW_PRIVATE_NETWORK: '1'
         run: |
           cargo build --release
           ./target/release/plasmate serve --protocol cdp --host 127.0.0.1 --port 9222 2>/dev/null &
@@ -73,6 +75,7 @@ jobs:
           PLASMATE_BIN: ./target/release/plasmate
           MCP_SMOKE_RPC_TIMEOUT: '20'
           MCP_SMOKE_OVERALL_TIMEOUT: '120'
+          PLASMATE_UNSAFE_ALLOW_PRIVATE_NETWORK: '1'
         run: python3 smoke/mcp-smoke.py
 
       - name: MCP smoke harness failure tests
@@ -81,6 +84,8 @@ jobs:
 
       - name: Throughput benchmark
         if: ${{ matrix.os == 'ubuntu-latest' }}
+        env:
+          PLASMATE_UNSAFE_ALLOW_PRIVATE_NETWORK: '1'
         run: |
           python3 bench/local_server.py 8765 &
           sleep 1

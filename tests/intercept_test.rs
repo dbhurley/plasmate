@@ -13,6 +13,9 @@ use tokio::sync::oneshot;
 // ============================================================
 
 async fn start_test_server() -> (String, oneshot::Sender<()>) {
+    // This test binary intentionally navigates to a loopback-only fixture.
+    // Production defaults remain fail-closed.
+    std::env::set_var("PLASMATE_UNSAFE_ALLOW_PRIVATE_NETWORK", "1");
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let base_url = format!("http://{}", addr);

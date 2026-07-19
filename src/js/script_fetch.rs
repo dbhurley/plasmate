@@ -3,6 +3,7 @@
 //! Resolves relative URLs against the page URL, fetches in parallel,
 //! and returns script sources in document order for execution.
 
+use futures_util::StreamExt;
 use reqwest::Client;
 use std::time::Duration;
 use tracing::debug;
@@ -101,6 +102,15 @@ pub async fn resolve_scripts(
             let url = url.clone();
             let idx = *idx;
             async move {
+                if let Err(e) = crate::network::security::OutboundUrlPolicy::from_environment()
+                    .validate_url(&url)
+                    .await
+                {
+                    debug!(url, error = %e, "External script URL blocked");
+                    return None;
+                }
+                let deadline =
+                    tokio::time::Instant::now() + Duration::from_millis(limits.timeout_ms);
                 let result = tokio::time::timeout(
                     Duration::from_millis(limits.timeout_ms),
                     client
@@ -111,24 +121,88 @@ pub async fn resolve_scripts(
                 .await;
 
                 match result {
-                    Ok(Ok(resp)) if resp.status().is_success() => match resp.text().await {
-                        Ok(text) if text.len() <= limits.max_script_bytes => {
-                            debug!(url, bytes = text.len(), "Fetched external script");
-                            Some(ResolvedScript {
-                                source: text,
-                                label: url,
-                                index: idx,
-                            })
+                    Ok(Ok(resp)) if resp.status().is_success() => {
+                        if resp
+                            .content_length()
+                            .is_some_and(|length| length > limits.max_script_bytes as u64)
+                        {
+                            debug!(url, "Script Content-Length exceeds limit, skipping");
+                            return None;
                         }
-                        Ok(text) => {
-                            debug!(url, bytes = text.len(), "Script too large, skipping");
-                            None
+                        let content_encoding = resp
+                            .headers()
+                            .get(reqwest::header::CONTENT_ENCODING)
+                            .and_then(|value| value.to_str().ok())
+                            .map(str::to_string);
+                        let mut bytes = Vec::new();
+                        let mut stream = resp.bytes_stream();
+                        loop {
+                            let remaining = match deadline
+                                .checked_duration_since(tokio::time::Instant::now())
+                            {
+                                Some(remaining) => remaining,
+                                None => {
+                                    debug!(url, "Script body timeout");
+                                    return None;
+                                }
+                            };
+                            let next = match tokio::time::timeout(remaining, stream.next()).await {
+                                Ok(next) => next,
+                                Err(_) => {
+                                    debug!(url, "Script body timeout");
+                                    return None;
+                                }
+                            };
+                            let Some(chunk) = next else { break };
+                            let chunk = match chunk {
+                                Ok(chunk) => chunk,
+                                Err(e) => {
+                                    debug!(url, error = %e, "Failed to read script body");
+                                    return None;
+                                }
+                            };
+                            if bytes.len().saturating_add(chunk.len()) > limits.max_script_bytes {
+                                debug!(url, "Script body exceeds limit, skipping");
+                                return None;
+                            }
+                            bytes.extend_from_slice(&chunk);
                         }
-                        Err(e) => {
-                            debug!(url, error = %e, "Failed to read script body");
-                            None
-                        }
-                    },
+                        let remaining =
+                            match deadline.checked_duration_since(tokio::time::Instant::now()) {
+                                Some(remaining) => remaining,
+                                None => {
+                                    debug!(url, "Script decode timeout");
+                                    return None;
+                                }
+                            };
+                        let decoded = match tokio::time::timeout(
+                            remaining,
+                            crate::network::fetch::decode_limited_body_async(
+                                bytes,
+                                content_encoding,
+                                limits.max_script_bytes,
+                            ),
+                        )
+                        .await
+                        {
+                            Ok(Ok(decoded)) => decoded,
+                            Ok(Err(e)) => {
+                                debug!(url, error = %e, "Failed to decode script body");
+                                return None;
+                            }
+                            Err(_) => {
+                                debug!(url, "Script decode timeout");
+                                return None;
+                            }
+                        };
+                        let text = String::from_utf8_lossy(&decoded).into_owned();
+                        debug!(url, bytes = text.len(), "Fetched external script");
+                        Some(ResolvedScript {
+                            source: text,
+                            label: url,
+                            index: idx,
+                        })
+                    }
                     Ok(Ok(resp)) => {
                         debug!(url, status = resp.status().as_u16(), "Script fetch failed");
                         None

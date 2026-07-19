@@ -1,0 +1,72 @@
+# Security policy
+
+## Reporting a vulnerability
+
+Please report vulnerabilities privately through GitHub Security Advisories for
+`plasmate-labs/plasmate`. Do not include cookies, authorization headers, page
+content, or other secrets in a public issue.
+
+## Trust boundaries
+
+Plasmate processes attacker-controlled URLs, HTML, JavaScript, redirects, DNS
+answers, response bodies, and MCP/AWP/CDP inputs. These inputs are untrusted.
+Stored auth profiles and the local auth bridge carry credentials and are a
+separate, sensitive boundary. A local Plasmate process runs with the invoking
+user's privileges; it is not a sandbox for malicious native plugins.
+
+The default outbound policy permits only `http` and `https` destinations that
+resolve exclusively to globally routable IP addresses. Loopback, private,
+link-local, multicast, unspecified, reserved/documentation ranges, IPv4-mapped
+IPv6 addresses, and known cloud-metadata hosts are rejected. Every redirect is
+resolved and validated before it is followed. The reqwest DNS resolver repeats
+the address check at connection time to defend against DNS rebinding.
+
+Response `Content-Length` is checked against `PLASMATE_MAX_COMPRESSED_BYTES`
+(default 8 MiB), and decoded body chunks are stopped at
+`PLASMATE_MAX_BODY_BYTES` (default 16 MiB). Redirects default to five and can be
+reduced with `PLASMATE_MAX_REDIRECTS`. External scripts and page JavaScript have
+additional, smaller limits.
+
+An explicitly configured HTTP/SOCKS proxy is a trusted network boundary. A
+proxy can perform remote DNS resolution outside Plasmate's connection-time DNS
+resolver. Plasmate still validates the destination before sending the request,
+but operators must configure the proxy to block private and metadata networks.
+
+AWP and CDP are unauthenticated control protocols and therefore refuse
+non-loopback bind hosts. The daemon and auth bridge also bind to loopback only.
+Screenshot commands render policy-fetched HTML with Chrome networking forced
+through a closed local proxy. Direct Chrome URL navigation cannot safely inspect
+browser-managed redirects, so it is disabled unless the unsafe development
+override is active. Chrome's process sandbox remains enabled.
+
+## Auth bridge
+
+Every auth-bridge endpoint requires `Authorization: Bearer <capability-token>`.
+The bridge creates a 256-bit token at startup unless
+`PLASMATE_AUTH_BRIDGE_TOKEN` supplies one of at least 32 characters. Treat this
+token like a password and never place it in a URL. Auto-generated tokens are
+written only to stderr for interactive bootstrapping, live for that bridge
+process, and must not be copied into retained or shared logs.
+
+Browser access is disabled unless `PLASMATE_AUTH_BRIDGE_ORIGIN` is the exact
+`chrome-extension://<extension-id>` origin. Origins are checked on requests and
+CORS responses; wildcard CORS is never enabled. Restarting without a configured
+token rotates the capability.
+
+## Unsafe development override
+
+Local integration fixtures must opt in explicitly. Setting
+`PLASMATE_UNSAFE_ALLOW_PRIVATE_NETWORK=1` disables private-network destination
+protection for that process. It is intentionally verbose, unsafe, and must not
+be set in services, shells used for normal browsing, CI against untrusted URLs,
+or production. Unit tests use a test-only policy constructor instead of
+weakening production defaults.
+
+## Residual risks
+
+V8 executes untrusted page JavaScript inside the Plasmate process. Resource
+limits reduce exposure but are not a process or OS sandbox. Run Plasmate with
+least privilege, do not expose control protocols to other users, and use an OS
+sandbox for adversarial workloads. Auth-profile encryption protects files at
+rest; it does not protect against another process already running as the same
+OS user.

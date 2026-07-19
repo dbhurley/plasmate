@@ -1259,7 +1259,12 @@ pub fn page_capture_screenshot(
         ..Default::default()
     };
 
-    match screenshot::capture_url(url, &opts) {
+    let html = target
+        .effective_html
+        .as_deref()
+        .or(target.current_html.as_deref())
+        .unwrap_or("<html></html>");
+    match screenshot::capture_html(html, url, &opts) {
         Ok(data) => {
             let base64 = base64_encode_simple(&data);
             (CdpResponse::success(id, json!({"data": base64})), vec![])

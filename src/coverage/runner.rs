@@ -166,6 +166,18 @@ fn classify_fetch_error(err: &fetch::FetchError) -> (FailureKind, String) {
             format!("HTTP error {status} for {url}"),
         ),
         fetch::FetchError::NavigationFailed(msg) => (FailureKind::NavigationFailed, msg.clone()),
+        fetch::FetchError::UrlBlocked(msg) => (
+            FailureKind::NavigationFailed,
+            format!("Outbound URL blocked: {msg}"),
+        ),
+        fetch::FetchError::TooManyRedirects(limit) => (
+            FailureKind::NavigationFailed,
+            format!("Too many redirects (maximum {limit})"),
+        ),
+        fetch::FetchError::BodyTooLarge { limit } => (
+            FailureKind::NavigationFailed,
+            format!("Response body exceeds {limit} bytes"),
+        ),
     }
 }
 

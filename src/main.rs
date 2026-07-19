@@ -448,6 +448,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tls,
             plugin: plugin_paths,
         } => {
+            if !network::security::is_loopback_bind_host(&host) {
+                return Err(format!(
+                    "refusing unauthenticated server exposure on '{host}'; bind to 127.0.0.1, ::1, or localhost"
+                )
+                .into());
+            }
             if tls.list_tls_options {
                 print_tls_options();
                 return Ok(());
@@ -565,7 +571,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             quality,
             full_page,
         } => {
-            cmd_screenshot(&url, &output, width, height, &format, quality, full_page)?;
+            cmd_screenshot(&url, &output, width, height, &format, quality, full_page).await?;
         }
         Commands::Daemon { action } => match action {
             DaemonAction::Start { port } => {
@@ -1467,7 +1473,7 @@ async fn cmd_coverage(
     Ok(())
 }
 
-fn cmd_screenshot(
+async fn cmd_screenshot(
     url: &str,
     output: &str,
     width: u32,
@@ -1484,7 +1490,11 @@ fn cmd_screenshot(
         full_page,
     };
 
-    match screenshot::capture_url(url, &opts) {
+    let jar = Arc::new(reqwest::cookie::Jar::default());
+    let client = network::fetch::build_client_h1_fallback(None, jar, network::tls::global())?;
+    let fetched = network::fetch::fetch_url(&client, url, 15_000).await?;
+
+    match screenshot::capture_html(&fetched.html, &fetched.url, &opts) {
         Ok(data) => {
             std::fs::write(output, &data)?;
             eprintln!("✓ Screenshot saved to {} ({} bytes)", output, data.len());
