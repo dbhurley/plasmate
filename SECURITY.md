@@ -33,7 +33,8 @@ resolver. Plasmate still validates the destination before sending the request,
 but operators must configure the proxy to block private and metadata networks.
 
 AWP and CDP are unauthenticated control protocols and therefore refuse
-non-loopback bind hosts. The daemon and auth bridge also bind to loopback only.
+non-loopback bind hosts. The daemon, auth bridge, and MCP Streamable HTTP server
+also bind to loopback only.
 Screenshot commands render policy-fetched HTML with Chrome networking forced
 through a closed local proxy. Direct Chrome URL navigation cannot safely inspect
 browser-managed redirects, so it is disabled unless the unsafe development
@@ -52,6 +53,25 @@ Browser access is disabled unless `PLASMATE_AUTH_BRIDGE_ORIGIN` is the exact
 `chrome-extension://<extension-id>` origin. Origins are checked on requests and
 CORS responses; wildcard CORS is never enabled. Restarting without a configured
 token rotates the capability.
+
+## MCP Streamable HTTP
+
+The HTTP MCP endpoint always requires a bearer capability token of at least 32
+visible ASCII bytes without whitespace, compared with the same constant-time
+helper used by the auth bridge. Set
+`PLASMATE_MCP_HTTP_TOKEN` or pass `--token`; otherwise a fresh 256-bit token is
+printed to stderr at startup. The server refuses non-loopback binds even when a
+token is present, limits request bodies to 1 MiB, and applies a 60-second
+handler deadline plus a 65-second whole-request deadline. Protocol sessions are
+capped at 128 and expire after 30 minutes idle.
+
+Requests without an `Origin` header are accepted for native clients. Browser
+requests are forbidden unless their exact HTTP(S) origin is configured with
+`--allow-origin`; no wildcard Origin is supported. The server does not emit CORS
+response headers or support preflight, so direct browser-client compatibility
+is not claimed. Capability tokens sent over plain HTTP must never leave the
+host. Plasmate does not yet provide TLS or OAuth for a remotely exposed MCP
+endpoint.
 
 ## Unsafe development override
 

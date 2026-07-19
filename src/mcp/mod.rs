@@ -16,6 +16,8 @@
 pub mod protocol;
 pub mod server;
 pub mod sessions;
+pub mod streamable_http;
 pub mod tools;
 
 pub use server::run_server;
+pub use streamable_http::{run_server as run_http_server, McpHttpConfig};

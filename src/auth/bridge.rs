@@ -3,7 +3,10 @@
 //! Provides endpoints for the Plasmate extension to push cookies directly
 //! instead of using clipboard copy.
 
-use crate::auth::store::{self, CookieEntry, CookieProfile};
+use crate::auth::{
+    capability::{bearer_matches, generate_token, validate_token},
+    store::{self, CookieEntry, CookieProfile},
+};
 use axum::{
     extract::{Json, Query, Request, State},
     http::{header, HeaderMap, HeaderValue, Method, StatusCode},
@@ -44,12 +47,9 @@ pub struct BridgeConfig {
 impl BridgeConfig {
     pub fn from_environment() -> Result<Self, String> {
         let token = match std::env::var(BRIDGE_TOKEN_ENV) {
-            Ok(value) if value.len() >= 32 => value,
-            Ok(_) => {
-                return Err(format!(
-                    "{BRIDGE_TOKEN_ENV} must contain at least 32 characters"
-                ))
-            }
+            Ok(value) => validate_token(&value)
+                .map(|()| value)
+                .map_err(|error| format!("invalid {BRIDGE_TOKEN_ENV}: {error}"))?,
             Err(std::env::VarError::NotPresent) => generate_token(),
             Err(error) => return Err(format!("invalid {BRIDGE_TOKEN_ENV}: {error}")),
         };
@@ -64,13 +64,6 @@ impl BridgeConfig {
             token,
         })
     }
-}
-
-fn generate_token() -> String {
-    use rand::RngCore;
-    let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
-    hex::encode(bytes)
 }
 
 fn validate_extension_origin(origin: &str) -> Result<(), String> {
@@ -415,25 +408,13 @@ fn authorize(state: &BridgeState, headers: &HeaderMap) -> Result<(), StatusCode>
             return Err(StatusCode::FORBIDDEN);
         }
     }
-    let expected = format!("Bearer {}", state.token);
     let supplied = headers
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok());
-    if !supplied.is_some_and(|value| constant_time_eq(value.as_bytes(), expected.as_bytes())) {
+    if !bearer_matches(supplied, &state.token) {
         return Err(StatusCode::UNAUTHORIZED);
     }
     Ok(())
-}
-
-fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
-    let mut difference = left.len() ^ right.len();
-    let max_len = left.len().max(right.len());
-    for index in 0..max_len {
-        let left_byte = left.get(index).copied().unwrap_or(0);
-        let right_byte = right.get(index).copied().unwrap_or(0);
-        difference |= usize::from(left_byte ^ right_byte);
-    }
-    difference == 0
 }
 
 #[cfg(test)]
