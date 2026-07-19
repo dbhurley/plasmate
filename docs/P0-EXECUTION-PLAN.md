@@ -124,14 +124,43 @@ Owner branch: `codex/p0-runtime-containment`
 - Normal non-JS/stateless fetch throughput does not pay a per-page process cost.
 - Remaining in-process MCP/session V8 risk is documented as the first follow-up containment slice, not described as solved.
 
+## Workstream D: Supply-chain integrity
+
+Owner branch: `codex/p0-supply-chain`
+
+### Deliverables
+
+- Keep a committed lockfile for every npm root and use `npm ci` in CI.
+- Declare and continuously compile-test the real Rust MSRV for default and
+  all-feature builds.
+- Fail on known Rust, npm, Python, and Go dependency vulnerabilities on pull
+  requests, pushes to `master`, and a weekly schedule.
+- Pin every remote GitHub Action to an immutable commit and default workflows
+  to read-only permissions.
+- Keep Python's multi-project audit input complete and reproducible with a
+  hashed Linux/CPython 3.11 lock.
+- Upload scheduled coverage as short-lived evidence instead of allowing an
+  unattended workflow to write to protected `master`.
+- Let Dependabot propose restrained weekly updates for every dependency root;
+  never auto-merge dependency or Action changes.
+
+### Acceptance criteria
+
+- Production and complete npm audits report zero known vulnerabilities in all
+  five lock roots.
+- `cargo audit`, `pip-audit`, and `govulncheck` exit zero without ignore lists.
+- The workflow pin validator finds no mutable remote Action references.
+- Coverage workflows have only `contents: read` and cannot commit or push.
+
 ## Integration sequence
 
 1. Integrate build integrity first because it defines the trustworthy verification gate.
 2. Rebase security onto the resulting `master`; resolve behavior changes explicitly and run all gates.
 3. Rebase runtime containment onto the resulting `master`; run all gates plus crash fixtures and a bounded coverage sample.
 4. Update documentation only after integrated behavior is verified.
-5. Enable repository branch protection and required checks after the direct P0 integration sequence is complete.
-6. Observe seven consecutive days of green required checks, including one successful weekly JS run, before tagging v0.6.
+5. Integrate supply-chain policy before enabling repository branch protection.
+6. Enable repository branch protection and required checks after the direct P0 integration sequence is complete.
+7. Observe seven consecutive days of green required checks, including one successful weekly JS run, before tagging v0.6.
 
 Each integration requires:
 
@@ -154,6 +183,8 @@ P0 is complete only when all of the following are true:
 - A crashing or hanging JS coverage page cannot crash or hang its parent run.
 - Coverage and release claims use honest denominators and match shipped code.
 - Package metadata and changelog state are coherent.
+- Dependency scans cover every first-party lock or package root, all remote
+  Actions are immutable, and scheduled evidence cannot write to `master`.
 - A security policy and threat model are present.
 - The repository remains green for seven days, including the scheduled JS workload.
 

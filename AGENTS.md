@@ -15,7 +15,7 @@ It runs as a CLI, a persistent daemon, an MCP server, and a CDP server.
 ~/.cargo/bin/cargo build --release    # release
 ```
 
-Requires Rust stable (1.77+). No system dependencies beyond a C linker.
+Requires Rust 1.88+ (including `--all-features`). No system dependencies beyond a C linker.
 
 ## Test
 

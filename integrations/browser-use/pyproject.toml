@@ -13,9 +13,6 @@ dependencies = [
     "som-parser>=0.3.0",
 ]
 
-[project.optional-dependencies]
-browser-use = ["browser-use>=0.12.0"]
-
 [project.urls]
 Homepage = "https://plasmate.app"
 Documentation = "https://plasmate.app/docs/integration-browser-use"

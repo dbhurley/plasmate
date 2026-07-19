@@ -11,6 +11,18 @@
   strict scope, deferred ordering, and `import.meta.url`. Bare specifiers,
   import maps/attributes, cross-origin CORS, dynamic import, and top-level await
   remain explicitly unsupported; see `docs/ES-MODULES.md`.
+- Added read-only Rust, npm, Python, Go, and GitHub Actions supply-chain gates,
+  immutable Action pins, restrained Dependabot coverage, and artifact-only
+  scheduled coverage evidence.
+- Added a Vercel AI dependency lock and migrated its MCP client to supported AI
+  SDK 6 APIs; refreshed vulnerable npm transitive dependencies to clean audits.
+- Updated the optional Wasmtime runtime to the patched 36.x line with a minimal
+  feature set and refreshed vulnerable TLS, QUIC, and test-only Rust transitives.
+- Corrected the documented Rust minimum to the verified 1.88 dependency floor
+  and added default/all-feature MSRV checks.
+- Removed the Browser Use package's unused `browser-use` convenience extra so
+  installing Plasmate no longer pulls an upstream graph pinned to vulnerable
+  `pypdf` releases.
 
 ## v0.5.1 (2026-04-05)
 

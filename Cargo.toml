@@ -2,6 +2,7 @@
 name = "plasmate"
 version = "0.5.1"
 edition = "2021"
+rust-version = "1.88"
 description = "Browser engine for AI agents. 10-100x fewer tokens than raw HTML. V8 JS, CDP/Puppeteer compatible, MCP server."
 license = "Apache-2.0"
 repository = "https://github.com/plasmate-labs/plasmate"
@@ -44,7 +45,7 @@ clap = { version = "4", features = ["derive"] }
 v8 = "130"
 
 # Wasm plugin runtime (optional — enable with `--features plugins`)
-wasmtime = { version = "27", optional = true }
+wasmtime = { version = "36.0.7", optional = true, default-features = false, features = ["cranelift", "runtime", "std"] }
 
 # Fast hashing for SOM cache keys
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
