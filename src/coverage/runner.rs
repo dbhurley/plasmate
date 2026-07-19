@@ -1,5 +1,7 @@
+use std::ffi::OsString;
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use reqwest::cookie::Jar;
 use serde::{Deserialize, Serialize};
@@ -8,9 +10,10 @@ use tracing::{debug, info, warn};
 
 use crate::js::pipeline::{self, PipelineConfig};
 use crate::network::fetch;
+use crate::process_supervisor::{self, ProcessOutcome, ProcessOutput, ProcessSpec};
 use crate::som::compiler;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoverageOptions {
     pub timeout_ms: u64,
     pub concurrency: usize,
@@ -29,6 +32,17 @@ pub struct CoverageOptions {
 
     pub timer_drain_ms: u64,
     pub max_urls: Option<usize>,
+
+    /// Execute JS-enabled pages in supervised child processes. V8 fatal errors
+    /// abort the worker, not the coverage coordinator.
+    pub isolate_js: bool,
+    /// Linux address-space ceiling for each JS worker. Zero disables it.
+    pub worker_memory_bytes: u64,
+    /// Maximum stdout/stderr captured from one worker before truncation.
+    pub worker_output_bytes: usize,
+    /// Test/embedding override. Production uses the current executable.
+    #[serde(skip)]
+    pub worker_executable: Option<PathBuf>,
 }
 
 impl Default for CoverageOptions {
@@ -49,6 +63,10 @@ impl Default for CoverageOptions {
 
             timer_drain_ms: 100,
             max_urls: Some(100),
+            isolate_js: true,
+            worker_memory_bytes: 0,
+            worker_output_bytes: 256 * 1024,
+            worker_executable: None,
         }
     }
 }
@@ -69,6 +87,10 @@ pub enum FailureKind {
     NavigationFailed,
     NonHtml,
     PipelineError,
+    WorkerCrash,
+    WorkerExit,
+    WorkerProtocolError,
+    WorkerSpawnError,
     Unknown,
 }
 
@@ -111,6 +133,22 @@ pub struct CoverageSummary {
     pub ok: usize,
     pub blocked: usize,
     pub failed: usize,
+    /// Success rate across every input URL, including blocked sites.
+    #[serde(default)]
+    pub success_percent: f64,
+    #[serde(default)]
+    pub timed_out: usize,
+    #[serde(default)]
+    pub worker_crashes: usize,
+    #[serde(default)]
+    pub worker_exits: usize,
+    /// Coordinator setup or worker-protocol errors, excluding page crashes.
+    #[serde(default)]
+    pub worker_errors: usize,
+    /// Fatal/invalid worker outcomes that should fail automation after the
+    /// complete report has been written.
+    #[serde(default)]
+    pub infrastructure_failures: usize,
     pub parsed_percent: f64,
     pub median_ratio: f64,
     pub mean_ratio: f64,
@@ -144,6 +182,18 @@ pub struct CoverageReportOptions {
 
     pub timer_drain_ms: u64,
     pub max_urls: Option<usize>,
+    #[serde(default)]
+    pub isolate_js: bool,
+    #[serde(default)]
+    pub worker_memory_bytes: u64,
+    #[serde(default)]
+    pub worker_output_bytes: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoverageWorkerRequest {
+    pub input_url: String,
+    pub options: CoverageOptions,
 }
 
 fn now_utc_rfc3339ish() -> String {
@@ -222,43 +272,59 @@ pub async fn run(urls: &[String], opts: &CoverageOptions) -> CoverageReport {
         let client = client.clone();
         let sem = sem.clone();
         let opts = opts.clone();
+        let task_url = input_url.clone();
 
-        handles.push(tokio::spawn(async move {
-            let _permit = sem.acquire().await.expect("semaphore poisoned");
+        handles.push((
+            task_url,
+            tokio::spawn(async move {
+                let _permit = sem.acquire().await.expect("semaphore poisoned");
 
-            let timeout = std::time::Duration::from_millis(opts.timeout_ms);
-            match tokio::time::timeout(timeout, cover_single(&client, &input_url, &opts)).await {
-                Ok(r) => r,
-                Err(_) => CoverageResult {
-                    input_url,
-                    final_url: None,
-                    status: CoverageStatus::Failed,
-                    http_status: None,
-                    content_type: None,
-                    title: None,
-                    html_bytes: None,
-                    som_bytes: None,
-                    compression_ratio: None,
-                    element_count: None,
-                    interactive_count: None,
-                    fetch_ms: None,
-                    pipeline_ms: None,
-                    js_total_scripts: None,
-                    js_succeeded: None,
-                    js_failed: None,
-                    failure_kind: Some(FailureKind::Timeout),
-                    error: Some(format!("Overall timeout after {}ms", opts.timeout_ms)),
-                },
-            }
-        }));
+                let timeout = std::time::Duration::from_millis(opts.timeout_ms);
+                let page = async {
+                    if opts.execute_js && opts.isolate_js {
+                        cover_single_supervised(&input_url, &opts).await
+                    } else {
+                        cover_single(&client, &input_url, &opts).await
+                    }
+                };
+                match tokio::time::timeout(timeout + Duration::from_secs(2), page).await {
+                    Ok(r) => r,
+                    Err(_) => CoverageResult {
+                        input_url,
+                        final_url: None,
+                        status: CoverageStatus::Failed,
+                        http_status: None,
+                        content_type: None,
+                        title: None,
+                        html_bytes: None,
+                        som_bytes: None,
+                        compression_ratio: None,
+                        element_count: None,
+                        interactive_count: None,
+                        fetch_ms: None,
+                        pipeline_ms: None,
+                        js_total_scripts: None,
+                        js_succeeded: None,
+                        js_failed: None,
+                        failure_kind: Some(FailureKind::Timeout),
+                        error: Some(format!("Overall timeout after {}ms", opts.timeout_ms)),
+                    },
+                }
+            }),
+        ));
     }
 
     let mut results = Vec::new();
-    for h in handles {
+    for (input_url, h) in handles {
         match h.await {
             Ok(r) => results.push(r),
             Err(e) => {
                 warn!(error = %e, "Coverage task join error");
+                results.push(failed_result(
+                    input_url,
+                    FailureKind::WorkerProtocolError,
+                    format!("Coverage coordinator task failed: {e}"),
+                ));
             }
         }
     }
@@ -269,6 +335,10 @@ pub async fn run(urls: &[String], opts: &CoverageOptions) -> CoverageReport {
     let mut ok = 0usize;
     let mut blocked = 0usize;
     let mut failed = 0usize;
+    let mut timed_out = 0usize;
+    let mut worker_crashes = 0usize;
+    let mut worker_exits = 0usize;
+    let mut worker_errors = 0usize;
     let mut ratios: Vec<f64> = Vec::new();
 
     let mut breakdown: std::collections::BTreeMap<String, usize> =
@@ -286,6 +356,16 @@ pub async fn run(urls: &[String], opts: &CoverageOptions) -> CoverageReport {
             CoverageStatus::Failed => failed += 1,
         }
 
+        match &r.failure_kind {
+            Some(FailureKind::Timeout) => timed_out += 1,
+            Some(FailureKind::WorkerCrash) => worker_crashes += 1,
+            Some(FailureKind::WorkerExit) => worker_exits += 1,
+            Some(FailureKind::WorkerProtocolError | FailureKind::WorkerSpawnError) => {
+                worker_errors += 1
+            }
+            _ => {}
+        }
+
         let key = match (&r.status, &r.failure_kind) {
             (CoverageStatus::Ok, _) => "ok".to_string(),
             (CoverageStatus::Blocked, _) => "blocked".to_string(),
@@ -297,6 +377,11 @@ pub async fn run(urls: &[String], opts: &CoverageOptions) -> CoverageReport {
 
     let total = results.len();
     let parseable = total - blocked;
+    let success_percent = if total == 0 {
+        0.0
+    } else {
+        (ok as f64 / total as f64) * 100.0
+    };
     let parsed_percent = if parseable == 0 {
         0.0
     } else {
@@ -329,12 +414,21 @@ pub async fn run(urls: &[String], opts: &CoverageOptions) -> CoverageReport {
 
             timer_drain_ms: opts.timer_drain_ms,
             max_urls: opts.max_urls,
+            isolate_js: opts.isolate_js,
+            worker_memory_bytes: opts.worker_memory_bytes,
+            worker_output_bytes: opts.worker_output_bytes,
         },
         summary: CoverageSummary {
             urls_total: total,
             ok,
             blocked,
             failed,
+            success_percent,
+            timed_out,
+            worker_crashes,
+            worker_exits,
+            worker_errors,
+            infrastructure_failures: worker_errors,
             parsed_percent,
             median_ratio,
             mean_ratio,
@@ -343,6 +437,178 @@ pub async fn run(urls: &[String], opts: &CoverageOptions) -> CoverageReport {
         },
         results,
     }
+}
+
+fn failed_result(input_url: String, kind: FailureKind, error: String) -> CoverageResult {
+    CoverageResult {
+        input_url,
+        final_url: None,
+        status: CoverageStatus::Failed,
+        http_status: None,
+        content_type: None,
+        title: None,
+        html_bytes: None,
+        som_bytes: None,
+        compression_ratio: None,
+        element_count: None,
+        interactive_count: None,
+        fetch_ms: None,
+        pipeline_ms: None,
+        js_total_scripts: None,
+        js_succeeded: None,
+        js_failed: None,
+        failure_kind: Some(kind),
+        error: Some(error),
+    }
+}
+
+fn bounded_diagnostic(stderr: &[u8], truncated: bool) -> String {
+    let mut diagnostic = String::from_utf8_lossy(stderr).trim().to_string();
+    if diagnostic.len() > 2048 {
+        diagnostic.truncate(2048);
+        diagnostic.push('…');
+    }
+    if truncated {
+        diagnostic.push_str(" [worker stderr truncated]");
+    }
+    diagnostic
+}
+
+async fn cover_single_supervised(input_url: &str, opts: &CoverageOptions) -> CoverageResult {
+    let executable = match &opts.worker_executable {
+        Some(path) => path.clone(),
+        None => match std::env::current_exe() {
+            Ok(path) => path,
+            Err(error) => {
+                return failed_result(
+                    input_url.to_string(),
+                    FailureKind::WorkerSpawnError,
+                    format!("Cannot resolve coverage worker executable: {error}"),
+                );
+            }
+        },
+    };
+
+    let mut worker_options = opts.clone();
+    worker_options.isolate_js = false;
+    worker_options.worker_executable = None;
+    let request = CoverageWorkerRequest {
+        input_url: input_url.to_string(),
+        options: worker_options,
+    };
+    let stdin = match serde_json::to_vec(&request) {
+        Ok(stdin) => stdin,
+        Err(error) => {
+            return failed_result(
+                input_url.to_string(),
+                FailureKind::WorkerProtocolError,
+                format!("Cannot encode coverage worker request: {error}"),
+            );
+        }
+    };
+
+    let output = process_supervisor::supervise(ProcessSpec {
+        program: executable,
+        args: vec![OsString::from("__coverage-worker")],
+        env: Vec::new(),
+        stdin,
+        timeout: Duration::from_millis(opts.timeout_ms),
+        max_stdout_bytes: opts.worker_output_bytes,
+        max_stderr_bytes: opts.worker_output_bytes,
+        memory_limit_bytes: opts.worker_memory_bytes,
+    })
+    .await;
+
+    let output = match output {
+        Ok(output) => output,
+        Err(error) => {
+            return failed_result(
+                input_url.to_string(),
+                FailureKind::WorkerSpawnError,
+                error.to_string(),
+            );
+        }
+    };
+    classify_worker_output(input_url, opts.timeout_ms, output)
+}
+
+fn classify_worker_output(
+    input_url: &str,
+    timeout_ms: u64,
+    output: ProcessOutput,
+) -> CoverageResult {
+    let diagnostic = bounded_diagnostic(&output.stderr, output.stderr_truncated);
+
+    match output.outcome {
+        ProcessOutcome::TimedOut => failed_result(
+            input_url.to_string(),
+            FailureKind::Timeout,
+            format!(
+                "Supervised JS worker exceeded {}ms{}",
+                timeout_ms,
+                if diagnostic.is_empty() {
+                    String::new()
+                } else {
+                    format!(": {diagnostic}")
+                }
+            ),
+        ),
+        ProcessOutcome::Signaled { signal } => failed_result(
+            input_url.to_string(),
+            FailureKind::WorkerCrash,
+            format!(
+                "Supervised JS worker terminated by signal {signal}{}",
+                if diagnostic.is_empty() {
+                    String::new()
+                } else {
+                    format!(": {diagnostic}")
+                }
+            ),
+        ),
+        ProcessOutcome::Exited { code } if code != 0 => failed_result(
+            input_url.to_string(),
+            FailureKind::WorkerExit,
+            format!(
+                "Supervised JS worker exited with code {code}{}",
+                if diagnostic.is_empty() {
+                    String::new()
+                } else {
+                    format!(": {diagnostic}")
+                }
+            ),
+        ),
+        ProcessOutcome::Exited { .. } if output.stdout_truncated => failed_result(
+            input_url.to_string(),
+            FailureKind::WorkerProtocolError,
+            "Supervised JS worker response exceeded the output limit".to_string(),
+        ),
+        ProcessOutcome::Exited { .. } => match serde_json::from_slice(&output.stdout) {
+            Ok(result) => result,
+            Err(error) => failed_result(
+                input_url.to_string(),
+                FailureKind::WorkerProtocolError,
+                format!("Invalid coverage worker response: {error}"),
+            ),
+        },
+    }
+}
+
+/// Run exactly one page inside a coverage worker process.
+pub async fn run_worker(mut request: CoverageWorkerRequest) -> CoverageResult {
+    request.options.isolate_js = false;
+    request.options.worker_executable = None;
+    let jar = Arc::new(Jar::default());
+    let client = match fetch::build_client(None, jar, None) {
+        Ok(client) => client,
+        Err(error) => {
+            return failed_result(
+                request.input_url,
+                FailureKind::WorkerSpawnError,
+                format!("Coverage worker could not build HTTP client: {error}"),
+            );
+        }
+    };
+    cover_single(&client, &request.input_url, &request.options).await
 }
 
 async fn cover_single(
@@ -541,5 +807,88 @@ async fn cover_single(
         js_failed,
         failure_kind: None,
         error: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn worker_output(outcome: ProcessOutcome) -> ProcessOutput {
+        ProcessOutput {
+            outcome,
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+            stdout_truncated: false,
+            stderr_truncated: false,
+        }
+    }
+
+    #[test]
+    fn worker_timeout_is_a_per_url_timeout() {
+        let result = classify_worker_output(
+            "https://example.test",
+            123,
+            worker_output(ProcessOutcome::TimedOut),
+        );
+        assert!(matches!(result.failure_kind, Some(FailureKind::Timeout)));
+        assert!(result.error.unwrap().contains("123ms"));
+    }
+
+    #[test]
+    fn worker_signal_is_a_per_url_crash() {
+        let result = classify_worker_output(
+            "https://example.test",
+            123,
+            worker_output(ProcessOutcome::Signaled { signal: 9 }),
+        );
+        assert!(matches!(
+            result.failure_kind,
+            Some(FailureKind::WorkerCrash)
+        ));
+    }
+
+    #[test]
+    fn worker_nonzero_exit_is_a_per_url_exit() {
+        let result = classify_worker_output(
+            "https://example.test",
+            123,
+            worker_output(ProcessOutcome::Exited { code: 17 }),
+        );
+        assert!(matches!(result.failure_kind, Some(FailureKind::WorkerExit)));
+    }
+
+    #[test]
+    fn malformed_worker_response_is_an_infrastructure_error() {
+        let mut output = worker_output(ProcessOutcome::Exited { code: 0 });
+        output.stdout = b"not-json".to_vec();
+        let result = classify_worker_output("https://example.test", 123, output);
+        assert!(matches!(
+            result.failure_kind,
+            Some(FailureKind::WorkerProtocolError)
+        ));
+    }
+
+    #[tokio::test]
+    async fn coordinator_records_spawn_failures_for_every_url_and_continues() {
+        let urls = vec![
+            "https://one.example.test".to_string(),
+            "https://two.example.test".to_string(),
+        ];
+        let options = CoverageOptions {
+            concurrency: 2,
+            max_urls: None,
+            worker_executable: Some(PathBuf::from("/definitely/not/a/plasmate-worker")),
+            ..CoverageOptions::default()
+        };
+
+        let report = run(&urls, &options).await;
+        assert_eq!(report.results.len(), 2);
+        assert_eq!(report.summary.failed, 2);
+        assert_eq!(report.summary.infrastructure_failures, 2);
+        assert!(report
+            .results
+            .iter()
+            .all(|result| matches!(result.failure_kind, Some(FailureKind::WorkerSpawnError))));
     }
 }

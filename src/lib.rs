@@ -8,6 +8,7 @@ pub mod daemon;
 pub mod js;
 pub mod network;
 pub mod plugin;
+pub mod process_supervisor;
 pub mod screenshot;
 pub mod session;
 pub mod som;
