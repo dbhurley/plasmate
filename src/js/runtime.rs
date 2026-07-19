@@ -3383,7 +3383,7 @@ impl JsRuntime {
             let context = v8::Local::new(scope, context_global);
             let scope = &mut v8::ContextScope::new(scope, context);
             let mut sources: Vec<_> = graph.sources.iter().collect();
-            sources.sort_by(|(left, _), (right, _)| left.cmp(right));
+            sources.sort_by_key(|(left, _)| *left);
             for (request_url, source) in sources {
                 let Some(source_text) = v8::String::new(scope, &source.source) else {
                     push_module_diagnostic(
