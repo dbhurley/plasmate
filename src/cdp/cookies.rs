@@ -305,14 +305,11 @@ pub fn parse_set_cookie_header(header_value: &str, request_url: &str) -> Option<
 
     // First part is name=value
     let name_value = parts[0].trim();
-    let (name, value) = if let Some(eq_pos) = name_value.find('=') {
-        (
-            name_value[..eq_pos].trim().to_string(),
-            name_value[eq_pos + 1..].trim().to_string(),
-        )
-    } else {
-        return None;
-    };
+    let eq_pos = name_value.find('=')?;
+    let (name, value) = (
+        name_value[..eq_pos].trim().to_string(),
+        name_value[eq_pos + 1..].trim().to_string(),
+    );
 
     if name.is_empty() {
         return None;

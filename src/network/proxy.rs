@@ -392,35 +392,33 @@ pub fn pool_from_params(params: &serde_json::Value) -> Option<ProxyPool> {
     let pool = params.get("proxy_pool")?;
 
     let proxies_val = pool.get("proxies")?;
-    let proxies: Vec<ProxyConfig> = if let Some(arr) = proxies_val.as_array() {
-        arr.iter()
-            .filter_map(|v| {
-                if let Some(url) = v.as_str() {
-                    Some(ProxyConfig::http(url))
-                } else if let Some(obj) = v.as_object() {
-                    let url = obj.get("url").and_then(|u| u.as_str())?;
-                    let username = obj
-                        .get("username")
-                        .and_then(|u| u.as_str())
-                        .map(String::from);
-                    let password = obj
-                        .get("password")
-                        .and_then(|u| u.as_str())
-                        .map(String::from);
-                    Some(ProxyConfig {
-                        url: Some(url.to_string()),
-                        username,
-                        password,
-                        bypass: None,
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect()
-    } else {
-        return None;
-    };
+    let proxies: Vec<ProxyConfig> = proxies_val
+        .as_array()?
+        .iter()
+        .filter_map(|v| {
+            if let Some(url) = v.as_str() {
+                Some(ProxyConfig::http(url))
+            } else if let Some(obj) = v.as_object() {
+                let url = obj.get("url").and_then(|u| u.as_str())?;
+                let username = obj
+                    .get("username")
+                    .and_then(|u| u.as_str())
+                    .map(String::from);
+                let password = obj
+                    .get("password")
+                    .and_then(|u| u.as_str())
+                    .map(String::from);
+                Some(ProxyConfig {
+                    url: Some(url.to_string()),
+                    username,
+                    password,
+                    bypass: None,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
 
     if proxies.is_empty() {
         return None;
