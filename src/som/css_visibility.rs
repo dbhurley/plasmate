@@ -44,13 +44,13 @@ impl VisibilityRules {
     fn parse_css(&mut self, css: &str) {
         // Simple CSS parser: find rules with display:none or visibility:hidden
         // We don't need a full parser, just pattern matching on common hiding patterns.
-        let mut chars = css.chars().peekable();
+        let chars = css.chars().peekable();
         let mut selector = String::new();
         let mut in_block = false;
         let mut block_content = String::new();
         let mut brace_depth = 0;
 
-        while let Some(ch) = chars.next() {
+        for ch in chars {
             if ch == '{' {
                 brace_depth += 1;
                 if brace_depth == 1 {
@@ -115,7 +115,7 @@ impl VisibilityRules {
             let parts: Vec<&str> = sel.split_whitespace().collect();
             let last = parts.last().copied().unwrap_or(sel);
 
-            for segment in last.split(|c: char| c == '>' || c == '+' || c == '~') {
+            for segment in last.split(['>', '+', '~']) {
                 let segment = segment.trim();
                 if segment.is_empty() {
                     continue;
@@ -167,10 +167,7 @@ impl VisibilityRules {
                 }
 
                 // Check for tag-level hiding (rare but happens)
-                let tag_part = segment
-                    .split(|c: char| c == '.' || c == '#' || c == ':' || c == '[')
-                    .next()
-                    .unwrap_or("");
+                let tag_part = segment.split(['.', '#', ':', '[']).next().unwrap_or("");
                 if !tag_part.is_empty()
                     && tag_part.chars().all(|c| c.is_ascii_alphabetic())
                     && is_hidden

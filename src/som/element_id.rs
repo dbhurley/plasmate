@@ -37,6 +37,12 @@ pub struct ElementIdTracker {
     seen: HashMap<String, usize>,
 }
 
+impl Default for ElementIdTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ElementIdTracker {
     pub fn new() -> Self {
         Self {

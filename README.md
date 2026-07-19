@@ -104,12 +104,23 @@ plasmate mcp
 This exposes Plasmate over stdio as MCP tools:
 - `fetch_page` - get structured SOM from any URL
 - `extract_text` - get clean readable text
+- `extract_links` - get deduplicated links from a page
 - `cache_status` - inspect MCP SOM cache reuse and restorable page-state entries
 - `session_status` - inspect active sessions, loaded URLs, HTML/SOM/node inventory
+- `screenshot_page` - capture a page screenshot, with SOM fallback
 - `open_page` - start an interactive session (returns session_id, SOM, cache_restored)
+- `navigate_to` - navigate an existing session
 - `evaluate` - run JavaScript in the page context
 - `click` - click elements by SOM element ID
+- `type_text` - type into an input or textarea
+- `select_option` - select a dropdown option
+- `scroll` - scroll the page or an element
+- `toggle` - toggle checkbox, radio, or details state
+- `clear` - clear an input or textarea
 - `close_page` - end a session
+- `get_cookies` - read session cookies
+- `set_cookies` - add or update session cookies
+- `clear_cookies` - remove session cookies
 
 Example Claude Desktop config:
 
@@ -149,7 +160,7 @@ Config file locations:
 - **VS Code Copilot** — `.vscode/mcp.json` (workspace) or user settings
 - **Windsurf** — `~/.codeium/windsurf/mcp_config.json`
 
-Once connected, 18 tools are available: `fetch_page`, `extract_text`, `extract_links`, `cache_status`, `session_status`, `open_page`, `navigate_to`, `click`, `type_text`, `select_option`, `scroll`, `toggle`, `clear`, `evaluate`, `close_page`, `get_cookies`, `set_cookies`, `clear_cookies`.
+Once connected, 19 tools are available: `fetch_page`, `extract_text`, `extract_links`, `cache_status`, `session_status`, `screenshot_page`, `open_page`, `navigate_to`, `click`, `type_text`, `select_option`, `scroll`, `toggle`, `clear`, `evaluate`, `close_page`, `get_cookies`, `set_cookies`, `clear_cookies`.
 
 **Tip:** use `selector="main"` to strip nav/footer, `selector="interactive"`
 to return only actionable elements, or `selector="action:click"` to build a
@@ -192,7 +203,7 @@ const { text } = await generateText({
 await mcp.close()
 ```
 
-This wires all 17 Plasmate tools directly into any Vercel AI SDK agent. See [Vercel AI SDK MCP docs](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling#mcp-tools) for details.
+This wires all 19 Plasmate tools directly into any Vercel AI SDK agent. See [Vercel AI SDK MCP docs](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling#mcp-tools) for details.
 
 ### LLM context
 
@@ -356,7 +367,7 @@ See [docs.plasmate.app/roadmap](https://docs.plasmate.app/roadmap) for the full 
 - [x] Proxy rotation (pool management, sticky sessions)
 - [x] Iframe support
 - [x] Shadow DOM support (declarative shadow DOM)
-- [x] Full ES module support
+- [ ] Full ES module support (module scripts are currently skipped; implementation is in progress)
 - [x] MCP cache/session observability for repeated agent workflows
 - [ ] Parallel sessions at scale (500+ concurrent)
 

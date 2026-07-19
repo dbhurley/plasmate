@@ -108,7 +108,7 @@ fn get_or_create_master_key() -> Result<[u8; KEY_SIZE], Box<dyn std::error::Erro
         OsRng.fill_bytes(&mut key);
 
         // Write key with restrictive permissions
-        std::fs::write(&key_path, &key)?;
+        std::fs::write(&key_path, key)?;
 
         #[cfg(unix)]
         {
@@ -535,7 +535,7 @@ mod tests {
         let config_dir = dir.path().join(".plasmate");
         let mut key = [0u8; 32];
         rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut key);
-        std::fs::write(config_dir.join("master.key"), &key).unwrap();
+        std::fs::write(config_dir.join("master.key"), key).unwrap();
 
         // Write a legacy plaintext profile
         let legacy_json = r#"{

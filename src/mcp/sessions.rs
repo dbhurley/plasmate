@@ -133,15 +133,6 @@ impl SessionManager {
         }
     }
 
-    /// Get a read-only reference to a session's target.
-    pub async fn with_session_ref<F, R>(&self, session_id: &str, f: F) -> Option<R>
-    where
-        F: FnOnce(&SessionState) -> R,
-    {
-        let sessions = self.sessions.read().await;
-        sessions.get(session_id).map(f)
-    }
-
     /// Close a session and free its resources.
     pub async fn close_session(&self, session_id: &str) -> bool {
         let mut sessions = self.sessions.write().await;
@@ -149,6 +140,7 @@ impl SessionManager {
     }
 
     /// Check if a session exists.
+    #[cfg(test)]
     pub async fn session_exists(&self, session_id: &str) -> bool {
         let sessions = self.sessions.read().await;
         sessions.contains_key(session_id)

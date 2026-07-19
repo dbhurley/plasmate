@@ -49,7 +49,7 @@ async fn start_test_server() -> (String, oneshot::Sender<()>) {
                             status,
                             if status == 200 { "OK" } else { "Not Found" },
                             content_type,
-                            body.as_bytes().len(),
+                            body.len(),
                             body
                         );
 

@@ -5,12 +5,15 @@ Tests the full agent workflow: initialize, open_page, evaluate, click, close_pag
 Runs against a local HTTP server with a test fixture to avoid network dependencies.
 """
 
-import subprocess
 import json
-import sys
 import http.server
-import threading
 import os
+import selectors
+import subprocess
+import sys
+import tempfile
+import threading
+import time
 
 FIXTURE_HTML = """<!doctype html>
 <html>
@@ -33,6 +36,12 @@ FIXTURE_PAGE2 = """<!doctype html>
 </body>
 </html>"""
 
+RPC_TIMEOUT_SECONDS = float(os.environ.get("MCP_SMOKE_RPC_TIMEOUT", "20"))
+OVERALL_TIMEOUT_SECONDS = float(os.environ.get("MCP_SMOKE_OVERALL_TIMEOUT", "120"))
+
+if RPC_TIMEOUT_SECONDS <= 0 or OVERALL_TIMEOUT_SECONDS <= 0:
+    raise ValueError("MCP smoke timeouts must be positive")
+
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
@@ -50,7 +59,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 def start_server():
-    server = http.server.HTTPServer(("127.0.0.1", 8766), Handler)
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     return server
@@ -64,25 +73,77 @@ def main():
         sys.exit(1)
 
     server = start_server()
+    base_url = f"http://127.0.0.1:{server.server_port}"
 
+    stderr_log = tempfile.TemporaryFile(mode="w+")
     proc = subprocess.Popen(
         [binary, "mcp"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=stderr_log,
+        text=True,
+        bufsize=1,
     )
+    selector = selectors.DefaultSelector()
+    selector.register(proc.stdout, selectors.EVENT_READ)
+    overall_deadline = time.monotonic() + OVERALL_TIMEOUT_SECONDS
 
     _id = [0]
 
+    def stderr_tail():
+        stderr_log.flush()
+        stderr_log.seek(0, os.SEEK_END)
+        size = stderr_log.tell()
+        stderr_log.seek(max(0, size - 4000))
+        tail = stderr_log.read().strip()
+        stderr_log.seek(0, os.SEEK_END)
+        return tail
+
     def rpc(method, params=None):
+        if proc.poll() is not None:
+            raise RuntimeError(
+                f"MCP process exited before {method} (status {proc.returncode}): "
+                f"{stderr_tail() or '<no stderr>'}"
+            )
+
         _id[0] += 1
         req = {"jsonrpc": "2.0", "id": _id[0], "method": method}
-        if params:
+        if params is not None:
             req["params"] = params
-        proc.stdin.write((json.dumps(req) + "\n").encode())
-        proc.stdin.flush()
+
+        try:
+            proc.stdin.write(json.dumps(req) + "\n")
+            proc.stdin.flush()
+        except (BrokenPipeError, OSError) as exc:
+            raise RuntimeError(
+                f"MCP process closed stdin during {method}: "
+                f"{stderr_tail() or '<no stderr>'}"
+            ) from exc
+
+        deadline = min(
+            time.monotonic() + RPC_TIMEOUT_SECONDS,
+            overall_deadline,
+        )
         while True:
-            line = proc.stdout.readline().decode().strip()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(
+                    f"Timed out waiting for MCP response to {method} "
+                    f"(request id {_id[0]}): {stderr_tail() or '<no stderr>'}"
+                )
+
+            if not selector.select(remaining):
+                continue
+
+            line = proc.stdout.readline()
+            if not line:
+                status = proc.poll()
+                raise RuntimeError(
+                    f"MCP stdout closed during {method}"
+                    + (f" (status {status})" if status is not None else "")
+                    + f": {stderr_tail() or '<no stderr>'}"
+                )
+            line = line.strip()
             if not line:
                 continue
             try:
@@ -104,86 +165,102 @@ def main():
             print(f"  FAIL: {name} {detail}")
             failed += 1
 
-    print("=== MCP Integration Smoke Test ===\n")
+    exit_code = 1
 
-    # 1. Initialize
-    print("1. Initialize")
-    r = rpc("initialize", {
-        "protocolVersion": "2024-11-05",
-        "capabilities": {},
-        "clientInfo": {"name": "smoke-test", "version": "1.0"},
-    })
-    check("server responds", r.get("result") is not None)
-    check("server name", r["result"]["serverInfo"]["name"] == "plasmate")
+    try:
+        print("=== MCP Integration Smoke Test ===\n")
 
-    # 2. fetch_page (stateless)
-    print("\n2. fetch_page (stateless)")
-    r = rpc("tools/call", {"name": "fetch_page", "arguments": {"url": "http://127.0.0.1:8766/"}})
-    som = json.loads(r["result"]["content"][0]["text"])
-    check("title", som.get("title") == "MCP Smoke Test", f'got: {som.get("title")}')
-    check("has regions", len(som.get("regions", [])) > 0)
-    all_elements = []
-    for region in som.get("regions", []):
-        all_elements.extend(region.get("elements", []))
-    check("has elements", len(all_elements) > 0, f"count: {len(all_elements)}")
+        # 1. Initialize
+        print("1. Initialize")
+        r = rpc("initialize", {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "smoke-test", "version": "1.0"},
+        })
+        check("server responds", r.get("result") is not None)
+        check("server name", r["result"]["serverInfo"]["name"] == "plasmate")
 
-    # 3. extract_text (stateless)
-    print("\n3. extract_text (stateless)")
-    r = rpc("tools/call", {"name": "extract_text", "arguments": {"url": "http://127.0.0.1:8766/"}})
-    text = r["result"]["content"][0]["text"]
-    check("contains content", "test page" in text.lower(), f"got: {text[:100]}")
+        # 2. fetch_page (stateless)
+        print("\n2. fetch_page (stateless)")
+        r = rpc("tools/call", {"name": "fetch_page", "arguments": {"url": f"{base_url}/"}})
+        som = json.loads(r["result"]["content"][0]["text"])
+        check("title", som.get("title") == "MCP Smoke Test", f'got: {som.get("title")}')
+        check("has regions", len(som.get("regions", [])) > 0)
+        all_elements = []
+        for region in som.get("regions", []):
+            all_elements.extend(region.get("elements", []))
+        check("has elements", len(all_elements) > 0, f"count: {len(all_elements)}")
 
-    # 4. open_page (stateful)
-    print("\n4. open_page (stateful)")
-    r = rpc("tools/call", {"name": "open_page", "arguments": {"url": "http://127.0.0.1:8766/"}})
-    page = json.loads(r["result"]["content"][0]["text"])
-    session_id = page.get("session_id")
-    check("has session_id", session_id is not None)
-    check("title matches", page.get("title") == "MCP Smoke Test", f'got: {page.get("title")}')
+        # 3. extract_text (stateless)
+        print("\n3. extract_text (stateless)")
+        r = rpc("tools/call", {"name": "extract_text", "arguments": {"url": f"{base_url}/"}})
+        text = r["result"]["content"][0]["text"]
+        check("contains content", "test page" in text.lower(), f"got: {text[:100]}")
 
-    # 5. evaluate
-    print("\n5. evaluate")
-    r = rpc("tools/call", {"name": "evaluate", "arguments": {
-        "session_id": session_id,
-        "expression": "document.title",
-    }})
-    result = json.loads(r["result"]["content"][0]["text"])
-    check("returns title", result.get("result") == "MCP Smoke Test", f'got: {result.get("result")}')
+        # 4. open_page (stateful)
+        print("\n4. open_page (stateful)")
+        r = rpc("tools/call", {"name": "open_page", "arguments": {"url": f"{base_url}/"}})
+        page = json.loads(r["result"]["content"][0]["text"])
+        session_id = page.get("session_id")
+        check("has session_id", session_id is not None)
+        check("title matches", page.get("title") == "MCP Smoke Test", f'got: {page.get("title")}')
 
-    # 6. click (navigate to page 2)
-    print("\n6. click (navigation)")
-    all_elements = []
-    for region in page.get("regions", []):
-        all_elements.extend(region.get("elements", []))
-    link = next((e for e in all_elements if e.get("text") == "Go to page 2"), None)
-    check("found link element", link is not None)
-    if link:
-        r = rpc("tools/call", {"name": "click", "arguments": {
+        # 5. evaluate
+        print("\n5. evaluate")
+        r = rpc("tools/call", {"name": "evaluate", "arguments": {
             "session_id": session_id,
-            "element_id": link["id"],
+            "expression": "document.title",
         }})
-        click_text = r.get("result", {}).get("content", [{}])[0].get("text", "")
-        is_error = r.get("result", {}).get("isError", False)
-        if is_error or not click_text:
-            check("click response", False, f"error={is_error} text={click_text[:200] if click_text else 'empty'} full={json.dumps(r)[:300]}")
-        else:
-            click_result = json.loads(click_text)
-        check("navigated", "page2" in click_result.get("url", ""), f'url: {click_result.get("url")}')
-        check("new title", click_result.get("title") == "Page Two", f'got: {click_result.get("title")}')
+        result = json.loads(r["result"]["content"][0]["text"])
+        check("returns title", result.get("result") == "MCP Smoke Test", f'got: {result.get("result")}')
 
-    # 7. close_page
-    print("\n7. close_page")
-    r = rpc("tools/call", {"name": "close_page", "arguments": {"session_id": session_id}})
-    check("closed", r.get("result") is not None)
+        # 6. click (navigate to page 2)
+        print("\n6. click (navigation)")
+        all_elements = []
+        for region in page.get("regions", []):
+            all_elements.extend(region.get("elements", []))
+        link = next((e for e in all_elements if e.get("text") == "Go to page 2"), None)
+        check("found link element", link is not None)
+        if link:
+            r = rpc("tools/call", {"name": "click", "arguments": {
+                "session_id": session_id,
+                "element_id": link["id"],
+            }})
+            click_text = r.get("result", {}).get("content", [{}])[0].get("text", "")
+            is_error = r.get("result", {}).get("isError", False)
+            click_result = {}
+            if is_error or not click_text:
+                check("click response", False, f"error={is_error} text={click_text[:200] if click_text else 'empty'} full={json.dumps(r)[:300]}")
+            else:
+                click_result = json.loads(click_text)
+            check("navigated", "page2" in click_result.get("url", ""), f'url: {click_result.get("url")}')
+            check("new title", click_result.get("title") == "Page Two", f'got: {click_result.get("title")}')
 
-    # Summary
-    proc.terminate()
-    server.shutdown()
+        # 7. close_page
+        print("\n7. close_page")
+        r = rpc("tools/call", {"name": "close_page", "arguments": {"session_id": session_id}})
+        check("closed", r.get("result") is not None)
 
-    print(f"\n=== Results: {passed} passed, {failed} failed ===")
-    if failed > 0:
-        sys.exit(1)
-    print("PASS")
+        print(f"\n=== Results: {passed} passed, {failed} failed ===")
+        if failed == 0:
+            print("PASS")
+            exit_code = 0
+    except Exception as exc:
+        print(f"\nFATAL: {exc}", file=sys.stderr)
+    finally:
+        selector.close()
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=5)
+        server.shutdown()
+        server.server_close()
+        stderr_log.close()
+
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

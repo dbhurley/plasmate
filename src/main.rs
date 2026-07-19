@@ -16,7 +16,6 @@ use plasmate::js;
 use plasmate::network;
 use plasmate::plugin;
 use plasmate::screenshot;
-use plasmate::session;
 use plasmate::som;
 
 #[derive(Parser)]
@@ -1061,6 +1060,7 @@ fn parse_header_args(args: &[String]) -> std::collections::HashMap<String, Strin
     map
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn cmd_fetch(
     url: &str,
     output: Option<&str>,
@@ -1251,7 +1251,7 @@ fn render_som_output(
             urls.retain(|u| seen.insert(u.clone()));
             Ok(urls.join("\n"))
         }
-        "json" | _ => Ok(serde_json::to_string_pretty(som)?),
+        _ => Ok(serde_json::to_string_pretty(som)?),
     }
 }
 
@@ -1403,6 +1403,7 @@ async fn cmd_bench(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn cmd_coverage(
     urls_file: &str,
     output: &str,
@@ -1420,20 +1421,19 @@ async fn cmd_coverage(
     let content = std::fs::read_to_string(urls_file)?;
     let urls = coverage::runner::parse_urls_file(&content);
 
-    let mut opts = coverage::runner::CoverageOptions::default();
-    opts.timeout_ms = timeout_ms;
-    opts.concurrency = concurrency;
-    opts.execute_js = !no_js;
-    opts.fetch_external_scripts = !no_external;
-
-    opts.js_max_heap_bytes = js_heap_mb.saturating_mul(1024 * 1024);
-
-    opts.max_external_scripts = max_external_scripts;
-    opts.max_external_script_bytes = max_external_script_kb.saturating_mul(1024);
-    opts.max_external_total_bytes = max_external_total_kb.saturating_mul(1024);
-    opts.external_script_timeout_ms = external_script_timeout_ms;
-
-    opts.max_urls = Some(max_urls);
+    let opts = coverage::runner::CoverageOptions {
+        timeout_ms,
+        concurrency,
+        execute_js: !no_js,
+        fetch_external_scripts: !no_external,
+        js_max_heap_bytes: js_heap_mb.saturating_mul(1024 * 1024),
+        max_external_scripts,
+        max_external_script_bytes: max_external_script_kb.saturating_mul(1024),
+        max_external_total_bytes: max_external_total_kb.saturating_mul(1024),
+        external_script_timeout_ms,
+        max_urls: Some(max_urls),
+        ..Default::default()
+    };
 
     info!(count = urls.len(), "Running coverage suite");
     let report = coverage::runner::run(&urls, &opts).await;
@@ -1442,10 +1442,22 @@ async fn cmd_coverage(
     std::fs::write(output, json)?;
     info!(output, "Coverage scorecard written");
 
+    let parseable = report
+        .summary
+        .urls_total
+        .saturating_sub(report.summary.blocked);
+    let overall_percent = if report.summary.urls_total == 0 {
+        0.0
+    } else {
+        report.summary.ok as f64 / report.summary.urls_total as f64 * 100.0
+    };
     println!(
-        "Coverage: ok {} / {} ({:.1}%), blocked {}, failed {}, median compression {:.1}x",
+        "Coverage: overall {} / {} ({:.1}%); parseable-site {} / {} ({:.1}%, excludes blocked); blocked {}; failed {}; median compression {:.1}x",
         report.summary.ok,
         report.summary.urls_total,
+        overall_percent,
+        report.summary.ok,
+        parseable,
         report.summary.parsed_percent,
         report.summary.blocked,
         report.summary.failed,
@@ -1572,22 +1584,14 @@ async fn cmd_throughput_bench(
     let results = network::fetch::fetch_urls_parallel(&client, &urls, 10000, concurrency).await;
 
     let fetch_elapsed = start.elapsed();
-    let mut par_html_bytes = 0usize;
-    let mut par_som_bytes = 0usize;
-    let mut par_elements = 0usize;
     let mut par_compile_us = 0u128;
     let mut success_count = 0usize;
 
-    for result in results {
-        if let Ok(r) = result {
-            par_html_bytes += r.html_bytes;
-            let compile_start = Instant::now();
-            if let Ok(compiled) = som::compiler::compile(&r.html, &r.url) {
-                par_compile_us += compile_start.elapsed().as_micros();
-                par_som_bytes += compiled.meta.som_bytes;
-                par_elements += compiled.meta.element_count;
-                success_count += 1;
-            }
+    for r in results.into_iter().flatten() {
+        let compile_start = Instant::now();
+        if som::compiler::compile(&r.html, &r.url).is_ok() {
+            par_compile_us += compile_start.elapsed().as_micros();
+            success_count += 1;
         }
     }
 

@@ -120,12 +120,16 @@ pub fn proxy_from_params(params: &serde_json::Value) -> Option<ProxyConfig> {
     if let Some(obj) = proxy.as_object() {
         let url = obj.get("url").and_then(|v| v.as_str()).map(String::from);
 
-        if url.is_none() {
-            return None;
-        }
+        url.as_ref()?;
 
-        let username = obj.get("username").and_then(|v| v.as_str()).map(String::from);
-        let password = obj.get("password").and_then(|v| v.as_str()).map(String::from);
+        let username = obj
+            .get("username")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let password = obj
+            .get("password")
+            .and_then(|v| v.as_str())
+            .map(String::from);
         let bypass = obj.get("bypass").and_then(|v| {
             v.as_array().map(|arr| {
                 arr.iter()
@@ -163,21 +167,11 @@ pub enum RotationStrategy {
 }
 
 /// Health status of a proxy.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct ProxyHealth {
     failures: u32,
     last_failure: Option<Instant>,
     last_success: Option<Instant>,
-}
-
-impl Default for ProxyHealth {
-    fn default() -> Self {
-        ProxyHealth {
-            failures: 0,
-            last_failure: None,
-            last_success: None,
-        }
-    }
 }
 
 /// A pool of proxies with rotation and health tracking.
@@ -215,10 +209,7 @@ impl ProxyPool {
 
     /// Create a pool from a list of proxy URLs (simple format).
     pub fn from_urls(urls: &[&str]) -> Self {
-        let proxies: Vec<ProxyConfig> = urls
-            .iter()
-            .map(|url| ProxyConfig::http(url))
-            .collect();
+        let proxies: Vec<ProxyConfig> = urls.iter().map(|url| ProxyConfig::http(url)).collect();
         Self::new(proxies, RotationStrategy::RoundRobin)
     }
 
@@ -408,8 +399,14 @@ pub fn pool_from_params(params: &serde_json::Value) -> Option<ProxyPool> {
                     Some(ProxyConfig::http(url))
                 } else if let Some(obj) = v.as_object() {
                     let url = obj.get("url").and_then(|u| u.as_str())?;
-                    let username = obj.get("username").and_then(|u| u.as_str()).map(String::from);
-                    let password = obj.get("password").and_then(|u| u.as_str()).map(String::from);
+                    let username = obj
+                        .get("username")
+                        .and_then(|u| u.as_str())
+                        .map(String::from);
+                    let password = obj
+                        .get("password")
+                        .and_then(|u| u.as_str())
+                        .map(String::from);
                     Some(ProxyConfig {
                         url: Some(url.to_string()),
                         username,
@@ -468,8 +465,7 @@ mod tests {
 
     #[test]
     fn test_proxy_with_auth() {
-        let config = ProxyConfig::http("http://proxy:8080")
-            .with_auth("user", "pass");
+        let config = ProxyConfig::http("http://proxy:8080").with_auth("user", "pass");
         assert_eq!(config.username.as_deref(), Some("user"));
         assert_eq!(config.password.as_deref(), Some("pass"));
     }
@@ -497,7 +493,10 @@ mod tests {
         assert_eq!(config.url.as_deref(), Some("socks5://proxy:1080"));
         assert_eq!(config.username.as_deref(), Some("user"));
         assert_eq!(config.password.as_deref(), Some("secret"));
-        assert_eq!(config.bypass, Some(vec!["localhost".to_string(), "127.0.0.1".to_string()]));
+        assert_eq!(
+            config.bypass,
+            Some(vec!["localhost".to_string(), "127.0.0.1".to_string()])
+        );
     }
 
     #[test]
@@ -520,8 +519,8 @@ mod tests {
 
     #[test]
     fn test_proxy_pool_health_tracking() {
-        let pool = ProxyPool::from_urls(&["http://p1:8080", "http://p2:8080"])
-            .with_failure_threshold(2);
+        let pool =
+            ProxyPool::from_urls(&["http://p1:8080", "http://p2:8080"]).with_failure_threshold(2);
 
         let p1 = pool.next().unwrap().clone();
 

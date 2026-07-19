@@ -2,7 +2,7 @@
 
 Plasmate integrates with both [Pi](https://github.com/badlogic/pi-mono) (the original coding agent by @mariozechner) and [oh-my-pi](https://github.com/can1357/oh-my-pi) (the extended fork with MCP, LSP, browser, and subagent support) via MCP.
 
-Both agents discover Plasmate's 13 tools automatically through their MCP configuration.
+Both agents discover Plasmate's 19 tools automatically through their MCP configuration.
 
 ## Quick Setup
 
@@ -24,12 +24,15 @@ oh-my-pi has native MCP support via its `mcp/` discovery layer. Add Plasmate to 
 
 Place this in your oh-my-pi MCP config file (typically `~/.config/oh-my-pi/mcp.json` or passed via `--mcp-config`).
 
-Once configured, oh-my-pi automatically discovers all 13 Plasmate tools:
+Once configured, oh-my-pi automatically discovers all 19 Plasmate tools:
 
 | Tool | What it does |
 |---|---|
 | `fetch_page` | Fetch a URL, return SOM (structured JSON). Stateless. |
 | `extract_text` | Fetch a URL, return plain text only. Stateless. |
+| `extract_links` | Fetch a URL, return deduplicated links. Stateless. |
+| `cache_status` | Inspect cache hits, misses, and restorable page state. |
+| `session_status` | Inspect active session capacity and page-state inventory. |
 | `screenshot_page` | Capture a screenshot. |
 | `open_page` | Open a URL in a persistent session. Returns session ID + SOM. |
 | `navigate_to` | Navigate an existing session to a new URL. |
@@ -41,6 +44,9 @@ Once configured, oh-my-pi automatically discovers all 13 Plasmate tools:
 | `clear` | Clear the value of a text input or textarea. |
 | `evaluate` | Run JavaScript in the page context. |
 | `close_page` | Close a session and free resources. |
+| `get_cookies` | Read cookies from a session. |
+| `set_cookies` | Add or update cookies in a session. |
+| `clear_cookies` | Remove cookies from a session. |
 
 ### Pi (original)
 

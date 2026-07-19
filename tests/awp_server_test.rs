@@ -28,7 +28,7 @@ async fn start_test_server() -> String {
                             )
                             .await;
                             let resp_json = serde_json::to_string(&response).unwrap();
-                            sink.send(Message::Text(resp_json.into())).await.unwrap();
+                            sink.send(Message::Text(resp_json)).await.unwrap();
                         }
                     }
                 });
@@ -55,7 +55,7 @@ async fn send_recv(
     msg: serde_json::Value,
 ) -> serde_json::Value {
     let text = serde_json::to_string(&msg).unwrap();
-    ws.send(Message::Text(text.into())).await.unwrap();
+    ws.send(Message::Text(text)).await.unwrap();
     if let Some(Ok(Message::Text(resp))) = ws.next().await {
         serde_json::from_str(&resp).unwrap()
     } else {

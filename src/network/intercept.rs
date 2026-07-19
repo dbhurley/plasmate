@@ -252,6 +252,12 @@ pub struct NetworkInterceptor {
     max_log_entries: usize,
 }
 
+impl Default for NetworkInterceptor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NetworkInterceptor {
     pub fn new() -> Self {
         NetworkInterceptor {
@@ -492,10 +498,8 @@ pub fn url_glob_match(pattern: &str, url: &str) -> bool {
 
     // Last part must match the end
     if let Some(last) = parts.last() {
-        if !last.is_empty() {
-            if !url[pos..].ends_with(last) {
-                return false;
-            }
+        if !last.is_empty() && !url[pos..].ends_with(last) {
+            return false;
         }
     }
 

@@ -169,13 +169,13 @@ fn classify_fetch_error(err: &fetch::FetchError) -> (FailureKind, String) {
     }
 }
 
-fn compute_ratio_stats(ratios: &mut Vec<f64>) -> (f64, f64, f64) {
+fn compute_ratio_stats(ratios: &mut [f64]) -> (f64, f64, f64) {
     if ratios.is_empty() {
         return (0.0, 0.0, 0.0);
     }
     ratios.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let mean = ratios.iter().sum::<f64>() / ratios.len() as f64;
-    let median = if ratios.len() % 2 == 0 {
+    let median = if ratios.len() & 1 == 0 {
         (ratios[ratios.len() / 2 - 1] + ratios[ratios.len() / 2]) / 2.0
     } else {
         ratios[ratios.len() / 2]
@@ -432,10 +432,12 @@ async fn cover_single(
         None
     };
 
-    let mut config = PipelineConfig::default();
-    config.execute_js = opts.execute_js;
-    config.fetch_external_scripts = opts.fetch_external_scripts;
-    config.timer_drain_ms = opts.timer_drain_ms;
+    let mut config = PipelineConfig {
+        execute_js: opts.execute_js,
+        fetch_external_scripts: opts.fetch_external_scripts,
+        timer_drain_ms: opts.timer_drain_ms,
+        ..Default::default()
+    };
 
     // Coverage runs must not crash. V8 OOM is fatal, so we run with a larger heap cap.
     config.js_config.max_heap_bytes = opts.js_max_heap_bytes;

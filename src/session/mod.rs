@@ -460,7 +460,7 @@ pub async fn fetch_parallel(
     pipeline_config: &PipelineConfig,
 ) -> Vec<Result<ParallelFetchResult, String>> {
     use futures_util::stream::{self, StreamExt};
-    let concurrency = concurrency.min(MAX_CONCURRENCY).max(1);
+    let concurrency = concurrency.clamp(1, MAX_CONCURRENCY);
     let total = urls.len();
 
     let indexed: Vec<(usize, Result<ParallelFetchResult, String>)> =

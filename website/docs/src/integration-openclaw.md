@@ -77,7 +77,7 @@ Add to your agent's MCP config:
 }
 ```
 
-Available MCP tools: `fetch_page`, `extract_text`, `screenshot_page`, `open_page`, `navigate_to`, `click`, `type_text`, `select_option`, `scroll`, `toggle`, `clear`, `evaluate`, `close_page`.
+Available MCP tools: `fetch_page`, `extract_text`, `extract_links`, `cache_status`, `session_status`, `screenshot_page`, `open_page`, `navigate_to`, `click`, `type_text`, `select_option`, `scroll`, `toggle`, `clear`, `evaluate`, `close_page`, `get_cookies`, `set_cookies`, `clear_cookies`.
 
 ## CDP Mode (Puppeteer-compatible)
 

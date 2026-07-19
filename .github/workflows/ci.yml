@@ -34,11 +34,17 @@ jobs:
       - name: Format check
         run: cargo fmt --all --check
 
-      - name: Clippy
-        run: cargo clippy --all-targets
+      - name: Clippy (default features)
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Test
-        run: cargo test
+      - name: Clippy (all features)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test (default features)
+        run: cargo test --workspace
+
+      - name: Test (all features)
+        run: cargo test --workspace --all-features
 
       - name: Setup Node (for CDP smoke test)
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -63,7 +69,15 @@ jobs:
 
       - name: MCP smoke test
         if: ${{ matrix.os == 'ubuntu-latest' }}
+        env:
+          PLASMATE_BIN: ./target/release/plasmate
+          MCP_SMOKE_RPC_TIMEOUT: '20'
+          MCP_SMOKE_OVERALL_TIMEOUT: '120'
         run: python3 smoke/mcp-smoke.py
+
+      - name: MCP smoke harness failure tests
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: python3 -m unittest smoke/test_mcp_smoke_harness.py
 
       - name: Throughput benchmark
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -109,13 +123,19 @@ jobs:
           cache-dependency-path: sdk/go/go.mod
 
       - name: Install Python manifest dependencies
-        run: python3 -m pip install pytest pydantic langchain-core
+        run: |
+          python3 -m pip install --disable-pip-version-check \
+            pytest pydantic langchain-core \
+            -e packages/som-parser-python \
+            -e sdk/python \
+            -e integrations/browser-use \
+            -e integrations/langchain
 
       - name: Install Node manifest dependencies
         run: |
           npm ci --prefix packages/som-parser-node
           npm ci --prefix sdk/node
-          npm install --prefix integrations/vercel-ai
+          npm install --no-package-lock --prefix integrations/vercel-ai
 
       - name: Action manifest conformance
         run: ./scripts/action-manifest-conformance.sh --quick

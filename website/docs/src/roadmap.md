@@ -611,7 +611,7 @@ Competitor pressure keeps moving reusable action state from browser engines into
 - [x] Proxy rotation (pool management, sticky sessions)
 - [x] Iframe support
 - [x] Shadow DOM support (declarative shadow DOM)
-- [x] Full ES module support
+- [ ] Full ES module support (module scripts are currently skipped; implementation is in progress)
 - [x] Chrome extension on Web Store
 - [x] Selector whitespace and `#region-id` support
 - [x] Common ARIA widget roles mapped to actionable SOM elements
