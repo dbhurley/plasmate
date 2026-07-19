@@ -4100,10 +4100,18 @@ fn do_fetch_on_thread(
     headers: &std::collections::HashMap<String, String>,
 ) -> Result<String, String> {
     use reqwest::blocking::Client as BlockingClient;
+    use std::io::Read;
 
     let client = BlockingClient::builder()
         .timeout(FETCH_TIMEOUT)
         .user_agent(crate::network::fetch::DEFAULT_USER_AGENT)
+        .redirect(reqwest::redirect::Policy::none())
+        .gzip(false)
+        .brotli(false)
+        .deflate(false)
+        .dns_resolver(std::sync::Arc::new(
+            crate::network::security::PolicyDnsResolver::from_environment(),
+        ))
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -4118,21 +4126,63 @@ fn do_fetch_on_thread(
         _ => reqwest::Method::GET,
     };
 
-    let mut request = client.request(req_method, url);
+    let policy = crate::network::security::OutboundUrlPolicy::from_environment();
+    let mut current = policy.validate_url_blocking(url)?;
+    let original_origin = (
+        current.scheme().to_string(),
+        current.host_str().unwrap_or_default().to_ascii_lowercase(),
+        current.port_or_known_default(),
+    );
+    let mut response = None;
+    for redirect_count in 0..=5 {
+        let mut request = client.request(req_method.clone(), current.clone());
 
-    for (k, v) in headers {
-        if let Ok(header_name) = reqwest::header::HeaderName::from_bytes(k.as_bytes()) {
-            if let Ok(header_value) = reqwest::header::HeaderValue::from_str(v) {
-                request = request.header(header_name, header_value);
+        let same_origin = original_origin
+            == (
+                current.scheme().to_string(),
+                current.host_str().unwrap_or_default().to_ascii_lowercase(),
+                current.port_or_known_default(),
+            );
+        for (k, v) in headers {
+            if !same_origin
+                && matches!(
+                    k.to_ascii_lowercase().as_str(),
+                    "authorization" | "proxy-authorization" | "cookie"
+                )
+            {
+                continue;
+            }
+            if let Ok(header_name) = reqwest::header::HeaderName::from_bytes(k.as_bytes()) {
+                if let Ok(header_value) = reqwest::header::HeaderValue::from_str(v) {
+                    request = request.header(header_name, header_value);
+                }
             }
         }
-    }
 
-    if let Some(body_str) = body {
-        request = request.body(body_str.to_string());
-    }
+        if let Some(body_str) = body {
+            request = request.body(body_str.to_string());
+        }
 
-    let response = request.send().map_err(|e| e.to_string())?;
+        let candidate = request.send().map_err(|e| e.to_string())?;
+        if candidate.status().is_redirection() {
+            if redirect_count == 5 {
+                return Err("too many redirects (maximum 5)".to_string());
+            }
+            let location = candidate
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .ok_or_else(|| "redirect response missing a valid Location".to_string())?;
+            let next = current
+                .join(location)
+                .map_err(|e| format!("invalid redirect Location: {e}"))?;
+            current = policy.validate_url_blocking(next.as_str())?;
+            continue;
+        }
+        response = Some(candidate);
+        break;
+    }
+    let mut response = response.ok_or_else(|| "request did not produce a response".to_string())?;
 
     let status = response.status().as_u16();
     let status_text = response
@@ -4149,12 +4199,37 @@ fn do_fetch_on_thread(
         }
     }
 
-    let body_bytes = response.bytes().map_err(|e| e.to_string())?;
-    let body_str = if body_bytes.len() > MAX_RESPONSE_BODY_SIZE {
-        String::from_utf8_lossy(&body_bytes[..MAX_RESPONSE_BODY_SIZE]).to_string()
-    } else {
-        String::from_utf8_lossy(&body_bytes).to_string()
-    };
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX_RESPONSE_BODY_SIZE as u64)
+    {
+        return Err(format!(
+            "response body exceeds {MAX_RESPONSE_BODY_SIZE} bytes"
+        ));
+    }
+    let content_encoding = response
+        .headers()
+        .get(reqwest::header::CONTENT_ENCODING)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
+    let mut body_bytes = Vec::new();
+    response
+        .by_ref()
+        .take(MAX_RESPONSE_BODY_SIZE.saturating_add(1) as u64)
+        .read_to_end(&mut body_bytes)
+        .map_err(|e| e.to_string())?;
+    if body_bytes.len() > MAX_RESPONSE_BODY_SIZE {
+        return Err(format!(
+            "response body exceeds {MAX_RESPONSE_BODY_SIZE} bytes"
+        ));
+    }
+    let decoded = crate::network::fetch::decode_limited_body(
+        &body_bytes,
+        content_encoding.as_deref(),
+        MAX_RESPONSE_BODY_SIZE,
+    )
+    .map_err(|e| e.to_string())?;
+    let body_str = String::from_utf8_lossy(&decoded).to_string();
 
     Ok(serde_json::json!({
         "ok": ok,

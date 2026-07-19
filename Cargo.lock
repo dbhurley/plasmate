@@ -1810,7 +1810,9 @@ version = "0.5.1"
 dependencies = [
  "aes-gcm",
  "axum",
+ "brotli",
  "clap",
+ "flate2",
  "futures-util",
  "hex",
  "html5ever",
@@ -1830,6 +1832,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
+ "tower",
  "tower-http",
  "tracing",
  "tracing-subscriber",

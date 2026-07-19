@@ -125,6 +125,15 @@ fn find_chrome() -> Option<String> {
 /// Spawns a temporary Chrome process, navigates to the URL,
 /// captures the screenshot, and terminates Chrome.
 pub fn capture_url(url: &str, opts: &ScreenshotOptions) -> Result<Vec<u8>, ScreenshotError> {
+    if !crate::network::security::OutboundUrlPolicy::from_environment().allows_private_network() {
+        return Err(ScreenshotError::CaptureFailed(
+            "direct Chrome URL navigation is disabled because browser redirects bypass the outbound URL policy; fetch with Plasmate and use capture_html, or set PLASMATE_UNSAFE_ALLOW_PRIVATE_NETWORK=1 for isolated development"
+                .to_string(),
+        ));
+    }
+    crate::network::security::OutboundUrlPolicy::from_environment()
+        .validate_url_blocking(url)
+        .map_err(ScreenshotError::CaptureFailed)?;
     let chrome_bin = find_chrome().ok_or(ScreenshotError::ChromeNotFound)?;
 
     let temp_dir = tempfile::tempdir()
@@ -136,7 +145,6 @@ pub fn capture_url(url: &str, opts: &ScreenshotOptions) -> Result<Vec<u8>, Scree
     cmd.args([
         "--headless=new",
         "--disable-gpu",
-        "--no-sandbox",
         "--disable-dev-shm-usage",
         "--disable-extensions",
         "--disable-background-networking",
@@ -241,12 +249,15 @@ pub fn capture_html(
         .args([
             "--headless=new",
             "--disable-gpu",
-            "--no-sandbox",
             "--disable-dev-shm-usage",
             "--disable-extensions",
             "--disable-background-networking",
             "--no-first-run",
             "--no-default-browser-check",
+            // Render the already-fetched HTML without allowing subresources to
+            // escape the outbound URL policy, including loopback IP literals.
+            "--proxy-server=http://127.0.0.1:9",
+            "--proxy-bypass-list=<-loopback>",
             &format!("--window-size={},{}", opts.width, opts.height),
             &format!("--user-data-dir={}", temp_dir.path().display()),
             &format!("--screenshot={}", screenshot_path.display()),
