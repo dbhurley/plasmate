@@ -49,11 +49,14 @@
     "ai": ">=4.0.0"
   },
   "devDependencies": {
-    "@ai-sdk/mcp": "^0.0.1",
+    "@ai-sdk/mcp": "^1.0.63",
     "@types/node": "^20.0.0",
-    "ai": "^4.0.0",
+    "ai": "^6.0.230",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0"
+  },
+  "overrides": {
+    "esbuild": "0.28.1"
   },
   "engines": {
     "node": ">=18.0.0"

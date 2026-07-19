@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,13 +16,17 @@ jobs:
   coverage_js:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-07-19
+        with:
+          toolchain: stable
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/registry
@@ -35,9 +39,10 @@ jobs:
 
       - name: Run coverage suite (JS enabled)
         run: |
+          mkdir -p artifacts
           ./target/release/plasmate coverage \
             --urls bench/top100.txt \
-            --output website/docs/coverage-js.json \
+            --output artifacts/coverage-js.json \
             --timeout 15000 \
             --concurrency 1 \
             --js-heap-mb 512 \
@@ -49,16 +54,11 @@ jobs:
             --external-script-timeout-ms 2000 \
             --max 100
 
-      - name: Commit and push scorecard (if changed)
-        run: |
-          if git diff --quiet; then
-            echo "No scorecard changes"
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add website/docs/coverage-js.json
-          git commit -m "chore: update JS coverage scorecard"
-          git push
+      - name: Upload JS coverage evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-js-scorecard-${{ github.run_id }}
+          path: artifacts/coverage-js.json
+          if-no-files-found: warn
+          retention-days: 14

@@ -28,6 +28,9 @@
 
 ---
 
+Dependency and CI trust policy, local audit commands, and scorecard promotion
+rules are documented in [Supply-chain policy](docs/SUPPLY-CHAIN.md).
+
 Plasmate compiles HTML into a **Semantic Object Model (SOM)**, a structured representation that LLMs can reason about directly. It runs JavaScript via V8, supports Puppeteer via CDP, and produces output that is 10-800x smaller than raw HTML.
 
 | | Plasmate | Lightpanda | Chrome |
@@ -360,7 +363,9 @@ cargo build --release
 ./target/release/plasmate fetch https://example.com
 ```
 
-Requirements: Rust 1.77+, V8 (fetched automatically by rusty_v8).
+Requirements: Rust 1.88+ for both default and `plugins` builds. V8 is fetched
+automatically by rusty_v8. CI checks the declared minimum against default and
+all-feature builds so dependency updates cannot silently raise it.
 
 ## Docker
 

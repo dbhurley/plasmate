@@ -5,25 +5,60 @@ on:
     branches: [ master ]
   pull_request:
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  msrv:
+    name: Minimum Rust 1.88
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Install minimum Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-07-19
+        with:
+          toolchain: 1.88.0
+
+      - name: Cache cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: msrv-1.88-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check default features at MSRV
+        run: cargo check --workspace --locked
+
+      - name: Check all features at MSRV
+        run: cargo check --workspace --locked --all-features
+
   test:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-07-19
         with:
+          toolchain: stable
           components: rustfmt, clippy
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/registry
@@ -48,14 +83,14 @@ jobs:
 
       - name: Setup Node (for CDP smoke test)
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
 
       - name: Install smoke test deps
         if: ${{ matrix.os == 'ubuntu-latest' }}
         working-directory: smoke
-        run: npm install
+        run: npm ci
 
       - name: CDP smoke test (Puppeteer)
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -115,20 +150,22 @@ jobs:
   action-manifest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.22'
           cache-dependency-path: sdk/go/go.mod
@@ -146,7 +183,7 @@ jobs:
         run: |
           npm ci --prefix packages/som-parser-node
           npm ci --prefix sdk/node
-          npm install --no-package-lock --prefix integrations/vercel-ai
+          npm ci --prefix integrations/vercel-ai
 
       - name: Action manifest conformance
         run: ./scripts/action-manifest-conformance.sh --quick

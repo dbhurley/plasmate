@@ -1,4 +1,4 @@
-import { experimental_createMCPClient } from 'ai'
+import { createMCPClient } from '@ai-sdk/mcp'
 import { Experimental_StdioMCPTransport } from '@ai-sdk/mcp/mcp-stdio'
 
 /**
@@ -913,10 +913,10 @@ export async function createPlasmateTools(
     )
   }
 
-  let client: Awaited<ReturnType<typeof experimental_createMCPClient>>
+  let client: Awaited<ReturnType<typeof createMCPClient>>
 
   try {
-    client = await experimental_createMCPClient({ transport })
+    client = await createMCPClient({ transport })
   } catch (err) {
     throw new Error(
       `Failed to start Plasmate MCP server (binary: "${binary}").\n` +
