@@ -10,6 +10,7 @@
 
 pub mod dom_bridge;
 pub mod extract;
+pub mod modules;
 pub mod pipeline;
 pub mod runtime;
 pub mod script_fetch;

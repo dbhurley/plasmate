@@ -1,0 +1,8 @@
+<!doctype html>
+<div id="result"></div>
+<script>globalThis.executionOrder = ['classic-before'];</script>
+<script type="module">
+  executionOrder.push('module');
+  document.getElementById('result').textContent = executionOrder.join(',') + ':' + import.meta.url;
+</script>
+<script>executionOrder.push('classic-after');</script>

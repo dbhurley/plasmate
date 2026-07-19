@@ -6,6 +6,7 @@
 
 use std::alloc::{alloc, Layout};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Once;
 use std::time::Duration;
@@ -13,6 +14,9 @@ use std::time::Duration;
 use tracing::{debug, info, warn};
 
 use super::dom_bridge::{ClickResult, NodeRegistry};
+use super::modules::{
+    ModuleDiagnostic, ModuleExecutionDiagnostics, ModuleGraph, MAX_MODULE_DIAGNOSTICS,
+};
 
 // Thread-local storage for the reqwest client used by the fetch bridge.
 // This is needed because V8 callbacks can't easily capture external state.
@@ -102,7 +106,8 @@ pub fn init_platform() {
 /// Configuration for a JS runtime instance.
 #[derive(Debug, Clone)]
 pub struct RuntimeConfig {
-    /// Max JS execution time per script in milliseconds.
+    /// Max JS execution time per classic script or native module graph in
+    /// milliseconds.
     pub max_execution_ms: u64,
     /// Max heap size in bytes (0 = unlimited).
     pub max_heap_bytes: usize,
@@ -3019,6 +3024,132 @@ pub struct JsRuntime {
     isolate: v8::OwnedIsolate,
     context: Option<v8::Global<v8::Context>>,
     scripts_executed: usize,
+    max_execution_ms: u64,
+}
+
+struct NativeModuleState {
+    modules: HashMap<String, v8::Global<v8::Module>>,
+    /// Identity hashes are explicitly not unique in V8. Keep the actual
+    /// persistent handles and compare their underlying module identities.
+    identities: Vec<NativeModuleIdentity>,
+    aliases: HashMap<String, String>,
+    diagnostics: Vec<ModuleDiagnostic>,
+}
+
+struct NativeModuleIdentity {
+    module: v8::Global<v8::Module>,
+    resolution_url: String,
+    import_meta_url: String,
+}
+
+fn throw_module_error<'a>(
+    scope: &mut v8::CallbackScope<'a>,
+    message: &str,
+) -> Option<v8::Local<'a, v8::Module>> {
+    if let Some(text) = v8::String::new(scope, message) {
+        let exception = v8::Exception::type_error(scope, text);
+        scope.throw_exception(exception);
+    }
+    None
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn resolve_native_module<'a>(
+    context: v8::Local<'a, v8::Context>,
+    specifier: v8::Local<'a, v8::String>,
+    import_attributes: v8::Local<'a, v8::FixedArray>,
+    referrer: v8::Local<'a, v8::Module>,
+) -> Option<v8::Local<'a, v8::Module>> {
+    let mut scope = unsafe { v8::CallbackScope::new(context) };
+    let specifier = specifier.to_rust_string_lossy(&mut scope);
+    if import_attributes.length() != 0 {
+        return throw_module_error(&mut scope, "module import attributes are not supported");
+    }
+    let Some(state) = context.get_slot::<NativeModuleState>() else {
+        return throw_module_error(&mut scope, "module resolver state is unavailable");
+    };
+    let referrer_url = state.identities.iter().find_map(|identity| {
+        let candidate = v8::Local::new(&mut scope, &identity.module);
+        (candidate == referrer).then_some(&identity.resolution_url)
+    });
+    let Some(referrer_url) = referrer_url else {
+        return throw_module_error(&mut scope, "module referrer is unknown");
+    };
+    let Ok(base) = url::Url::parse(referrer_url) else {
+        return throw_module_error(&mut scope, "module referrer URL is invalid");
+    };
+    let is_url_specifier = specifier.starts_with('/')
+        || specifier.starts_with("./")
+        || specifier.starts_with("../")
+        || specifier.starts_with("http://")
+        || specifier.starts_with("https://");
+    if !is_url_specifier {
+        return throw_module_error(&mut scope, "bare module specifiers are not supported");
+    }
+    let Ok(mut target) = base.join(&specifier) else {
+        return throw_module_error(&mut scope, "module specifier could not be resolved");
+    };
+    target.set_fragment(None);
+    let canonical = state
+        .aliases
+        .get(target.as_str())
+        .map(String::as_str)
+        .unwrap_or_else(|| target.as_str());
+    let Some(module) = state.modules.get(canonical) else {
+        return throw_module_error(&mut scope, "module dependency was not loaded");
+    };
+    Some(v8::Local::new(&mut scope, module))
+}
+
+extern "C" fn initialize_import_meta(
+    context: v8::Local<v8::Context>,
+    module: v8::Local<v8::Module>,
+    meta: v8::Local<v8::Object>,
+) {
+    let mut scope = unsafe { v8::CallbackScope::new(context) };
+    let Some(state) = context.get_slot::<NativeModuleState>() else {
+        return;
+    };
+    let url = state.identities.iter().find_map(|identity| {
+        let candidate = v8::Local::new(&mut scope, &identity.module);
+        (candidate == module).then_some(&identity.import_meta_url)
+    });
+    let Some(url) = url else {
+        return;
+    };
+    let Some(key) = v8::String::new(&mut scope, "url") else {
+        return;
+    };
+    let Some(value) = v8::String::new(&mut scope, url) else {
+        return;
+    };
+    let _ = meta.create_data_property(&mut scope, key.into(), value.into());
+}
+
+fn reject_dynamic_import<'s>(
+    scope: &mut v8::HandleScope<'s>,
+    _host_defined_options: v8::Local<'s, v8::Data>,
+    resource_name: v8::Local<'s, v8::Value>,
+    _specifier: v8::Local<'s, v8::String>,
+    _import_attributes: v8::Local<'s, v8::FixedArray>,
+) -> Option<v8::Local<'s, v8::Promise>> {
+    let resource = resource_name.to_rust_string_lossy(scope);
+    let context = scope.get_current_context();
+    if let Some(state) = context.get_slot_mut::<NativeModuleState>() {
+        if state.diagnostics.len() < MAX_MODULE_DIAGNOSTICS {
+            state.diagnostics.push(module_runtime_diagnostic(
+                &resource,
+                "resolve",
+                "unsupported-dynamic-import",
+                "dynamic import() is not supported",
+            ));
+        }
+    }
+    let resolver = v8::PromiseResolver::new(scope)?;
+    let message = v8::String::new(scope, "dynamic import() is not supported")?;
+    let exception = v8::Exception::type_error(scope, message);
+    let _ = resolver.reject(scope, exception);
+    Some(resolver.get_promise(scope))
 }
 
 impl JsRuntime {
@@ -3033,6 +3164,8 @@ impl JsRuntime {
         };
 
         let mut isolate = v8::Isolate::new(params);
+        isolate.set_host_initialize_import_meta_object_callback(initialize_import_meta);
+        isolate.set_host_import_module_dynamically_callback(reject_dynamic_import);
 
         // Create a persistent context
         let context = {
@@ -3045,6 +3178,7 @@ impl JsRuntime {
             isolate,
             context: Some(context),
             scripts_executed: 0,
+            max_execution_ms: config.max_execution_ms,
         };
 
         // Inject DOM shim
@@ -3182,6 +3316,7 @@ impl JsRuntime {
             succeeded: 0,
             failed: 0,
             errors: Vec::new(),
+            module_diagnostics: None,
         };
 
         for (source, filename) in scripts {
@@ -3193,6 +3328,280 @@ impl JsRuntime {
                 Err(e) => {
                     report.failed += 1;
                     report.errors.push((filename.clone(), e.to_string()));
+                }
+            }
+        }
+        report
+    }
+
+    /// Compile, instantiate, and evaluate a pre-fetched ES-module graph using
+    /// V8's native module implementation. Module objects are cached by final
+    /// URL, so dependencies and duplicate roots are evaluated at most once.
+    pub fn execute_module_graph(&mut self, graph: &ModuleGraph) -> ModuleExecutionDiagnostics {
+        let mut report = ModuleExecutionDiagnostics::from_graph(graph);
+        if graph.roots.is_empty() {
+            return report;
+        }
+        let execution_started = std::time::Instant::now();
+        let execution_budget = Duration::from_millis(self.max_execution_ms);
+        let context_global = match self.context.as_ref() {
+            Some(context) => context,
+            None => {
+                push_module_diagnostic(
+                    &mut report,
+                    ModuleDiagnostic {
+                        url: String::new(),
+                        phase: "runtime".into(),
+                        code: "missing-context".into(),
+                        message: "V8 context is unavailable".into(),
+                    },
+                );
+                report.roots_failed = graph.root_count;
+                return report;
+            }
+        };
+
+        let mut state = NativeModuleState {
+            modules: HashMap::new(),
+            identities: Vec::new(),
+            aliases: graph.aliases.clone(),
+            diagnostics: Vec::new(),
+        };
+        let compile_handle = self.isolate.thread_safe_handle();
+        let (compile_cancel_tx, compile_cancel_rx) = std::sync::mpsc::channel();
+        let compile_remaining = execution_budget.saturating_sub(execution_started.elapsed());
+        let compile_watchdog = std::thread::spawn(move || {
+            if compile_cancel_rx.recv_timeout(compile_remaining).is_err() {
+                compile_handle.terminate_execution();
+                true
+            } else {
+                false
+            }
+        });
+        {
+            let scope = &mut v8::HandleScope::new(&mut self.isolate);
+            let context = v8::Local::new(scope, context_global);
+            let scope = &mut v8::ContextScope::new(scope, context);
+            let mut sources: Vec<_> = graph.sources.iter().collect();
+            sources.sort_by(|(left, _), (right, _)| left.cmp(right));
+            for (request_url, source) in sources {
+                let Some(source_text) = v8::String::new(scope, &source.source) else {
+                    push_module_diagnostic(
+                        &mut report,
+                        module_runtime_diagnostic(
+                            &source.url,
+                            "compile",
+                            "source-allocation-failed",
+                            "V8 could not allocate module source",
+                        ),
+                    );
+                    continue;
+                };
+                let Some(name) = v8::String::new(scope, &source.url) else {
+                    push_module_diagnostic(
+                        &mut report,
+                        module_runtime_diagnostic(
+                            &source.url,
+                            "compile",
+                            "url-allocation-failed",
+                            "V8 could not allocate module URL",
+                        ),
+                    );
+                    continue;
+                };
+                let origin = v8::ScriptOrigin::new(
+                    scope,
+                    name.into(),
+                    0,
+                    0,
+                    false,
+                    0,
+                    None,
+                    false,
+                    false,
+                    true,
+                    None,
+                );
+                let mut compiler_source =
+                    v8::script_compiler::Source::new(source_text, Some(&origin));
+                let tc = &mut v8::TryCatch::new(scope);
+                match v8::script_compiler::compile_module(tc, &mut compiler_source) {
+                    Some(module) => {
+                        state.identities.push(NativeModuleIdentity {
+                            module: v8::Global::new(tc, module),
+                            resolution_url: source.resolution_url.clone(),
+                            import_meta_url: source.import_meta_url.clone(),
+                        });
+                        state
+                            .modules
+                            .insert(source.url.clone(), v8::Global::new(tc, module));
+                        state
+                            .aliases
+                            .insert(request_url.clone(), source.url.clone());
+                    }
+                    None => push_module_diagnostic(
+                        &mut report,
+                        module_runtime_diagnostic(
+                            &source.url,
+                            "compile",
+                            "module-syntax-error",
+                            &caught_exception(tc),
+                        ),
+                    ),
+                }
+            }
+            context.set_slot(state);
+        }
+
+        let _ = compile_cancel_tx.send(());
+        let compile_timed_out = compile_watchdog.join().unwrap_or(true);
+        if compile_timed_out {
+            self.isolate.cancel_terminate_execution();
+            let scope = &mut v8::HandleScope::new(&mut self.isolate);
+            let context = v8::Local::new(scope, context_global);
+            let _ = context.remove_slot::<NativeModuleState>();
+            report.roots_failed += graph.roots.len();
+            push_module_diagnostic(
+                &mut report,
+                module_runtime_diagnostic(
+                    "",
+                    "compile",
+                    "module-execution-deadline-exceeded",
+                    "module compilation exhausted the whole-graph execution deadline; roots were not evaluated",
+                ),
+            );
+            return report;
+        }
+
+        for (root_index, root_url) in graph.roots.iter().enumerate() {
+            let Some(remaining) = execution_budget.checked_sub(execution_started.elapsed()) else {
+                report.roots_failed += graph.roots.len() - root_index;
+                push_module_diagnostic(
+                    &mut report,
+                    module_runtime_diagnostic(
+                        root_url,
+                        "evaluate",
+                        "module-execution-deadline-exceeded",
+                        "the whole-graph execution deadline was exhausted; remaining roots were not evaluated",
+                    ),
+                );
+                break;
+            };
+            let handle = self.isolate.thread_safe_handle();
+            let (cancel_tx, cancel_rx) = std::sync::mpsc::channel();
+            let watchdog = std::thread::spawn(move || {
+                if cancel_rx.recv_timeout(remaining).is_err() {
+                    handle.terminate_execution();
+                    true
+                } else {
+                    false
+                }
+            });
+
+            let outcome = {
+                let scope = &mut v8::HandleScope::new(&mut self.isolate);
+                let context = v8::Local::new(scope, context_global);
+                let scope = &mut v8::ContextScope::new(scope, context);
+                let module = context
+                    .get_slot::<NativeModuleState>()
+                    .and_then(|state| {
+                        let canonical = state
+                            .aliases
+                            .get(root_url)
+                            .map(String::as_str)
+                            .unwrap_or(root_url);
+                        state.modules.get(canonical)
+                    })
+                    .map(|module| v8::Local::new(scope, module));
+                match module {
+                    None => Err((
+                        "module-not-loaded",
+                        "module root or one of its dependencies was not loaded".to_string(),
+                    )),
+                    Some(module) if module.get_status() == v8::ModuleStatus::Evaluated => Ok(()),
+                    Some(module) if module.get_status() == v8::ModuleStatus::Errored => Err((
+                        "module-previously-errored",
+                        bounded_utf8(&module.get_exception().to_rust_string_lossy(scope), 1024),
+                    )),
+                    Some(module) => {
+                        let tc = &mut v8::TryCatch::new(scope);
+                        let instantiated =
+                            if module.get_status() == v8::ModuleStatus::Uninstantiated {
+                                module.instantiate_module(tc, resolve_native_module)
+                            } else {
+                                Some(true)
+                            };
+                        match instantiated {
+                            None | Some(false) => {
+                                Err(("module-instantiation-error", caught_exception(tc)))
+                            }
+                            Some(true) if module.is_graph_async() => Err((
+                                "unsupported-top-level-await",
+                                "top-level await is not supported".to_string(),
+                            )),
+                            Some(true) => match module.evaluate(tc) {
+                                None => Err(("module-runtime-error", caught_exception(tc))),
+                                Some(value) => {
+                                    tc.perform_microtask_checkpoint();
+                                    if let Ok(promise) = v8::Local::<v8::Promise>::try_from(value) {
+                                        if promise.state() == v8::PromiseState::Rejected {
+                                            Err((
+                                                "module-runtime-error",
+                                                promise.result(tc).to_rust_string_lossy(tc),
+                                            ))
+                                        } else {
+                                            Ok(())
+                                        }
+                                    } else {
+                                        Ok(())
+                                    }
+                                }
+                            },
+                        }
+                    }
+                }
+            };
+            let _ = cancel_tx.send(());
+            let timed_out = watchdog.join().unwrap_or(true);
+            if timed_out {
+                self.isolate.cancel_terminate_execution();
+                report.roots_failed += graph.roots.len() - root_index;
+                push_module_diagnostic(
+                    &mut report,
+                    module_runtime_diagnostic(
+                        root_url,
+                        "evaluate",
+                        "module-execution-deadline-exceeded",
+                        "module evaluation exhausted the whole-graph execution deadline; remaining roots were not evaluated",
+                    ),
+                );
+                break;
+            } else {
+                match outcome {
+                    Ok(()) => {
+                        report.roots_evaluated += 1;
+                        self.scripts_executed += 1;
+                    }
+                    Err((code, message)) => {
+                        report.roots_failed += 1;
+                        push_module_diagnostic(
+                            &mut report,
+                            module_runtime_diagnostic(root_url, "evaluate", code, &message),
+                        );
+                    }
+                }
+            }
+        }
+
+        {
+            let scope = &mut v8::HandleScope::new(&mut self.isolate);
+            let context = v8::Local::new(scope, context_global);
+            if let Some(state) = context.remove_slot::<NativeModuleState>() {
+                for diagnostic in state.diagnostics {
+                    if report.diagnostics.len() >= MAX_MODULE_DIAGNOSTICS {
+                        break;
+                    }
+                    push_module_diagnostic(&mut report, diagnostic);
                 }
             }
         }
@@ -4268,13 +4677,67 @@ fn do_fetch_on_thread(
     .to_string())
 }
 
+fn module_runtime_diagnostic(
+    url: &str,
+    phase: &str,
+    code: &str,
+    message: &str,
+) -> ModuleDiagnostic {
+    let safe_url = url::Url::parse(url)
+        .map(|mut parsed| {
+            let _ = parsed.set_username("");
+            let _ = parsed.set_password(None);
+            parsed.set_query(None);
+            parsed.set_fragment(None);
+            parsed.to_string()
+        })
+        .unwrap_or_default();
+    ModuleDiagnostic {
+        url: bounded_utf8(&safe_url, 512),
+        phase: bounded_utf8(phase, 32),
+        code: bounded_utf8(code, 64),
+        message: bounded_utf8(message, 1024),
+    }
+}
+
+fn push_module_diagnostic(report: &mut ModuleExecutionDiagnostics, diagnostic: ModuleDiagnostic) {
+    if report.diagnostics.len() < MAX_MODULE_DIAGNOSTICS {
+        report.diagnostics.push(diagnostic);
+    }
+}
+
+fn bounded_utf8(value: &str, max_bytes: usize) -> String {
+    if value.len() <= max_bytes {
+        return value.to_string();
+    }
+    let mut end = max_bytes;
+    while end > 0 && !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    value[..end].to_string()
+}
+
+fn caught_exception(scope: &mut v8::TryCatch<v8::HandleScope>) -> String {
+    bounded_utf8(
+        &scope
+            .exception()
+            .map(|exception| exception.to_rust_string_lossy(scope))
+            .unwrap_or_else(|| "V8 did not provide exception details".into()),
+        1024,
+    )
+}
+
 /// Report from executing page scripts.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct JsExecutionReport {
     pub total: usize,
     pub succeeded: usize,
     pub failed: usize,
     pub errors: Vec<(String, String)>,
+    /// Versioned native ES-module diagnostics. Omitted for classic-only pages,
+    /// preserving the legacy serialized shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub module_diagnostics: Option<ModuleExecutionDiagnostics>,
 }
 
 /// Heap memory statistics.
@@ -4300,11 +4763,197 @@ pub enum JsError {
 mod tests {
     use super::*;
 
+    fn module_graph(entries: &[(&str, &str)], roots: &[&str]) -> ModuleGraph {
+        let mut graph = ModuleGraph {
+            root_count: roots.len(),
+            ..Default::default()
+        };
+        for (url, source) in entries {
+            graph.aliases.insert((*url).into(), (*url).into());
+            graph.sources.insert(
+                (*url).into(),
+                super::super::modules::ModuleSource {
+                    url: (*url).into(),
+                    resolution_url: (*url).into(),
+                    import_meta_url: (*url).into(),
+                    source: (*source).into(),
+                    imports: Vec::new(),
+                },
+            );
+        }
+        graph.roots = roots.iter().map(|url| (*url).into()).collect();
+        graph
+    }
+
     #[test]
     fn test_basic_execution() {
         let mut rt = JsRuntime::new(RuntimeConfig::default());
         let result = rt.execute_in_context("1 + 2", "test.js").unwrap();
         assert_eq!(result, "3");
+    }
+
+    #[test]
+    fn native_modules_preserve_bindings_cycles_strictness_and_import_meta() {
+        let graph = module_graph(
+            &[
+                (
+                    "https://example.com/main.js",
+                    "import { value, bump } from './dep.js'; bump(); globalThis.moduleResult = value; globalThis.metaResult = import.meta.url; try { undeclaredModuleValue = 1; } catch (e) { globalThis.strictResult = e.name; }",
+                ),
+                (
+                    "https://example.com/dep.js",
+                    "import './cycle.js'; export let value = 1; export function bump() { value += 1; }",
+                ),
+                (
+                    "https://example.com/cycle.js",
+                    "import './dep.js'; globalThis.cycleEvaluations = (globalThis.cycleEvaluations || 0) + 1;",
+                ),
+            ],
+            &["https://example.com/main.js"],
+        );
+        let mut runtime = JsRuntime::new(RuntimeConfig::default());
+        let report = runtime.execute_module_graph(&graph);
+        assert_eq!(report.roots_evaluated, 1, "{:#?}", report.diagnostics);
+        assert_eq!(runtime.eval("moduleResult").unwrap(), "2");
+        assert_eq!(runtime.eval("cycleEvaluations").unwrap(), "1");
+        assert_eq!(runtime.eval("strictResult").unwrap(), "ReferenceError");
+        assert_eq!(
+            runtime.eval("metaResult").unwrap(),
+            "https://example.com/main.js"
+        );
+    }
+
+    #[test]
+    fn native_module_dependency_and_duplicate_root_evaluate_once() {
+        let graph = module_graph(
+            &[
+                (
+                    "https://example.com/a.js",
+                    "import './shared.js'; globalThis.aLoaded = true;",
+                ),
+                (
+                    "https://example.com/b.js",
+                    "import './shared.js'; globalThis.bLoaded = true;",
+                ),
+                (
+                    "https://example.com/shared.js",
+                    "globalThis.sharedEvaluations = (globalThis.sharedEvaluations || 0) + 1; export const ok = true;",
+                ),
+            ],
+            &[
+                "https://example.com/a.js",
+                "https://example.com/b.js",
+                "https://example.com/a.js",
+            ],
+        );
+        let mut runtime = JsRuntime::new(RuntimeConfig::default());
+        let report = runtime.execute_module_graph(&graph);
+        assert_eq!(report.roots_evaluated, 3, "{:#?}", report.diagnostics);
+        assert_eq!(runtime.eval("sharedEvaluations").unwrap(), "1");
+    }
+
+    #[test]
+    fn native_module_roots_share_one_execution_deadline() {
+        let graph = module_graph(
+            &[
+                ("https://example.com/a.js", "for (;;) {}"),
+                (
+                    "https://example.com/b.js",
+                    "globalThis.secondRootStarted = true; for (;;) {}",
+                ),
+                (
+                    "https://example.com/c.js",
+                    "globalThis.thirdRootStarted = true; for (;;) {}",
+                ),
+                (
+                    "https://example.com/d.js",
+                    "globalThis.fourthRootStarted = true; for (;;) {}",
+                ),
+            ],
+            &[
+                "https://example.com/a.js",
+                "https://example.com/b.js",
+                "https://example.com/c.js",
+                "https://example.com/d.js",
+            ],
+        );
+        let mut runtime = JsRuntime::new(RuntimeConfig {
+            max_execution_ms: 75,
+            ..Default::default()
+        });
+        let started = std::time::Instant::now();
+        let report = runtime.execute_module_graph(&graph);
+        let elapsed = started.elapsed();
+
+        assert!(
+            elapsed < Duration::from_millis(250),
+            "four roots consumed more than one bounded graph deadline: {elapsed:?}"
+        );
+        assert_eq!(report.roots_evaluated, 0, "{:#?}", report.diagnostics);
+        assert_eq!(report.roots_failed, 4, "{:#?}", report.diagnostics);
+        assert_eq!(
+            report
+                .diagnostics
+                .iter()
+                .filter(|item| item.code == "module-execution-deadline-exceeded")
+                .count(),
+            1,
+            "{:#?}",
+            report.diagnostics
+        );
+        assert_eq!(
+            runtime.eval("typeof secondRootStarted").unwrap(),
+            "undefined"
+        );
+        assert_eq!(runtime.eval("1 + 1").unwrap(), "2");
+    }
+
+    #[test]
+    fn native_dynamic_import_is_rejected_and_reported() {
+        let graph = module_graph(
+            &[(
+                "https://example.com/main.js",
+                "import('./lazy.js'); globalThis.afterDynamic = true;",
+            )],
+            &["https://example.com/main.js"],
+        );
+        let mut runtime = JsRuntime::new(RuntimeConfig::default());
+        let report = runtime.execute_module_graph(&graph);
+        assert!(report
+            .diagnostics
+            .iter()
+            .any(|item| item.code == "unsupported-dynamic-import"));
+    }
+
+    #[test]
+    fn native_module_syntax_runtime_and_top_level_await_errors_are_explicit() {
+        for (source, expected) in [
+            ("export const = 1;", "module-syntax-error"),
+            ("throw new Error('module boom');", "module-runtime-error"),
+            ("await Promise.resolve(1);", "unsupported-top-level-await"),
+        ] {
+            let graph = module_graph(
+                &[("https://example.com/error.js", source)],
+                &["https://example.com/error.js"],
+            );
+            let mut runtime = JsRuntime::new(RuntimeConfig::default());
+            let report = runtime.execute_module_graph(&graph);
+            assert!(
+                report.diagnostics.iter().any(|item| item.code == expected),
+                "expected {expected}: {:#?}",
+                report.diagnostics
+            );
+        }
+    }
+
+    #[test]
+    fn classic_report_serialization_shape_is_backward_compatible() {
+        let mut runtime = JsRuntime::new(RuntimeConfig::default());
+        let report = runtime.execute_page_scripts(&[("1 + 1".into(), "classic.js".into())]);
+        let value = serde_json::to_value(report).unwrap();
+        assert_eq!(value["total"], 1);
+        assert_eq!(value["succeeded"], 1);
+        assert!(value.get("module_diagnostics").is_none());
     }
 
     #[test]

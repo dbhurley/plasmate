@@ -10,6 +10,8 @@ use tracing::debug;
 
 use super::dom_bridge::NodeRegistry;
 use super::extract;
+use super::extract::ScriptKind;
+use super::modules;
 use super::runtime::{JsExecutionReport, JsRuntime, RuntimeConfig};
 use super::script_fetch;
 use crate::plugin::PluginManager;
@@ -57,6 +59,8 @@ pub struct PipelineConfig {
     pub fetch_external_scripts: bool,
     /// Limits for external script fetching.
     pub external_script_limits: script_fetch::ScriptFetchLimits,
+    /// Limits for native ES-module graph acquisition.
+    pub module_limits: modules::ModuleLimits,
     /// JS runtime configuration.
     pub js_config: RuntimeConfig,
     /// Max timer drain threshold in ms (execute short setTimeout callbacks).
@@ -69,6 +73,7 @@ impl Default for PipelineConfig {
             execute_js: true,
             fetch_external_scripts: false, // Off by default for sync API; async API enables it
             external_script_limits: script_fetch::ScriptFetchLimits::default(),
+            module_limits: modules::ModuleLimits::default(),
             js_config: RuntimeConfig::default(),
             timer_drain_ms: 100,
         }
@@ -236,6 +241,7 @@ pub async fn process_page_async(
             scripts
                 .iter()
                 .filter(|s| s.is_inline)
+                .filter(|s| s.kind == ScriptKind::Classic)
                 .map(|s| script_fetch::ResolvedScript {
                     source: s.source.clone(),
                     label: s.label.clone(),
@@ -243,6 +249,14 @@ pub async fn process_page_async(
                 })
                 .collect()
         };
+        let module_graph = modules::resolve_module_graph(
+            &scripts,
+            url,
+            client,
+            &config.module_limits,
+            config.fetch_external_scripts,
+        )
+        .await;
 
         let exec_scripts: Vec<(String, String)> = resolved
             .iter()
@@ -264,9 +278,19 @@ pub async fn process_page_async(
         // NodeRegistry, inject into V8 so JS mutations flow to the rcdom tree.
         wire_dom_bridge(&mut runtime, html);
 
-        if !exec_scripts.is_empty() {
+        if !exec_scripts.is_empty()
+            || !module_graph.roots.is_empty()
+            || !module_graph.diagnostics.is_empty()
+        {
             // Execute page scripts
-            let report = runtime.execute_page_scripts(&exec_scripts);
+            let mut report = runtime.execute_page_scripts(&exec_scripts);
+            let module_report = runtime.execute_module_graph(&module_graph);
+            report.total += module_report.roots;
+            report.succeeded += module_report.roots_evaluated;
+            report.failed += module_report.roots_failed;
+            if module_report.roots > 0 || !module_report.diagnostics.is_empty() {
+                report.module_diagnostics = Some(module_report);
+            }
 
             // Pump microtasks after script execution (resolves Promise.then chains)
             runtime.pump_microtasks();
@@ -380,9 +404,10 @@ pub fn process_page_with_client(
 
         let inline_scripts: Vec<(String, String)> = scripts
             .iter()
-            .filter(|s| s.is_inline)
+            .filter(|s| s.is_inline && s.kind == ScriptKind::Classic)
             .map(|s| (s.source.clone(), s.label.clone()))
             .collect();
+        let module_graph = modules::inline_module_graph(&scripts, url, &config.module_limits);
 
         // Phase 2: Bootstrap DOM and execute JS
         let t1 = Instant::now();
@@ -400,9 +425,19 @@ pub fn process_page_with_client(
         // Wire the DOM bridge so JS mutations flow to the rcdom tree.
         wire_dom_bridge(&mut runtime, html);
 
-        if !inline_scripts.is_empty() {
+        if !inline_scripts.is_empty()
+            || !module_graph.roots.is_empty()
+            || !module_graph.diagnostics.is_empty()
+        {
             // Execute page scripts in the context with the bootstrapped DOM
-            let report = runtime.execute_page_scripts(&inline_scripts);
+            let mut report = runtime.execute_page_scripts(&inline_scripts);
+            let module_report = runtime.execute_module_graph(&module_graph);
+            report.total += module_report.roots;
+            report.succeeded += module_report.roots_evaluated;
+            report.failed += module_report.roots_failed;
+            if module_report.roots > 0 || !module_report.diagnostics.is_empty() {
+                report.module_diagnostics = Some(module_report);
+            }
 
             // Pump microtasks after script execution (resolves Promise.then chains)
             runtime.pump_microtasks();
@@ -502,6 +537,7 @@ pub async fn process_page_async_with_plugins(
             scripts
                 .iter()
                 .filter(|s| s.is_inline)
+                .filter(|s| s.kind == ScriptKind::Classic)
                 .map(|s| script_fetch::ResolvedScript {
                     source: s.source.clone(),
                     label: s.label.clone(),
@@ -509,6 +545,14 @@ pub async fn process_page_async_with_plugins(
                 })
                 .collect()
         };
+        let module_graph = modules::resolve_module_graph(
+            &scripts,
+            url,
+            client,
+            &config.module_limits,
+            config.fetch_external_scripts,
+        )
+        .await;
 
         let exec_scripts: Vec<(String, String)> = resolved
             .iter()
@@ -527,8 +571,18 @@ pub async fn process_page_async_with_plugins(
         // Install timer/rAF shims so SPA frameworks can queue deferred callbacks.
         install_timer_shims(&mut runtime);
 
-        if !exec_scripts.is_empty() {
-            let report = runtime.execute_page_scripts(&exec_scripts);
+        if !exec_scripts.is_empty()
+            || !module_graph.roots.is_empty()
+            || !module_graph.diagnostics.is_empty()
+        {
+            let mut report = runtime.execute_page_scripts(&exec_scripts);
+            let module_report = runtime.execute_module_graph(&module_graph);
+            report.total += module_report.roots;
+            report.succeeded += module_report.roots_evaluated;
+            report.failed += module_report.roots_failed;
+            if module_report.roots > 0 || !module_report.diagnostics.is_empty() {
+                report.module_diagnostics = Some(module_report);
+            }
             drain_timer_queue(&mut runtime);
             runtime.pump_microtasks();
             runtime.fire_dom_content_loaded();
@@ -610,9 +664,10 @@ pub fn process_page_with_plugins(
 
         let inline_scripts: Vec<(String, String)> = scripts
             .iter()
-            .filter(|s| s.is_inline)
+            .filter(|s| s.is_inline && s.kind == ScriptKind::Classic)
             .map(|s| (s.source.clone(), s.label.clone()))
             .collect();
+        let module_graph = modules::inline_module_graph(&scripts, url, &config.module_limits);
 
         let t1 = Instant::now();
         let mut runtime = JsRuntime::new(config.js_config.clone());
@@ -625,8 +680,18 @@ pub fn process_page_with_plugins(
         // Install timer/rAF shims so SPA frameworks can queue deferred callbacks.
         install_timer_shims(&mut runtime);
 
-        if !inline_scripts.is_empty() {
-            let report = runtime.execute_page_scripts(&inline_scripts);
+        if !inline_scripts.is_empty()
+            || !module_graph.roots.is_empty()
+            || !module_graph.diagnostics.is_empty()
+        {
+            let mut report = runtime.execute_page_scripts(&inline_scripts);
+            let module_report = runtime.execute_module_graph(&module_graph);
+            report.total += module_report.roots;
+            report.succeeded += module_report.roots_evaluated;
+            report.failed += module_report.roots_failed;
+            if module_report.roots > 0 || !module_report.diagnostics.is_empty() {
+                report.module_diagnostics = Some(module_report);
+            }
             drain_timer_queue(&mut runtime);
             runtime.pump_microtasks();
             runtime.fire_dom_content_loaded();
@@ -710,6 +775,47 @@ mod tests {
         assert_eq!(result.som.title, "");
         assert!(result.js_report.is_none());
         assert!(result.timing.js_execution_us == 0);
+    }
+
+    #[test]
+    fn classic_scripts_run_before_deferred_modules_in_document_order() {
+        // Locally reduced from the WPT module-script ordering cases; see the
+        // adjacent fixture provenance document.
+        let html = include_str!("../../tests/fixtures/js-modules/ordering.html");
+        let result =
+            process_page(html, "https://example.com/page", &PipelineConfig::default()).unwrap();
+        assert!(
+            result
+                .effective_html
+                .contains("classic-before,classic-after,module:https://example.com/page"),
+            "{}",
+            result.effective_html
+        );
+        let report = result.js_report.unwrap();
+        assert_eq!(report.total, 3);
+        assert_eq!(report.failed, 0, "{report:#?}");
+        assert_eq!(
+            report.module_diagnostics.unwrap().version,
+            modules::MODULE_DIAGNOSTICS_VERSION
+        );
+    }
+
+    #[test]
+    fn import_maps_are_reported_instead_of_silently_ignored() {
+        let result = process_page(
+            r#"<script type="importmap">{"imports":{"pkg":"./pkg.js"}}</script>"#,
+            "https://example.com/page",
+            &PipelineConfig::default(),
+        )
+        .unwrap();
+        let modules = result
+            .js_report
+            .and_then(|report| report.module_diagnostics)
+            .expect("module diagnostics");
+        assert!(modules
+            .diagnostics
+            .iter()
+            .any(|item| item.code == "unsupported-import-maps"));
     }
 
     #[test]
