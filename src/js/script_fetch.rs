@@ -9,7 +9,7 @@ use std::time::Duration;
 use tracing::debug;
 use url::Url;
 
-use super::extract::ScriptBlock;
+use super::extract::{ScriptBlock, ScriptKind};
 
 /// A script ready for execution (either inline or fetched external).
 #[derive(Debug, Clone)]
@@ -60,6 +60,9 @@ pub async fn resolve_scripts(
     let mut to_fetch: Vec<(usize, String)> = Vec::new();
 
     for script in scripts {
+        if script.kind != ScriptKind::Classic {
+            continue;
+        }
         if script.is_inline {
             resolved.push(ResolvedScript {
                 source: script.source.clone(),
@@ -258,12 +261,14 @@ mod tests {
                 label: "inline-0".to_string(),
                 is_inline: true,
                 index: 0,
+                kind: ScriptKind::Classic,
             },
             ScriptBlock {
                 source: "var y = 2;".to_string(),
                 label: "inline-1".to_string(),
                 is_inline: true,
                 index: 1,
+                kind: ScriptKind::Classic,
             },
         ];
 
@@ -290,18 +295,21 @@ mod tests {
                 label: "inline-0".to_string(),
                 is_inline: true,
                 index: 0,
+                kind: ScriptKind::Classic,
             },
             ScriptBlock {
                 source: String::new(),
                 label: "https://httpbin.org/html".to_string(), // Will fail but that's OK
                 is_inline: false,
                 index: 1,
+                kind: ScriptKind::Classic,
             },
             ScriptBlock {
                 source: "third();".to_string(),
                 label: "inline-2".to_string(),
                 is_inline: true,
                 index: 2,
+                kind: ScriptKind::Classic,
             },
         ];
 

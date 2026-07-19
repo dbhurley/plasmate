@@ -413,7 +413,8 @@ See [docs.plasmate.app/roadmap](https://docs.plasmate.app/roadmap) for the full 
 - [x] Proxy rotation (pool management, sticky sessions)
 - [x] Iframe support
 - [x] Shadow DOM support (declarative shadow DOM)
-- [ ] Full ES module support (module scripts are currently skipped; implementation is in progress)
+- [x] Native bounded ES-module core (same-origin static URL imports; see [scope and limitations](docs/ES-MODULES.md))
+- [ ] Broader module compatibility (import maps, CORS graphs, dynamic import, import attributes, top-level await)
 - [x] MCP cache/session observability for repeated agent workflows
 - [ ] Parallel sessions at scale (500+ concurrent)
 

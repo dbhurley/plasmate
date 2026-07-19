@@ -82,6 +82,12 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: python3 -m unittest smoke/test_mcp_smoke_harness.py
 
+      - name: ES module smoke test
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        env:
+          PLASMATE_BIN: ./target/release/plasmate
+        run: python3 smoke/module-smoke.py
+
       - name: Throughput benchmark
         if: ${{ matrix.os == 'ubuntu-latest' }}
         env:
