@@ -3277,6 +3277,33 @@ impl JsRuntime {
         }
     }
 
+    /// Install the WebMCP registration capture before page scripts execute.
+    ///
+    /// This is intentionally a discovery-only implementation. The pipeline
+    /// drops its V8 context after compiling the page, so exposing callback
+    /// execution here would create false lifecycle and session guarantees.
+    pub fn install_webmcp_discovery(&mut self) {
+        if let Err(error) = self.execute_in_context(
+            crate::webmcp::DISCOVERY_SHIM_JS,
+            "<plasmate-webmcp-discovery>",
+        ) {
+            warn!(%error, "WebMCP discovery shim failed to install");
+        }
+    }
+
+    /// Collect bounded, JSON-serializable WebMCP registrations from the
+    /// current page context. Function callbacks never cross this boundary.
+    pub fn collect_webmcp_registrations(&mut self) -> crate::webmcp::RuntimeCapture {
+        let capture = self.execute_in_context(
+            "document.__plasmate_webmcp_capture ? document.__plasmate_webmcp_capture() : '{}'",
+            "<plasmate-webmcp-collect>",
+        );
+        match capture {
+            Ok(json) => serde_json::from_str(&json).unwrap_or_default(),
+            Err(_) => crate::webmcp::RuntimeCapture::default(),
+        }
+    }
+
     /// Fire the DOMContentLoaded event.
     pub fn fire_dom_content_loaded(&mut self) {
         let _ =

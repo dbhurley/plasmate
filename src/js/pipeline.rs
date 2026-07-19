@@ -30,6 +30,9 @@ pub struct PageResult {
     /// The effective HTML after JS execution (post-JS DOM serialized to HTML).
     /// For CDP Runtime.evaluate, this is the HTML that will be used to bootstrap a fresh DOM.
     pub effective_html: String,
+    /// WebMCP tools discovered in the current top-level page. Tool metadata is
+    /// untrusted web content and invocation remains explicitly discovery-only.
+    pub webmcp: crate::webmcp::WebMcpCatalog,
 }
 
 /// Timing breakdown for the pipeline stages.
@@ -217,6 +220,7 @@ pub async fn process_page_async(
     let mut extract_us = 0u128;
     let mut js_us = 0u128;
     let mut effective_html = std::borrow::Cow::Borrowed(html);
+    let mut webmcp_runtime_capture = None;
 
     if config.execute_js {
         let t0 = Instant::now();
@@ -254,6 +258,7 @@ pub async fn process_page_async(
 
         // Bootstrap the DOM tree from source HTML
         runtime.bootstrap_dom(html, url);
+        runtime.install_webmcp_discovery();
 
         // Wire the DOM bridge: parse HTML with html5ever, register tree in
         // NodeRegistry, inject into V8 so JS mutations flow to the rcdom tree.
@@ -305,10 +310,12 @@ pub async fn process_page_async(
                 }
             }
         }
+        webmcp_runtime_capture = Some(runtime.collect_webmcp_registrations());
     }
 
     let t2 = Instant::now();
     let effective_html_owned = effective_html.into_owned();
+    let webmcp = crate::webmcp::discover(&effective_html_owned, url, webmcp_runtime_capture);
     let som = compiler::compile(&effective_html_owned, url)
         .map_err(|e| PipelineError::SomCompile(e.to_string()))?;
     let som_us = t2.elapsed().as_micros();
@@ -326,6 +333,7 @@ pub async fn process_page_async(
         },
         js_report,
         effective_html: effective_html_owned,
+        webmcp,
     })
 }
 
@@ -362,6 +370,7 @@ pub fn process_page_with_client(
     let mut extract_us = 0u128;
     let mut js_us = 0u128;
     let mut effective_html = std::borrow::Cow::Borrowed(html);
+    let mut webmcp_runtime_capture = None;
 
     // Phase 1: Extract scripts (if JS enabled)
     if config.execute_js {
@@ -386,6 +395,7 @@ pub fn process_page_with_client(
 
         // Bootstrap the DOM tree from source HTML
         runtime.bootstrap_dom(html, url);
+        runtime.install_webmcp_discovery();
 
         // Wire the DOM bridge so JS mutations flow to the rcdom tree.
         wire_dom_bridge(&mut runtime, html);
@@ -432,10 +442,12 @@ pub fn process_page_with_client(
                 }
             }
         }
+        webmcp_runtime_capture = Some(runtime.collect_webmcp_registrations());
     }
 
     let t2 = Instant::now();
     let effective_html_owned = effective_html.into_owned();
+    let webmcp = crate::webmcp::discover(&effective_html_owned, url, webmcp_runtime_capture);
     let som = compiler::compile(&effective_html_owned, url)
         .map_err(|e| PipelineError::SomCompile(e.to_string()))?;
     let som_us = t2.elapsed().as_micros();
@@ -453,6 +465,7 @@ pub fn process_page_with_client(
         },
         js_report,
         effective_html: effective_html_owned,
+        webmcp,
     })
 }
 
@@ -474,6 +487,7 @@ pub async fn process_page_async_with_plugins(
     let mut extract_us = 0u128;
     let mut js_us = 0u128;
     let mut effective_html = std::borrow::Cow::Borrowed(html);
+    let mut webmcp_runtime_capture = None;
 
     if config.execute_js {
         let t0 = Instant::now();
@@ -505,6 +519,7 @@ pub async fn process_page_async_with_plugins(
         let mut runtime = JsRuntime::new(config.js_config.clone());
         runtime.inject_fetch_bridge(client.clone());
         runtime.bootstrap_dom(html, url);
+        runtime.install_webmcp_discovery();
 
         // Wire the DOM bridge so JS mutations flow to the rcdom tree.
         wire_dom_bridge(&mut runtime, html);
@@ -533,6 +548,7 @@ pub async fn process_page_async_with_plugins(
                 }
             }
         }
+        webmcp_runtime_capture = Some(runtime.collect_webmcp_registrations());
     }
 
     // Plugin hook: post_parse (between JS execution and SOM compilation).
@@ -543,6 +559,7 @@ pub async fn process_page_async_with_plugins(
     } else {
         effective_html.into_owned()
     };
+    let webmcp = crate::webmcp::discover(&effective_html_owned, url, webmcp_runtime_capture);
 
     let t2 = Instant::now();
     let som = compiler::compile(&effective_html_owned, url)
@@ -567,6 +584,7 @@ pub async fn process_page_async_with_plugins(
         },
         js_report,
         effective_html: effective_html_owned,
+        webmcp,
     })
 }
 
@@ -583,6 +601,7 @@ pub fn process_page_with_plugins(
     let mut extract_us = 0u128;
     let mut js_us = 0u128;
     let mut effective_html = std::borrow::Cow::Borrowed(html);
+    let mut webmcp_runtime_capture = None;
 
     if config.execute_js {
         let t0 = Instant::now();
@@ -598,6 +617,7 @@ pub fn process_page_with_plugins(
         let t1 = Instant::now();
         let mut runtime = JsRuntime::new(config.js_config.clone());
         runtime.bootstrap_dom(html, url);
+        runtime.install_webmcp_discovery();
 
         // Wire the DOM bridge so JS mutations flow to the rcdom tree.
         wire_dom_bridge(&mut runtime, html);
@@ -626,6 +646,7 @@ pub fn process_page_with_plugins(
                 }
             }
         }
+        webmcp_runtime_capture = Some(runtime.collect_webmcp_registrations());
     }
 
     let effective_html_owned = if plugins.has_hook(crate::plugin::Hook::PostParse) {
@@ -635,6 +656,7 @@ pub fn process_page_with_plugins(
     } else {
         effective_html.into_owned()
     };
+    let webmcp = crate::webmcp::discover(&effective_html_owned, url, webmcp_runtime_capture);
 
     let t2 = Instant::now();
     let som = compiler::compile(&effective_html_owned, url)
@@ -658,6 +680,7 @@ pub fn process_page_with_plugins(
         },
         js_report,
         effective_html: effective_html_owned,
+        webmcp,
     })
 }
 

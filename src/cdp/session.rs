@@ -44,6 +44,9 @@ pub struct CdpTarget {
     pub effective_html: Option<String>,
     pub current_som: Option<Som>,
     pub current_structured_data: Option<StructuredData>,
+    /// WebMCP tools discovered for the current top-level page. These are bound
+    /// to this target and never shared across MCP/CDP sessions.
+    pub current_webmcp: crate::webmcp::WebMcpCatalog,
 
     // CDP DOM node mapping: nodeId -> (backendNodeId, SOM element)
     pub node_map: HashMap<u64, NodeEntry>,
@@ -95,6 +98,17 @@ const DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7
 impl CdpTarget {
     pub fn new() -> Result<Self, String> {
         Self::new_with_options(crate::auth::config::profiles(), None)
+    }
+
+    /// Validate and prepare a WebMCP call against this target's current page
+    /// catalog. The plan is never executed while callbacks are not retained;
+    /// lookup here prevents using a descriptor copied from another page.
+    pub fn prepare_webmcp_invocation(
+        &self,
+        tool_id: &str,
+        input: serde_json::Value,
+    ) -> Result<crate::webmcp::WebMcpInvocationPlan, String> {
+        crate::webmcp::prepare_invocation(&self.current_webmcp, tool_id, input)
     }
 
     pub fn new_with_plugins(plugins: SharedPlugins) -> Result<Self, String> {
@@ -153,6 +167,7 @@ impl CdpTarget {
             effective_html: None,
             current_som: None,
             current_structured_data: None,
+            current_webmcp: crate::webmcp::WebMcpCatalog::default(),
             node_map: HashMap::new(),
             document_node_id: 0,
             frame_id,
@@ -194,6 +209,7 @@ impl CdpTarget {
         self.effective_html = None;
         self.current_som = None;
         self.current_structured_data = None;
+        self.current_webmcp = crate::webmcp::WebMcpCatalog::default();
         self.node_map.clear();
 
         new_target_id
@@ -250,6 +266,7 @@ impl CdpTarget {
         self.current_html = Some(html.to_string());
         self.effective_html = Some(page_result.effective_html);
         self.current_structured_data = page_result.som.structured_data.clone();
+        self.current_webmcp = page_result.webmcp.clone();
         self.current_som = Some(page_result.som);
 
         // Rebuild node map from SOM
@@ -382,6 +399,7 @@ impl CdpTarget {
         self.current_html = Some(html);
         self.effective_html = Some(page_result.effective_html);
         self.current_structured_data = page_result.som.structured_data.clone();
+        self.current_webmcp = page_result.webmcp.clone();
         self.current_som = Some(page_result.som);
 
         // Rebuild node map from SOM

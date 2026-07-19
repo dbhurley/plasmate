@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+  <head><title>Imperative WebMCP fixture</title></head>
+  <body>
+    <main><p id="status">Ready</p></main>
+    <script>
+      document.modelContext.registerTool({
+        name: "getOrderStatus",
+        title: "Get order status",
+        description: "Return the current status for one order.",
+        inputSchema: {
+          type: "object",
+          properties: { orderId: { type: "string" } },
+          required: ["orderId"]
+        },
+        outputSchema: {
+          type: "object",
+          properties: { status: { type: "string" } }
+        },
+        annotations: {
+          readOnlyHint: true,
+          untrustedContentHint: true
+        },
+        execute: async ({ orderId }) => ({ orderId, status: "shipped" })
+      });
+
+      document.modelContext.registerTool({
+        name: "cancelOrder",
+        description: "Cancel an order after the user confirms.",
+        inputSchema: {
+          type: "object",
+          properties: { orderId: { type: "string" } },
+          required: ["orderId"]
+        },
+        execute: async ({ orderId }) => {
+          document.querySelector("#status").textContent = `Cancelled ${orderId}`;
+          return { cancelled: true };
+        }
+      });
+    </script>
+  </body>
+</html>

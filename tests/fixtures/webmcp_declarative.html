@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head><title>Declarative WebMCP fixture</title></head>
+  <body>
+    <main>
+      <form
+        toolname="createSupportRequest"
+        tooldescription="Submit a request for customer support."
+        action="/support"
+        method="post"
+        toolautosubmit
+      >
+        <label for="customer-name">Customer name</label>
+        <input id="customer-name" name="customerName" required>
+
+        <label for="team">Team</label>
+        <select
+          id="team"
+          name="team"
+          required
+          toolparamdescription="The support team that receives the request."
+        >
+          <option value="billing">Billing</option>
+          <option value="technical">Technical support</option>
+        </select>
+        <button type="submit">Send request</button>
+      </form>
+    </main>
+  </body>
+</html>
