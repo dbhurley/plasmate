@@ -220,7 +220,7 @@ def main():
 
         # 4. open_page (stateful)
         print("\n4. open_page (stateful)")
-        r = rpc("tools/call", {"name": "open_page", "arguments": {"url": f"{base_url}/"}})
+        r = rpc("tools/call", {"name": "open_page", "arguments": {"url": f"{base_url}/", "trace": True}})
         page = json.loads(r["result"]["content"][0]["text"])
         session_id = page.get("session_id")
         check("has session_id", session_id is not None)
@@ -257,10 +257,40 @@ def main():
             check("navigated", "page2" in click_result.get("url", ""), f'url: {click_result.get("url")}')
             check("new title", click_result.get("title") == "Page Two", f'got: {click_result.get("title")}')
 
-        # 7. close_page
-        print("\n7. close_page")
+        # 7. privacy-safe trace and validation-only replay
+        print("\n7. trace export and replay validation")
+        r = rpc("tools/call", {"name": "trace_status", "arguments": {"session_id": session_id}})
+        trace_status = json.loads(r["result"]["content"][0]["text"])
+        trace_id = trace_status.get("trace_id")
+        check("trace enabled", trace_status.get("enabled") is True)
+        check("trace has actions", trace_status.get("retained_events", 0) >= 3)
+
+        r = rpc("tools/call", {"name": "trace_export", "arguments": {"session_id": session_id}})
+        trace_text = r["result"]["content"][0]["text"]
+        trace_export = json.loads(trace_text)
+        click_event = next((event for event in trace_export.get("events", []) if event.get("action") == "click"), None)
+        check("trace schema", trace_export.get("schema") == "plasmate.trace.v1")
+        check("trace omits evaluate source", "document.title" not in trace_text)
+        check("trace has click", click_event is not None)
+        if click_event:
+            r = rpc("tools/call", {"name": "replay_validate", "arguments": {
+                "session_id": session_id,
+                "trace_id": trace_id,
+                "sequence": click_event["sequence"],
+                "confirmed": True,
+            }})
+            replay = json.loads(r["result"]["content"][0]["text"])
+            check("stale replay refused", replay.get("status") == "refused", f"got: {replay}")
+            check("replay has no side effects", replay.get("side_effects") is False)
+            check("replay execution unavailable", replay.get("execution_available") is False)
+
+        # 8. close_page returns the last in-memory trace before destruction
+        print("\n8. close_page")
         r = rpc("tools/call", {"name": "close_page", "arguments": {"session_id": session_id}})
-        check("closed", r.get("result") is not None)
+        close_payload = json.loads(r["result"]["content"][0]["text"])
+        check("closed", close_payload.get("closed") is True)
+        final_events = close_payload.get("final_trace", {}).get("events", [])
+        check("close returns final trace", bool(final_events) and final_events[-1].get("action") == "close_page")
 
         print(f"\n=== Results: {passed} passed, {failed} failed ===")
         if failed == 0:

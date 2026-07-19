@@ -17,6 +17,7 @@ use serde_json::{json, Value};
 use tracing::{debug, info, warn};
 
 use super::sessions::{SessionManager, SessionState};
+use super::trace::ReplayRequest;
 use crate::cache::store::{CacheLookup, SomCache};
 use crate::cdp::cookies::{cookie_from_cdp_params, Cookie};
 use crate::js::pipeline::{self, PipelineConfig};
@@ -26,6 +27,7 @@ use crate::som::types::Som;
 
 /// Default timeout for fetching pages (30 seconds).
 const DEFAULT_TIMEOUT_MS: u64 = 30000;
+const MAX_TRACE_HANDLE_BYTES: usize = 64;
 
 /// MCP tool definition structure.
 #[derive(Debug, Serialize)]
@@ -630,6 +632,135 @@ pub async fn handle_session_status(sessions: &Arc<SessionManager>) -> Value {
     })
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TraceSessionParams {
+    session_id: String,
+}
+
+pub fn trace_status_definition() -> ToolDefinition {
+    ToolDefinition {
+        name: "trace_status".to_string(),
+        description: "Inspect bounded in-memory action tracing for one browser session. Returns whether tracing was enabled at open_page, retained event/byte counts, eviction counters, and the session-bound trace_id. This never returns page content or secret values.".to_string(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string", "maxLength": 64, "description": "Session ID from open_page"}
+            },
+            "required": ["session_id"],
+            "additionalProperties": false
+        }),
+    }
+}
+
+pub fn trace_export_definition() -> ToolDefinition {
+    ToolDefinition {
+        name: "trace_export".to_string(),
+        description: "Export the retained plasmate.trace.v1 event envelope for one session. Use it for local debugging or a later validation plan; typed and selected values are omitted, URL paths are keyed fingerprints, and page bodies, cookies, JavaScript, screenshots, and tool output are never included.".to_string(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string", "maxLength": 64, "description": "Owning browser session ID"}
+            },
+            "required": ["session_id"],
+            "additionalProperties": false
+        }),
+    }
+}
+
+pub fn trace_clear_definition() -> ToolDefinition {
+    ToolDefinition {
+        name: "trace_clear".to_string(),
+        description: "Delete all retained trace events for one live browser session while preserving its monotonic sequence and tracing mode. Use this to minimize in-memory retention after exporting or debugging.".to_string(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string", "maxLength": 64, "description": "Owning browser session ID"}
+            },
+            "required": ["session_id"],
+            "additionalProperties": false
+        }),
+    }
+}
+
+pub fn replay_validate_definition() -> ToolDefinition {
+    ToolDefinition {
+        name: "replay_validate".to_string(),
+        description: "Validate one retained action against its exact owning session, current keyed URL fingerprint/origin, semantic state fingerprint, and live target identity. Returns a drift classification or validation-only plan and never executes the action. Set confirmed=true only after independently approving the recorded mutation.".to_string(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string", "maxLength": 64, "description": "Current owning browser session ID"},
+                "trace_id": {"type": "string", "maxLength": 64, "description": "Trace ID returned by trace_status or trace_export"},
+                "sequence": {"type": "integer", "minimum": 1, "description": "Retained event sequence to validate"},
+                "confirmed": {"type": "boolean", "description": "Explicit approval of the mutating action; default false. Validation remains side-effect free."}
+            },
+            "required": ["session_id", "trace_id", "sequence"],
+            "additionalProperties": false
+        }),
+    }
+}
+
+pub async fn handle_trace_status(arguments: &Value, sessions: &Arc<SessionManager>) -> Value {
+    let params: TraceSessionParams = match serde_json::from_value(arguments.clone()) {
+        Ok(params) => params,
+        Err(error) => return error_response(&format!("Invalid arguments: {error}")),
+    };
+    if params.session_id.len() > MAX_TRACE_HANDLE_BYTES {
+        return error_response("Invalid arguments: session_id exceeds 64 bytes");
+    }
+    match sessions.trace_status(&params.session_id).await {
+        Some(status) => tool_response(serde_json::to_string(&status).unwrap_or_default()),
+        None => error_response(&format!("Session not found: {}", params.session_id)),
+    }
+}
+
+pub async fn handle_trace_export(arguments: &Value, sessions: &Arc<SessionManager>) -> Value {
+    let params: TraceSessionParams = match serde_json::from_value(arguments.clone()) {
+        Ok(params) => params,
+        Err(error) => return error_response(&format!("Invalid arguments: {error}")),
+    };
+    if params.session_id.len() > MAX_TRACE_HANDLE_BYTES {
+        return error_response("Invalid arguments: session_id exceeds 64 bytes");
+    }
+    match sessions.trace_export(&params.session_id).await {
+        Some(export) => tool_response(serde_json::to_string(&export).unwrap_or_default()),
+        None => error_response(&format!("Session not found: {}", params.session_id)),
+    }
+}
+
+pub async fn handle_trace_clear(arguments: &Value, sessions: &Arc<SessionManager>) -> Value {
+    let params: TraceSessionParams = match serde_json::from_value(arguments.clone()) {
+        Ok(params) => params,
+        Err(error) => return error_response(&format!("Invalid arguments: {error}")),
+    };
+    if params.session_id.len() > MAX_TRACE_HANDLE_BYTES {
+        return error_response("Invalid arguments: session_id exceeds 64 bytes");
+    }
+    match sessions.clear_trace(&params.session_id).await {
+        Some((cleared_events, status)) => {
+            tool_response(json!({"cleared_events": cleared_events, "status": status}).to_string())
+        }
+        None => error_response(&format!("Session not found: {}", params.session_id)),
+    }
+}
+
+pub async fn handle_replay_validate(arguments: &Value, sessions: &Arc<SessionManager>) -> Value {
+    let request: ReplayRequest = match serde_json::from_value(arguments.clone()) {
+        Ok(request) => request,
+        Err(error) => return error_response(&format!("Invalid arguments: {error}")),
+    };
+    if request.session_id.len() > MAX_TRACE_HANDLE_BYTES
+        || request.trace_id.len() > MAX_TRACE_HANDLE_BYTES
+    {
+        return error_response("Invalid arguments: session_id or trace_id exceeds 64 bytes");
+    }
+    match sessions.validate_trace_replay(&request).await {
+        Some(plan) => tool_response(plan.to_string()),
+        None => error_response(&format!("Session not found: {}", request.session_id)),
+    }
+}
+
 /// Handle the extract_links tool call.
 pub async fn handle_extract_links(
     arguments: &Value,
@@ -913,6 +1044,17 @@ fn error_response(message: &str) -> Value {
     })
 }
 
+fn tool_response(text: String) -> Value {
+    json!({
+        "content": [
+            {
+                "type": "text",
+                "text": text
+            }
+        ]
+    })
+}
+
 // ============================================================================
 // Phase 2: Stateful browser tools
 // ============================================================================
@@ -921,6 +1063,8 @@ fn error_response(message: &str) -> Value {
 #[derive(Debug, Deserialize)]
 struct OpenPageParams {
     url: String,
+    #[serde(default)]
+    trace: bool,
 }
 
 /// Parameters for evaluate tool.
@@ -954,6 +1098,10 @@ pub fn open_page_definition() -> ToolDefinition {
                 "url": {
                     "type": "string",
                     "description": "URL to open"
+                },
+                "trace": {
+                    "type": "boolean",
+                    "description": "Opt in to bounded, privacy-safe in-memory action tracing for this session. Default: false."
                 }
             },
             "required": ["url"]
@@ -1038,7 +1186,11 @@ pub async fn handle_open_page(
         }
     };
 
-    info!(url = %params.url, "open_page");
+    info!(
+        url_bytes = params.url.len(),
+        trace = params.trace,
+        "open_page"
+    );
 
     // Create a new session
     let session_id = match sessions.create_session().await {
@@ -1047,6 +1199,9 @@ pub async fn handle_open_page(
             return error_response(&e);
         }
     };
+    if params.trace {
+        sessions.enable_trace(&session_id).await;
+    }
 
     let (html, final_url, page_result, cache_restored) =
         match load_session_page_for_mcp(client, cache, &params.url).await {
@@ -1103,7 +1258,7 @@ pub async fn handle_evaluate(arguments: &Value, sessions: &Arc<SessionManager>) 
         }
     };
 
-    info!(session_id = %params.session_id, expression = %params.expression, "evaluate");
+    info!(session_id = %params.session_id, expression_bytes = params.expression.len(), "evaluate");
 
     // Get the effective HTML and URL from the session
     let session_data = sessions
@@ -1624,7 +1779,7 @@ pub async fn handle_navigate_to(
         }
     };
 
-    info!(session_id = %params.session_id, url = %params.url, "navigate_to");
+    info!(session_id = %params.session_id, url_bytes = params.url.len(), "navigate_to");
 
     // Verify session exists
     let exists = sessions
@@ -1833,7 +1988,7 @@ pub async fn handle_select_option(
         }
     };
 
-    info!(session_id = %params.session_id, element_id = %params.element_id, value = %params.value, "select_option");
+    info!(session_id = %params.session_id, element_id = %params.element_id, value_bytes = params.value.len(), "select_option");
 
     // Get session data
     let session_data = sessions
@@ -2555,7 +2710,7 @@ pub async fn handle_get_cookies(arguments: &Value, sessions: &Arc<SessionManager
         }
     };
 
-    info!(session_id = %params.session_id, url = ?params.url, "get_cookies");
+    info!(session_id = %params.session_id, url_filter = params.url.is_some(), "get_cookies");
 
     let result = sessions
         .with_session(&params.session_id, |session| {
@@ -2611,12 +2766,15 @@ pub async fn handle_set_cookies(arguments: &Value, sessions: &Arc<SessionManager
     let result = sessions
         .with_session(&params.session_id, |session| {
             let mut set_count = 0;
-            for cookie_params in &params.cookies {
+            for (index, cookie_params) in params.cookies.iter().enumerate() {
                 if let Some(cookie) = cookie_from_cdp_params(cookie_params) {
                     session.target.cookie_jar.set_cookie(cookie);
                     set_count += 1;
                 } else {
-                    warn!("Skipping invalid cookie: {:?}", cookie_params);
+                    warn!(
+                        index,
+                        "Skipping invalid cookie without logging cookie fields"
+                    );
                 }
             }
             set_count
@@ -2650,9 +2808,9 @@ pub async fn handle_clear_cookies(arguments: &Value, sessions: &Arc<SessionManag
 
     info!(
         session_id = %params.session_id,
-        name = ?params.name,
-        domain = ?params.domain,
-        url = ?params.url,
+        name_filter = params.name.is_some(),
+        domain_filter = params.domain.is_some(),
+        url_filter = params.url.is_some(),
         "clear_cookies"
     );
 
@@ -3041,5 +3199,35 @@ mod tests {
             Some(false)
         );
         assert!(sessions.close_session(&session_id).await);
+    }
+
+    #[test]
+    fn trace_tool_schemas_are_closed() {
+        for definition in [
+            trace_status_definition(),
+            trace_export_definition(),
+            trace_clear_definition(),
+            replay_validate_definition(),
+        ] {
+            assert_eq!(definition.input_schema["additionalProperties"], false);
+        }
+    }
+
+    #[tokio::test]
+    async fn trace_status_is_disabled_by_default_and_rejects_unknown_fields() {
+        let sessions = Arc::new(SessionManager::new());
+        let session_id = sessions.create_session().await.unwrap();
+        let result = handle_trace_status(&json!({"session_id": session_id}), &sessions).await;
+        let status: Value =
+            serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(status["enabled"], false);
+        assert_eq!(status["retained_events"], 0);
+
+        let invalid = handle_trace_status(
+            &json!({"session_id": session_id, "unexpected": true}),
+            &sessions,
+        )
+        .await;
+        assert_eq!(invalid["isError"], true);
     }
 }
