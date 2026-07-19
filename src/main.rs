@@ -230,6 +230,17 @@ enum Commands {
         #[arg(long)]
         output: Option<String>,
     },
+    /// Discover and validate static ARD catalog signals for an HTTPS page or origin.
+    ArdDiscover {
+        /// Operator-supplied HTTPS origin or page URL.
+        url: String,
+        /// Optional path for the versioned JSON discovery report.
+        #[arg(long, short)]
+        output: Option<String>,
+        /// Whole-discovery wall deadline in milliseconds (1 to 30000).
+        #[arg(long, default_value = "10000")]
+        timeout: u64,
+    },
     /// Run the real-world coverage suite and write a public scorecard JSON
     Coverage {
         /// File containing URLs (one per line)
@@ -644,6 +655,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("{json}");
             }
             if !report.valid {
+                std::process::exit(2);
+            }
+        }
+        Commands::ArdDiscover {
+            url,
+            output,
+            timeout,
+        } => {
+            let report = plasmate::ard::discover(&url, timeout).await?;
+            let json = serde_json::to_string_pretty(&report)?;
+            if let Some(output) = output {
+                std::fs::write(output, &json)?;
+            } else {
+                println!("{json}");
+            }
+            if report.summary.catalogs_accepted == 0 {
                 std::process::exit(2);
             }
         }

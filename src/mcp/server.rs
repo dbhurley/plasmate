@@ -323,6 +323,7 @@ fn handle_tools_list(request: &JsonRpcRequest, adapter: ProtocolAdapter) -> Json
         tools::fetch_page_definition(),
         tools::extract_text_definition(),
         tools::extract_links_definition(),
+        tools::ard_discover_definition(),
         tools::cache_status_definition(),
         tools::session_status_definition(),
         tools::trace_status_definition(),
@@ -411,6 +412,7 @@ async fn handle_tools_call(
         "fetch_page" => tools::handle_fetch_page(&arguments, client, cache).await,
         "extract_text" => tools::handle_extract_text(&arguments, client, cache).await,
         "extract_links" => tools::handle_extract_links(&arguments, client, cache).await,
+        "ard_discover" => tools::handle_ard_discover(&arguments).await,
         "cache_status" => tools::handle_cache_status(cache),
         "session_status" => tools::handle_session_status(sessions).await,
         "trace_status" => tools::handle_trace_status(&arguments, sessions).await,
@@ -626,7 +628,7 @@ mod tests {
         .await;
         let listed = route(&request(Some(3), "tools/list", None), &mut state).await;
         let result = listed.result.unwrap();
-        assert_eq!(result["tools"].as_array().unwrap().len(), 23);
+        assert_eq!(result["tools"].as_array().unwrap().len(), 24);
         for tool in result["tools"].as_array().unwrap() {
             assert!(tool["title"].is_string());
             assert_eq!(tool["outputSchema"]["type"], "object");
