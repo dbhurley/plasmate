@@ -27,6 +27,8 @@ import { ChildProcess, spawn } from 'child_process';
 import { createInterface, Interface } from 'readline';
 import { EventEmitter } from 'events';
 
+const SDK_VERSION = '0.4.0';
+
 // ---- SOM types (from specs/som-schema.json) ----
 
 export type {
@@ -186,7 +188,7 @@ export class Plasmate extends EventEmitter {
     await this.rpc('initialize', {
       protocolVersion: '2024-11-05',
       capabilities: {},
-      clientInfo: { name: 'plasmate-node-sdk', version: '0.2.0' },
+      clientInfo: { name: 'plasmate-node-sdk', version: SDK_VERSION },
     });
 
     // Send initialized notification (no response expected)

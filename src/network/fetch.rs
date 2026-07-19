@@ -82,11 +82,36 @@ pub fn build_client(
     cookie_jar: Arc<Jar>,
     tls_config: Option<&TlsConfig>,
 ) -> Result<Client, FetchError> {
+    build_client_with_policy(
+        user_agent,
+        cookie_jar,
+        tls_config,
+        OutboundUrlPolicy::from_environment(),
+    )
+}
+
+/// Build a client for the deterministic benchmark's ephemeral loopback server.
+/// This remains crate-private so product call surfaces cannot opt out of SSRF policy.
+pub(crate) fn build_client_for_local_fixture(cookie_jar: Arc<Jar>) -> Result<Client, FetchError> {
+    build_client_with_policy(
+        None,
+        cookie_jar,
+        None,
+        OutboundUrlPolicy::for_local_fixtures(),
+    )
+}
+
+fn build_client_with_policy(
+    user_agent: Option<&str>,
+    cookie_jar: Arc<Jar>,
+    tls_config: Option<&TlsConfig>,
+    policy: OutboundUrlPolicy,
+) -> Result<Client, FetchError> {
     let mut builder = Client::builder()
         .user_agent(user_agent.unwrap_or(DEFAULT_USER_AGENT))
         .cookie_provider(cookie_jar)
         .redirect(reqwest::redirect::Policy::none())
-        .dns_resolver(Arc::new(PolicyDnsResolver::from_environment()))
+        .dns_resolver(Arc::new(PolicyDnsResolver::with_policy(policy)))
         // Connection pooling: keep idle connections alive
         .pool_max_idle_per_host(16)
         .pool_idle_timeout(std::time::Duration::from_secs(90))
@@ -226,6 +251,24 @@ pub async fn fetch_url(
     timeout_ms: u64,
 ) -> Result<FetchResult, FetchError> {
     fetch_url_inner(client, url, timeout_ms, None, FetchLimits::default()).await
+}
+
+/// Fetch from a deterministic local fixture with an explicit private-network policy.
+/// The ordinary `fetch_url` path remains fail-closed.
+pub(crate) async fn fetch_url_for_local_fixture(
+    client: &Client,
+    url: &str,
+    timeout_ms: u64,
+) -> Result<FetchResult, FetchError> {
+    fetch_url_inner_with_policy(
+        client,
+        url,
+        timeout_ms,
+        None,
+        FetchLimits::default(),
+        OutboundUrlPolicy::for_local_fixtures(),
+    )
+    .await
 }
 
 /// Fetch a URL with additional headers (for interception overrides).
@@ -523,6 +566,24 @@ mod security_tests {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .unwrap()
+    }
+
+    #[tokio::test]
+    async fn ordinary_fetch_policy_still_rejects_loopback_fixtures() {
+        let url = fixture_server(
+            b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 2\r\n\r\nok",
+        )
+        .await;
+        let result = fetch_url_inner_with_policy(
+            &fixture_client(),
+            &url,
+            1_000,
+            None,
+            FetchLimits::default(),
+            OutboundUrlPolicy::deny_private_network(),
+        )
+        .await;
+        assert!(matches!(result, Err(FetchError::UrlBlocked(_))));
     }
 
     #[tokio::test]
