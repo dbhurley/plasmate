@@ -5,6 +5,7 @@
 
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -324,6 +325,10 @@ fn handle_tools_list(request: &JsonRpcRequest, adapter: ProtocolAdapter) -> Json
         tools::extract_links_definition(),
         tools::cache_status_definition(),
         tools::session_status_definition(),
+        tools::trace_status_definition(),
+        tools::trace_export_definition(),
+        tools::trace_clear_definition(),
+        tools::replay_validate_definition(),
         // Screenshot
         tools::screenshot_page_definition(),
         // Phase 2: Stateful tools
@@ -398,14 +403,20 @@ async fn handle_tools_call(
     };
 
     let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
+    let trace_started = Instant::now();
+    let trace_attempt = sessions.prepare_trace(tool_name, &arguments).await;
 
-    let result = match tool_name {
+    let mut result = match tool_name {
         // Phase 1: Stateless tools
         "fetch_page" => tools::handle_fetch_page(&arguments, client, cache).await,
         "extract_text" => tools::handle_extract_text(&arguments, client, cache).await,
         "extract_links" => tools::handle_extract_links(&arguments, client, cache).await,
         "cache_status" => tools::handle_cache_status(cache),
         "session_status" => tools::handle_session_status(sessions).await,
+        "trace_status" => tools::handle_trace_status(&arguments, sessions).await,
+        "trace_export" => tools::handle_trace_export(&arguments, sessions).await,
+        "trace_clear" => tools::handle_trace_clear(&arguments, sessions).await,
+        "replay_validate" => tools::handle_replay_validate(&arguments, sessions).await,
         // Screenshot
         "screenshot_page" => tools::handle_screenshot_page(&arguments, client).await,
         // Phase 2: Stateful tools
@@ -437,6 +448,23 @@ async fn handle_tools_call(
             };
         }
     };
+
+    let trace_duration = trace_started.elapsed();
+    if super::trace::open_trace_requested(tool_name, &arguments) {
+        if let Some(session_id) = super::trace::session_id_from_tool_result(&result) {
+            sessions
+                .record_open_trace(&session_id, &arguments, &result, trace_duration)
+                .await;
+        }
+    }
+    if let Some(attempt) = trace_attempt {
+        if let Some(final_export) = sessions
+            .finish_trace(attempt, &result, trace_duration)
+            .await
+        {
+            super::trace::attach_final_trace_export(&mut result, final_export);
+        }
+    }
 
     JsonRpcResponse {
         jsonrpc: "2.0".to_string(),
@@ -598,7 +626,7 @@ mod tests {
         .await;
         let listed = route(&request(Some(3), "tools/list", None), &mut state).await;
         let result = listed.result.unwrap();
-        assert_eq!(result["tools"].as_array().unwrap().len(), 19);
+        assert_eq!(result["tools"].as_array().unwrap().len(), 23);
         for tool in result["tools"].as_array().unwrap() {
             assert!(tool["title"].is_string());
             assert_eq!(tool["outputSchema"]["type"], "object");
@@ -650,6 +678,61 @@ mod tests {
         );
         assert_eq!(result["structuredContent"]["trust"], "local");
         assert!(result.get("resultType").is_none());
+    }
+
+    #[tokio::test]
+    async fn dispatcher_traces_failures_once_and_close_returns_final_export() {
+        let (client, sessions, cache) = dependencies();
+        let session_id = sessions.create_session().await.unwrap();
+        assert!(sessions.enable_trace(&session_id).await);
+
+        let failed = handle_tools_call(
+            &request(
+                Some(1),
+                "tools/call",
+                Some(json!({
+                    "name": "evaluate",
+                    "arguments": {
+                        "session_id": session_id.clone(),
+                        "expression": "document.cookie = 'never-export-this'"
+                    }
+                })),
+            ),
+            &client,
+            &sessions,
+            &cache,
+            ProtocolAdapter::Stable2025,
+        )
+        .await;
+        assert_eq!(failed.result.as_ref().unwrap()["isError"], true);
+        let export = sessions.trace_export(&session_id).await.unwrap();
+        assert_eq!(export.retained_events, 1);
+        let encoded = serde_json::to_string(&export).unwrap();
+        assert!(!encoded.contains("never-export-this"));
+
+        let closed = handle_tools_call(
+            &request(
+                Some(2),
+                "tools/call",
+                Some(json!({
+                    "name": "close_page",
+                    "arguments": {"session_id": session_id}
+                })),
+            ),
+            &client,
+            &sessions,
+            &cache,
+            ProtocolAdapter::Stable2025,
+        )
+        .await;
+        let result = closed.result.unwrap();
+        let text = result["content"][0]["text"].as_str().unwrap();
+        let payload: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(payload["closed"], true);
+        assert_eq!(payload["final_trace"]["retained_events"], 2);
+        assert_eq!(payload["final_trace"]["events"][1]["action"], "close_page");
+        assert_eq!(payload["final_trace"]["events"][1]["outcome"], "success");
+        assert!(text.len() <= super::super::trace::MAX_TRACE_EXPORT_BYTES);
     }
 
     #[tokio::test]

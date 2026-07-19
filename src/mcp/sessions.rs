@@ -14,6 +14,9 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::cdp::session::CdpTarget;
+use crate::mcp::trace::{
+    self, PendingTraceEvent, ReplayRequest, TraceAttempt, TraceExport, TraceLog, TraceStatus,
+};
 
 /// Maximum number of concurrent sessions.
 pub const MAX_SESSIONS: usize = 10;
@@ -54,6 +57,8 @@ pub struct SessionState {
     pub created_at: Instant,
     /// When this session was last accessed.
     pub last_accessed: Instant,
+    /// Optional privacy-safe action tracing. Disabled by default.
+    pub trace: TraceLog,
 }
 
 impl SessionState {
@@ -64,6 +69,7 @@ impl SessionState {
             target,
             created_at: now,
             last_accessed: now,
+            trace: TraceLog::new(),
         }
     }
 
@@ -137,6 +143,171 @@ impl SessionManager {
     pub async fn close_session(&self, session_id: &str) -> bool {
         let mut sessions = self.sessions.write().await;
         sessions.remove(session_id).is_some()
+    }
+
+    /// Enable tracing for a newly opened session. Tracing is opt-in and
+    /// remains scoped to this in-memory session.
+    pub async fn enable_trace(&self, session_id: &str) -> bool {
+        self.with_session(session_id, |session| session.trace.set_enabled(true))
+            .await
+            .is_some()
+    }
+
+    /// Capture the pre-action state needed for a trace event. Nothing is
+    /// captured when tracing is disabled or the action is not traceable.
+    pub async fn prepare_trace(
+        &self,
+        action: &str,
+        arguments: &serde_json::Value,
+    ) -> Option<TraceAttempt> {
+        if !trace::is_traceable_action(action) {
+            return None;
+        }
+        let session_id = trace::session_id_from_arguments(arguments)?;
+        self.with_session(session_id, |session| {
+            if !session.trace.enabled() {
+                return None;
+            }
+            Some(TraceAttempt {
+                session_id: session_id.to_string(),
+                action: action.to_string(),
+                parameters: session.trace.sanitized_parameters(action, arguments),
+                target: session.trace.replay_target(
+                    session.target.current_som.as_ref(),
+                    arguments
+                        .get("element_id")
+                        .and_then(serde_json::Value::as_str),
+                ),
+                before: session.trace.page_state(
+                    session.target.current_url.as_deref(),
+                    session.target.current_som.as_ref(),
+                ),
+                detached_log: session.trace.clone(),
+            })
+        })
+        .await
+        .flatten()
+    }
+
+    /// Complete a trace attempt. A close event is returned as a final export
+    /// because the owning session is removed by the action.
+    pub async fn finish_trace(
+        &self,
+        attempt: TraceAttempt,
+        result: &serde_json::Value,
+        duration: std::time::Duration,
+    ) -> Option<TraceExport> {
+        let completed = self
+            .with_session(&attempt.session_id, |session| {
+                let after = session.trace.page_state(
+                    session.target.current_url.as_deref(),
+                    session.target.current_som.as_ref(),
+                );
+                session.trace.append(
+                    PendingTraceEvent {
+                        action: attempt.action.clone(),
+                        parameters: attempt.parameters.clone(),
+                        target: attempt.target.clone(),
+                        before: attempt.before.clone(),
+                        after,
+                    },
+                    result,
+                    duration,
+                );
+            })
+            .await;
+        if completed.is_some() {
+            return None;
+        }
+
+        if attempt.action == "close_page" {
+            let mut log = attempt.detached_log;
+            let after = log.closed_page_state();
+            log.append(
+                PendingTraceEvent {
+                    action: attempt.action,
+                    parameters: attempt.parameters,
+                    target: attempt.target,
+                    before: attempt.before,
+                    after,
+                },
+                result,
+                duration,
+            );
+            return Some(log.export(&attempt.session_id));
+        }
+        None
+    }
+
+    pub async fn record_open_trace(
+        &self,
+        session_id: &str,
+        arguments: &serde_json::Value,
+        result: &serde_json::Value,
+        duration: std::time::Duration,
+    ) {
+        let _ = self
+            .with_session(session_id, |session| {
+                if !session.trace.enabled() {
+                    return;
+                }
+                let after = session.trace.page_state(
+                    session.target.current_url.as_deref(),
+                    session.target.current_som.as_ref(),
+                );
+                let parameters = session.trace.sanitized_parameters("open_page", arguments);
+                let before = session.trace.closed_page_state();
+                session.trace.append(
+                    PendingTraceEvent {
+                        action: "open_page".to_string(),
+                        parameters,
+                        target: None,
+                        before,
+                        after,
+                    },
+                    result,
+                    duration,
+                );
+            })
+            .await;
+    }
+
+    pub async fn trace_status(&self, session_id: &str) -> Option<TraceStatus> {
+        self.with_session(session_id, |session| session.trace.status())
+            .await
+    }
+
+    pub async fn trace_export(&self, session_id: &str) -> Option<TraceExport> {
+        self.with_session(session_id, |session| session.trace.export(session_id))
+            .await
+    }
+
+    pub async fn clear_trace(&self, session_id: &str) -> Option<(u64, TraceStatus)> {
+        self.with_session(session_id, |session| {
+            let cleared = session.trace.clear();
+            (cleared, session.trace.status())
+        })
+        .await
+    }
+
+    pub async fn validate_trace_replay(
+        &self,
+        request: &ReplayRequest,
+    ) -> Option<serde_json::Value> {
+        self.with_session(&request.session_id, |session| {
+            let current = session.trace.page_state(
+                session.target.current_url.as_deref(),
+                session.target.current_som.as_ref(),
+            );
+            trace::validate_replay(
+                &session.trace,
+                &request.session_id,
+                request,
+                current,
+                session.target.current_som.as_ref(),
+            )
+        })
+        .await
     }
 
     /// Check if a session exists.
@@ -268,5 +439,55 @@ mod tests {
         assert_eq!(snapshot.sessions[0].html_bytes, Some(13));
         assert_eq!(snapshot.sessions[0].effective_html_bytes, Some(31));
         assert!(manager.close_session(&id).await);
+    }
+
+    #[tokio::test]
+    async fn tracing_is_disabled_by_default_and_failed_action_is_appended_once() {
+        let manager = SessionManager::new();
+        let id = manager.create_session().await.unwrap();
+        let arguments = serde_json::json!({"session_id": id, "element_id": "missing"});
+        assert!(manager.prepare_trace("click", &arguments).await.is_none());
+
+        assert!(manager.enable_trace(&id).await);
+        let attempt = manager.prepare_trace("click", &arguments).await.unwrap();
+        let error = serde_json::json!({
+            "isError": true,
+            "content": [{"type":"text", "text":"Element not found: missing"}]
+        });
+        assert!(manager
+            .finish_trace(attempt, &error, std::time::Duration::from_millis(1))
+            .await
+            .is_none());
+        let export = manager.trace_export(&id).await.unwrap();
+        assert_eq!(export.retained_events, 1);
+        assert_eq!(export.events[0].outcome, "error");
+        assert_eq!(export.events[0].error_class, Some("not_found"));
+    }
+
+    #[tokio::test]
+    async fn failed_close_returns_bounded_final_trace_after_session_removal() {
+        let manager = SessionManager::new();
+        let id = manager.create_session().await.unwrap();
+        assert!(manager.enable_trace(&id).await);
+        let arguments = serde_json::json!({"session_id": id});
+        let attempt = manager
+            .prepare_trace("close_page", &arguments)
+            .await
+            .unwrap();
+        assert!(manager.close_session(&id).await);
+        let error = serde_json::json!({
+            "isError": true,
+            "content": [{"type":"text", "text":"Synthetic close failure with secret detail"}]
+        });
+        let export = manager
+            .finish_trace(attempt, &error, std::time::Duration::ZERO)
+            .await
+            .unwrap();
+        assert_eq!(export.retained_events, 1);
+        assert_eq!(export.events[0].action, "close_page");
+        assert_eq!(export.events[0].outcome, "error");
+        let encoded = serde_json::to_vec(&export).unwrap();
+        assert!(encoded.len() <= crate::mcp::trace::MAX_TRACE_EXPORT_BYTES);
+        assert!(!String::from_utf8_lossy(&encoded).contains("secret detail"));
     }
 }

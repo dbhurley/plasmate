@@ -442,6 +442,10 @@ fn metadata_for_tool(name: &str) -> ToolMetadata {
         "extract_links" => ("Extract Page Links", true, false, true, true),
         "cache_status" => ("Inspect SOM Cache", true, false, true, false),
         "session_status" => ("Inspect Browser Sessions", true, false, true, false),
+        "trace_status" => ("Inspect Session Trace", true, false, true, false),
+        "trace_export" => ("Export Session Trace", true, false, true, false),
+        "trace_clear" => ("Clear Session Trace", false, true, true, false),
+        "replay_validate" => ("Validate Replay Plan", true, false, true, false),
         "screenshot_page" => ("Capture Page Screenshot", true, false, true, true),
         "open_page" => ("Open Browser Session", false, false, false, true),
         "evaluate" => ("Evaluate Page JavaScript", false, true, false, true),
@@ -470,9 +474,8 @@ fn metadata_for_tool(name: &str) -> ToolMetadata {
 fn trust_for_tool(name: &str) -> &'static str {
     match name {
         "cache_status" => "local",
-        "session_status" | "close_page" | "get_cookies" | "set_cookies" | "clear_cookies" => {
-            "sensitive-session"
-        }
+        "session_status" | "trace_status" | "trace_export" | "trace_clear" | "replay_validate"
+        | "close_page" | "get_cookies" | "set_cookies" | "clear_cookies" => "sensitive-session",
         _ => "untrusted-web",
     }
 }

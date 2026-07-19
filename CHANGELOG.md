@@ -5,6 +5,7 @@
 - Post-v0.5.1 work remains unreleased and is being brought back behind required formatting, all-feature lint, test, conformance, and smoke gates.
 - Current development includes expanded SOM action metadata, cache/session observability, proxy and cookie surfaces, iframe and Shadow DOM extraction, and broader SDK/adapter conformance.
 - ES module execution is not yet complete; module scripts remain skipped pending the module-runtime work.
+- Added opt-in, bounded, memory-only `plasmate.trace.v1` session action traces plus four MCP tools for status, privacy-safe export, clearing, and exact validation-before-replay. Replay is validation-only and never executes an action in this release.
 
 ## v0.5.1 (2026-04-05)
 
