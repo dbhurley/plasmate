@@ -13,6 +13,7 @@
 //! - click: Click an element by SOM ID
 //! - close_page: Close a session
 
+pub mod protocol;
 pub mod server;
 pub mod sessions;
 pub mod tools;

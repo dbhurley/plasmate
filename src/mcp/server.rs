@@ -10,13 +10,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::{debug, error, info};
 
+use super::protocol::{self, ProtocolAdapter, ProtocolSelectionError, ProtocolState};
 use super::sessions::SessionManager;
 use super::tools::{self, ToolDefinition};
 use crate::cache::store::{CacheConfig, SomCache};
 use crate::network::fetch;
-
-/// MCP protocol version we support.
-const PROTOCOL_VERSION: &str = "2024-11-05";
 
 /// Server name.
 const SERVER_NAME: &str = "plasmate";
@@ -75,6 +73,7 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     // Session manager for stateful browser tools
     let sessions = Arc::new(SessionManager::new());
     let cache = Arc::new(SomCache::new(CacheConfig::default()));
+    let mut protocol_state = ProtocolState::default();
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();
@@ -131,7 +130,8 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Handle the request
-        let response = handle_request(&request, &client, &sessions, &cache).await;
+        let response =
+            handle_request(&request, &client, &sessions, &cache, &mut protocol_state).await;
 
         // MCP notifications (no id) must not receive a response.
         if request.id.is_none() && request.method.starts_with("notifications/") {
@@ -163,15 +163,24 @@ async fn handle_request(
     client: &reqwest::Client,
     sessions: &Arc<SessionManager>,
     cache: &Arc<SomCache>,
+    protocol_state: &mut ProtocolState,
 ) -> JsonRpcResponse {
     match request.method.as_str() {
         // MCP lifecycle methods
-        "initialize" => handle_initialize(request),
-        "notifications/initialized" => handle_initialized_notification(request),
+        "initialize" => handle_initialize(request, protocol_state),
+        "notifications/initialized" => handle_initialized_notification(request, protocol_state),
+        "server/discover" => handle_server_discover(request),
+        "ping" => handle_ping(request, protocol_state),
 
         // MCP tool methods
-        "tools/list" => handle_tools_list(request),
-        "tools/call" => handle_tools_call(request, client, sessions, cache).await,
+        "tools/list" => match protocol_state.adapter_for_request(request.params.as_ref()) {
+            Ok(adapter) => handle_tools_list(request, adapter),
+            Err(error) => protocol_selection_error(request, error),
+        },
+        "tools/call" => match protocol_state.adapter_for_request(request.params.as_ref()) {
+            Ok(adapter) => handle_tools_call(request, client, sessions, cache, adapter).await,
+            Err(error) => protocol_selection_error(request, error),
+        },
 
         // Unknown method
         _ => JsonRpcResponse {
@@ -188,44 +197,67 @@ async fn handle_request(
 }
 
 /// Handle the 'initialize' method.
-fn handle_initialize(request: &JsonRpcRequest) -> JsonRpcResponse {
-    // Validate protocol version from params
-    if let Some(params) = &request.params {
-        if let Some(version) = params.get("protocolVersion").and_then(|v| v.as_str()) {
-            debug!("Client protocol version: {}", version);
-            // We support 2024-11-05
-            if version != PROTOCOL_VERSION {
-                debug!(
-                    "Client using different protocol version: {} (we support {})",
-                    version, PROTOCOL_VERSION
-                );
-            }
-        }
+fn handle_initialize(
+    request: &JsonRpcRequest,
+    protocol_state: &mut ProtocolState,
+) -> JsonRpcResponse {
+    let params = match request.params.as_ref().and_then(Value::as_object) {
+        Some(params) => params,
+        None => return invalid_params_response(request, "Missing initialize params object"),
+    };
+    let requested = match params.get("protocolVersion").and_then(Value::as_str) {
+        Some(version) => version,
+        None => return invalid_params_response(request, "Missing protocolVersion"),
+    };
+    if !params.get("capabilities").is_some_and(Value::is_object) {
+        return invalid_params_response(request, "Missing client capabilities object");
     }
+    let client_info = match params.get("clientInfo").and_then(Value::as_object) {
+        Some(client_info) => client_info,
+        None => return invalid_params_response(request, "Missing clientInfo object"),
+    };
+    if !client_info.get("name").is_some_and(Value::is_string)
+        || !client_info.get("version").is_some_and(Value::is_string)
+    {
+        return invalid_params_response(
+            request,
+            "clientInfo must contain string name and version fields",
+        );
+    }
+    debug!("Client protocol version: {}", requested);
+    let adapter = protocol_state.negotiate_initialize(Some(requested));
 
     JsonRpcResponse {
         jsonrpc: "2.0".to_string(),
         id: request.id.clone(),
-        result: Some(json!({
-            "protocolVersion": PROTOCOL_VERSION,
-            "serverInfo": {
-                "name": SERVER_NAME,
-                "version": SERVER_VERSION
-            },
-            "capabilities": {
-                "tools": {}
-            }
-        })),
+        result: Some(protocol::initialize_result(
+            adapter,
+            SERVER_NAME,
+            SERVER_VERSION,
+        )),
         error: None,
     }
 }
 
 /// Handle the 'notifications/initialized' notification.
-fn handle_initialized_notification(request: &JsonRpcRequest) -> JsonRpcResponse {
-    // This is a notification (no id expected), but we'll respond anyway if there's an id
-    info!("MCP client initialized");
+fn handle_initialized_notification(
+    request: &JsonRpcRequest,
+    protocol_state: &mut ProtocolState,
+) -> JsonRpcResponse {
+    if let Err(message) = protocol_state.mark_initialized() {
+        return JsonRpcResponse {
+            jsonrpc: "2.0".to_string(),
+            id: request.id.clone(),
+            result: None,
+            error: Some(JsonRpcError {
+                code: INVALID_REQUEST,
+                message: message.to_string(),
+                data: None,
+            }),
+        };
+    }
 
-    // Notifications don't require a response, but if there's an id we should respond
+    info!("MCP client initialized");
     if request.id.is_some() {
         JsonRpcResponse {
             jsonrpc: "2.0".to_string(),
@@ -245,8 +277,46 @@ fn handle_initialized_notification(request: &JsonRpcRequest) -> JsonRpcResponse 
     }
 }
 
+fn handle_server_discover(request: &JsonRpcRequest) -> JsonRpcResponse {
+    if let Err(error) = protocol::modern_adapter_for_request(request.params.as_ref()) {
+        return protocol_selection_error(request, error);
+    }
+    JsonRpcResponse {
+        jsonrpc: "2.0".to_string(),
+        id: request.id.clone(),
+        result: Some(protocol::discover_result(SERVER_NAME, SERVER_VERSION)),
+        error: None,
+    }
+}
+
+fn handle_ping(request: &JsonRpcRequest, protocol_state: &ProtocolState) -> JsonRpcResponse {
+    // Initialize-era clients may ping while the lifecycle is still in
+    // progress. Modern requests still need their complete per-request meta.
+    let adapter = if protocol::request_protocol_version(request.params.as_ref()).is_some() {
+        match protocol::modern_adapter_for_request(request.params.as_ref()) {
+            Ok(adapter) => adapter,
+            Err(error) => return protocol_selection_error(request, error),
+        }
+    } else {
+        protocol_state
+            .adapter_for_request(request.params.as_ref())
+            .unwrap_or(ProtocolAdapter::Stable2025)
+    };
+    let result = if adapter.is_modern() {
+        json!({ "resultType": "complete" })
+    } else {
+        json!({})
+    };
+    JsonRpcResponse {
+        jsonrpc: "2.0".to_string(),
+        id: request.id.clone(),
+        result: Some(result),
+        error: None,
+    }
+}
+
 /// Handle the 'tools/list' method.
-fn handle_tools_list(request: &JsonRpcRequest) -> JsonRpcResponse {
+fn handle_tools_list(request: &JsonRpcRequest, adapter: ProtocolAdapter) -> JsonRpcResponse {
     let tools: Vec<ToolDefinition> = vec![
         // Phase 1: Stateless tools
         tools::fetch_page_definition(),
@@ -274,12 +344,15 @@ fn handle_tools_list(request: &JsonRpcRequest) -> JsonRpcResponse {
         tools::clear_cookies_definition(),
     ];
 
+    let definitions = tools
+        .into_iter()
+        .map(|definition| json!(definition))
+        .collect();
+
     JsonRpcResponse {
         jsonrpc: "2.0".to_string(),
         id: request.id.clone(),
-        result: Some(json!({
-            "tools": tools
-        })),
+        result: Some(protocol::adapt_tool_list(adapter, definitions)),
         error: None,
     }
 }
@@ -290,6 +363,7 @@ async fn handle_tools_call(
     client: &reqwest::Client,
     sessions: &Arc<SessionManager>,
     cache: &Arc<SomCache>,
+    adapter: ProtocolAdapter,
 ) -> JsonRpcResponse {
     let params = match &request.params {
         Some(p) => p,
@@ -367,7 +441,279 @@ async fn handle_tools_call(
     JsonRpcResponse {
         jsonrpc: "2.0".to_string(),
         id: request.id.clone(),
-        result: Some(result),
+        result: Some(protocol::adapt_tool_result(adapter, tool_name, result)),
         error: None,
+    }
+}
+
+fn invalid_params_response(request: &JsonRpcRequest, message: &str) -> JsonRpcResponse {
+    JsonRpcResponse {
+        jsonrpc: "2.0".to_string(),
+        id: request.id.clone(),
+        result: None,
+        error: Some(JsonRpcError {
+            code: INVALID_PARAMS,
+            message: message.to_string(),
+            data: None,
+        }),
+    }
+}
+
+fn protocol_selection_error(
+    request: &JsonRpcRequest,
+    error: ProtocolSelectionError,
+) -> JsonRpcResponse {
+    let (code, message, data) = match error {
+        ProtocolSelectionError::NotInitialized => (
+            INVALID_REQUEST,
+            "MCP connection is not initialized; call initialize or use modern per-request metadata"
+                .to_string(),
+            None,
+        ),
+        ProtocolSelectionError::NotReady => (
+            INVALID_REQUEST,
+            "MCP connection is awaiting notifications/initialized".to_string(),
+            None,
+        ),
+        ProtocolSelectionError::Unsupported(version) => (
+            -32022,
+            format!("Unsupported protocol version: {}", version),
+            Some(json!({
+                "supported": [protocol::MODERN_RC_VERSION],
+                "requested": version
+            })),
+        ),
+        ProtocolSelectionError::InvalidModernMetadata(reason) => (
+            INVALID_PARAMS,
+            format!("Invalid modern MCP request metadata: {}", reason),
+            Some(json!({
+                "required": [
+                    "io.modelcontextprotocol/protocolVersion",
+                    "io.modelcontextprotocol/clientInfo",
+                    "io.modelcontextprotocol/clientCapabilities"
+                ]
+            })),
+        ),
+    };
+    JsonRpcResponse {
+        jsonrpc: "2.0".to_string(),
+        id: request.id.clone(),
+        result: None,
+        error: Some(JsonRpcError {
+            code,
+            message,
+            data,
+        }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(id: Option<u64>, method: &str, params: Option<Value>) -> JsonRpcRequest {
+        JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: id.map(|id| json!(id)),
+            method: method.to_string(),
+            params,
+        }
+    }
+
+    fn dependencies() -> (reqwest::Client, Arc<SessionManager>, Arc<SomCache>) {
+        (
+            reqwest::Client::new(),
+            Arc::new(SessionManager::new()),
+            Arc::new(SomCache::new(CacheConfig::default())),
+        )
+    }
+
+    async fn route(request: &JsonRpcRequest, state: &mut ProtocolState) -> JsonRpcResponse {
+        let (client, sessions, cache) = dependencies();
+        handle_request(request, &client, &sessions, &cache, state).await
+    }
+
+    #[tokio::test]
+    async fn legacy_client_keeps_legacy_tool_shape() {
+        let mut state = ProtocolState::default();
+        let initialized = route(
+            &request(
+                Some(1),
+                "initialize",
+                Some(json!({
+                    "protocolVersion": protocol::LEGACY_VERSION,
+                    "capabilities": {},
+                    "clientInfo": { "name": "legacy-test", "version": "1" }
+                })),
+            ),
+            &mut state,
+        )
+        .await;
+        assert_eq!(
+            initialized.result.unwrap()["protocolVersion"],
+            protocol::LEGACY_VERSION
+        );
+
+        route(
+            &request(None, "notifications/initialized", None),
+            &mut state,
+        )
+        .await;
+        let listed = route(&request(Some(2), "tools/list", None), &mut state).await;
+        let first = &listed.result.unwrap()["tools"][0];
+        assert_eq!(first["name"], "fetch_page");
+        assert!(first.get("title").is_none());
+        assert!(first.get("outputSchema").is_none());
+        assert!(first.get("annotations").is_none());
+    }
+
+    #[tokio::test]
+    async fn stable_client_must_complete_lifecycle_and_gets_modern_tool_metadata() {
+        let mut state = ProtocolState::default();
+        let initialized = route(
+            &request(
+                Some(1),
+                "initialize",
+                Some(json!({
+                    "protocolVersion": protocol::STABLE_VERSION,
+                    "capabilities": {},
+                    "clientInfo": { "name": "stable-test", "version": "1" }
+                })),
+            ),
+            &mut state,
+        )
+        .await;
+        assert_eq!(
+            initialized.result.unwrap()["protocolVersion"],
+            protocol::STABLE_VERSION
+        );
+
+        let too_early = route(&request(Some(2), "tools/list", None), &mut state).await;
+        assert_eq!(too_early.error.unwrap().code, INVALID_REQUEST);
+
+        route(
+            &request(None, "notifications/initialized", None),
+            &mut state,
+        )
+        .await;
+        let listed = route(&request(Some(3), "tools/list", None), &mut state).await;
+        let result = listed.result.unwrap();
+        assert_eq!(result["tools"].as_array().unwrap().len(), 19);
+        for tool in result["tools"].as_array().unwrap() {
+            assert!(tool["title"].is_string());
+            assert_eq!(tool["outputSchema"]["type"], "object");
+            assert!(tool["annotations"]["readOnlyHint"].is_boolean());
+            assert!(tool["annotations"]["destructiveHint"].is_boolean());
+            assert!(tool["annotations"]["idempotentHint"].is_boolean());
+            assert!(tool["annotations"]["openWorldHint"].is_boolean());
+            assert!(tool.get("execution").is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn stable_tool_call_returns_schema_compatible_structured_content() {
+        let mut state = ProtocolState::default();
+        route(
+            &request(
+                Some(1),
+                "initialize",
+                Some(json!({
+                    "protocolVersion": protocol::STABLE_VERSION,
+                    "capabilities": {},
+                    "clientInfo": { "name": "stable-test", "version": "1" }
+                })),
+            ),
+            &mut state,
+        )
+        .await;
+        route(
+            &request(None, "notifications/initialized", None),
+            &mut state,
+        )
+        .await;
+
+        let called = route(
+            &request(
+                Some(2),
+                "tools/call",
+                Some(json!({ "name": "cache_status", "arguments": {} })),
+            ),
+            &mut state,
+        )
+        .await;
+        let result = called.result.unwrap();
+        assert!(result["content"].is_array());
+        assert!(result["structuredContent"]["result"].is_object());
+        assert_eq!(
+            result["structuredContent"]["contentType"],
+            "application/json"
+        );
+        assert_eq!(result["structuredContent"]["trust"], "local");
+        assert!(result.get("resultType").is_none());
+    }
+
+    #[tokio::test]
+    async fn modern_discovery_and_per_request_metadata_need_no_initialize() {
+        let mut state = ProtocolState::default();
+        let discovered = route(
+            &request(
+                Some(1),
+                "server/discover",
+                Some(json!({
+                    "_meta": {
+                        "io.modelcontextprotocol/protocolVersion": protocol::MODERN_RC_VERSION,
+                        "io.modelcontextprotocol/clientInfo": {
+                            "name": "modern-test",
+                            "version": "1"
+                        },
+                        "io.modelcontextprotocol/clientCapabilities": {}
+                    }
+                })),
+            ),
+            &mut state,
+        )
+        .await;
+        let result = discovered.result.unwrap();
+        assert_eq!(result["resultType"], "complete");
+        assert_eq!(result["supportedVersions"][0], protocol::MODERN_RC_VERSION);
+
+        let params = json!({
+            "_meta": {
+                "io.modelcontextprotocol/protocolVersion": protocol::MODERN_RC_VERSION,
+                "io.modelcontextprotocol/clientInfo": {
+                    "name": "modern-test",
+                    "version": "1"
+                },
+                "io.modelcontextprotocol/clientCapabilities": {}
+            }
+        });
+        let listed = route(&request(Some(2), "tools/list", Some(params)), &mut state).await;
+        let result = listed.result.unwrap();
+        assert_eq!(result["resultType"], "complete");
+        assert_eq!(result["cacheScope"], "public");
+        assert!(result["ttlMs"].as_u64().unwrap() > 0);
+    }
+
+    #[tokio::test]
+    async fn unsupported_per_request_version_has_downgrade_details() {
+        let mut state = ProtocolState::default();
+        let response = route(
+            &request(
+                Some(1),
+                "tools/list",
+                Some(json!({
+                    "_meta": {
+                        "io.modelcontextprotocol/protocolVersion": "2099-01-01"
+                    }
+                })),
+            ),
+            &mut state,
+        )
+        .await;
+        let error = response.error.unwrap();
+        assert_eq!(error.code, -32022);
+        let data = error.data.unwrap();
+        assert_eq!(data["supported"][0], protocol::MODERN_RC_VERSION);
+        assert_eq!(data["requested"], "2099-01-01");
     }
 }
