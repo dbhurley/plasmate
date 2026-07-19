@@ -361,7 +361,12 @@ fn validate_timeout(timeout_ms: u64) -> Result<u64, String> {
 fn remaining_timeout_ms(deadline: tokio::time::Instant) -> Option<u64> {
     let remaining = deadline.checked_duration_since(tokio::time::Instant::now())?;
     let millis = remaining.as_millis().min(u64::MAX as u128) as u64;
-    Some(millis.max(1))
+    // Fetch timeouts are expressed in whole milliseconds. Starting another
+    // request when less than one millisecond remains rounds an already-spent
+    // budget back up to 1 ms and makes the source classification scheduler-
+    // dependent ("failed" on a fast runner, "deadline_omitted" elsewhere).
+    // Treat sub-millisecond residue as exhausted instead.
+    (millis > 0).then_some(millis)
 }
 
 #[cfg(test)]
