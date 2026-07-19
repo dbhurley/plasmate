@@ -17,6 +17,7 @@ use plasmate::network;
 use plasmate::plugin;
 use plasmate::screenshot;
 use plasmate::som;
+use plasmate::webmcp;
 
 #[derive(Parser)]
 #[command(name = "plasmate")]

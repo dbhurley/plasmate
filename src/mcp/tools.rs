@@ -127,7 +127,7 @@ async fn load_som_for_mcp(
             content_hash,
             page_result.som,
             fetch_result.html_bytes,
-            Some(page_result.effective_html),
+            Some((page_result.effective_html, page_result.webmcp)),
             selector,
         ))
     } else if let Some(selector) = selector {
@@ -146,12 +146,29 @@ fn select_and_store_mcp_som(
     content_hash: u64,
     som: Som,
     html_bytes: usize,
-    effective_html: Option<String>,
+    page_state: Option<(String, crate::webmcp::WebMcpCatalog)>,
     selector: Option<&str>,
 ) -> Som {
     if let Ok(full_som_json) = serde_json::to_vec(&som) {
-        if let Some(effective_html) = effective_html {
-            cache.store_page_state(url, content_hash, full_som_json, html_bytes, effective_html);
+        if let Some((effective_html, webmcp)) = page_state {
+            if let Ok(webmcp_json) = serde_json::to_vec(&webmcp) {
+                cache.store_page_state_with_webmcp(
+                    url,
+                    content_hash,
+                    full_som_json,
+                    html_bytes,
+                    effective_html,
+                    webmcp_json,
+                );
+            } else {
+                cache.store_page_state(
+                    url,
+                    content_hash,
+                    full_som_json,
+                    html_bytes,
+                    effective_html,
+                );
+            }
         } else {
             cache.store(url, content_hash, full_som_json, html_bytes);
         }
@@ -178,6 +195,7 @@ fn store_page_state_in_session(
     session.target.current_html = Some(html.to_string());
     session.target.effective_html = Some(page_result.effective_html.clone());
     session.target.current_structured_data = page_result.som.structured_data.clone();
+    session.target.current_webmcp = page_result.webmcp.clone();
     session.target.current_som = Some(page_result.som.clone());
     session.target.rebuild_node_map();
 
@@ -204,6 +222,19 @@ async fn load_session_page_for_mcp(
                     url = %fetch_result.url,
                     "MCP session page-state cache hit"
                 );
+                let webmcp = entry
+                    .webmcp_json
+                    .as_deref()
+                    .and_then(|json| serde_json::from_slice(json).ok())
+                    .unwrap_or_else(|| {
+                        let mut catalog =
+                            crate::webmcp::discover(&effective_html, &fetch_result.url, None);
+                        catalog.warnings.push(
+                            "Cached page state predates WebMCP catalog persistence; only declarative tools were recovered"
+                                .to_string(),
+                        );
+                        catalog
+                    });
                 let page_result = pipeline::PageResult {
                     som,
                     url: fetch_result.url.clone(),
@@ -215,6 +246,7 @@ async fn load_session_page_for_mcp(
                     },
                     js_report: None,
                     effective_html,
+                    webmcp,
                 };
                 return Ok((fetch_result.html, fetch_result.url, page_result, true));
             }
@@ -238,13 +270,23 @@ async fn load_session_page_for_mcp(
     .map_err(|e| format!("Pipeline error: {}", e))?;
 
     if let Ok(full_som_json) = serde_json::to_vec(&page_result.som) {
-        cache.store_page_state(
-            &fetch_result.url,
-            content_hash,
-            full_som_json,
-            fetch_result.html_bytes,
-            page_result.effective_html.clone(),
-        );
+        match serde_json::to_vec(&page_result.webmcp) {
+            Ok(webmcp_json) => cache.store_page_state_with_webmcp(
+                &fetch_result.url,
+                content_hash,
+                full_som_json,
+                fetch_result.html_bytes,
+                page_result.effective_html.clone(),
+                webmcp_json,
+            ),
+            Err(_) => cache.store_page_state(
+                &fetch_result.url,
+                content_hash,
+                full_som_json,
+                fetch_result.html_bytes,
+                page_result.effective_html.clone(),
+            ),
+        }
     }
 
     Ok((fetch_result.html, fetch_result.url, page_result, false))
@@ -1040,7 +1082,8 @@ pub async fn handle_open_page(
                     "title": page_result.som.title,
                     "url": final_url,
                     "cache_restored": cache_restored,
-                    "regions": som_json.get("regions")
+                    "regions": som_json.get("regions"),
+                    "webmcp": page_result.webmcp
                 }).to_string()
             }
         ]
@@ -1343,7 +1386,8 @@ pub async fn handle_click(
                 "text": json!({
                     "title": page_result.som.title,
                     "url": final_url,
-                    "regions": som_json.get("regions")
+                    "regions": som_json.get("regions"),
+                    "webmcp": page_result.webmcp
                 }).to_string()
             }
         ]
@@ -1621,7 +1665,8 @@ pub async fn handle_navigate_to(
                     "title": page_result.som.title,
                     "url": final_url,
                     "cache_restored": cache_restored,
-                    "regions": som_json.get("regions")
+                    "regions": som_json.get("regions"),
+                    "webmcp": page_result.webmcp
                 }).to_string()
             }
         ]
@@ -1767,7 +1812,8 @@ pub async fn handle_type_text(
                 "text": json!({
                     "title": page_result.som.title,
                     "url": url,
-                    "regions": som_json.get("regions")
+                    "regions": som_json.get("regions"),
+                    "webmcp": page_result.webmcp
                 }).to_string()
             }
         ]
@@ -1913,7 +1959,8 @@ pub async fn handle_select_option(
                 "text": json!({
                     "title": page_result.som.title,
                     "url": url,
-                    "regions": som_json.get("regions")
+                    "regions": som_json.get("regions"),
+                    "webmcp": page_result.webmcp
                 }).to_string()
             }
         ]
@@ -2067,7 +2114,8 @@ pub async fn handle_scroll(
                     "title": page_result.som.title,
                     "url": url,
                     "scroll_position": scroll_top,
-                    "regions": som_json.get("regions")
+                    "regions": som_json.get("regions"),
+                    "webmcp": page_result.webmcp
                 }).to_string()
             }
         ]
@@ -2207,7 +2255,8 @@ pub async fn handle_toggle(
                 "text": json!({
                     "title": page_result.som.title,
                     "url": url,
-                    "regions": som_json.get("regions")
+                    "regions": som_json.get("regions"),
+                    "webmcp": page_result.webmcp
                 }).to_string()
             }
         ]
@@ -2339,7 +2388,8 @@ pub async fn handle_clear(
                 "text": json!({
                     "title": page_result.som.title,
                     "url": url,
-                    "regions": som_json.get("regions")
+                    "regions": som_json.get("regions"),
+                    "webmcp": page_result.webmcp
                 }).to_string()
             }
         ]
@@ -2849,7 +2899,14 @@ mod tests {
             42,
             test_som(),
             200,
-            Some("<html><body>ready</body></html>".to_string()),
+            Some((
+                "<html><body>ready</body></html>".to_string(),
+                crate::webmcp::discover(
+                    r#"<form toolname="cached" tooldescription="Cached"></form>"#,
+                    "https://example.com/app",
+                    None,
+                ),
+            )),
             Some("interactive"),
         );
 
@@ -2868,6 +2925,9 @@ mod tests {
                     entry.effective_html.as_deref(),
                     Some("<html><body>ready</body></html>")
                 );
+                let catalog: crate::webmcp::WebMcpCatalog =
+                    serde_json::from_slice(entry.webmcp_json.as_deref().unwrap()).unwrap();
+                assert_eq!(catalog.tools[0].name, "cached");
             }
             _ => panic!("Expected full cache hit"),
         }
@@ -2893,6 +2953,11 @@ mod tests {
             },
             js_report: None,
             effective_html: "<html><body><button>Save</button></body></html>".to_string(),
+            webmcp: crate::webmcp::discover(
+                r#"<form toolname="save" tooldescription="Save"></form>"#,
+                "https://example.com/app",
+                None,
+            ),
         };
         let mut session = SessionState::new(CdpTarget::new().unwrap());
 
@@ -2905,6 +2970,17 @@ mod tests {
         .unwrap();
 
         assert_eq!(som_json["title"], "App");
+        assert_eq!(session.target.current_webmcp.tools[0].name, "save");
+        let tool_id = session.target.current_webmcp.tools[0].id.clone();
+        let plan = session
+            .target
+            .prepare_webmcp_invocation(&tool_id, json!({}))
+            .unwrap();
+        assert!(!plan.executed);
+        assert!(session
+            .target
+            .prepare_webmcp_invocation("top:foreign-session", json!({}))
+            .is_err());
         assert_eq!(
             session
                 .target

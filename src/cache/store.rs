@@ -29,6 +29,10 @@ pub struct CacheEntry {
     pub som_bytes: usize,
     /// Effective HTML after JS execution, when stored by an interactive path.
     pub effective_html: Option<String>,
+    /// Bounded, serialized WebMCP discovery catalog captured with this exact
+    /// page state. Stored as opaque JSON so the SOM cache remains independent
+    /// of the experimental WebMCP contract.
+    pub webmcp_json: Option<Vec<u8>>,
     /// Number of times this entry has been served from cache.
     pub hit_count: u64,
 }
@@ -84,6 +88,7 @@ pub struct CacheStats {
     pub misses: u64,
     pub evictions: u64,
     pub total_som_bytes_served: u64,
+    pub total_webmcp_bytes_served: u64,
     pub total_html_bytes_avoided: u64,
 }
 
@@ -94,12 +99,14 @@ pub struct CacheSnapshot {
     pub misses: u64,
     pub evictions: u64,
     pub total_som_bytes_served: u64,
+    pub total_webmcp_bytes_served: u64,
     pub total_html_bytes_avoided: u64,
     pub entries: usize,
     pub full_entries: usize,
     pub selector_entries: usize,
     pub effective_html_entries: usize,
     pub total_som_bytes: usize,
+    pub total_webmcp_bytes: usize,
     pub total_html_bytes: usize,
     pub total_effective_html_bytes: usize,
     pub max_hot_entries: usize,
@@ -157,6 +164,10 @@ impl SomCache {
                 entry.hit_count += 1;
                 stats.hits += 1;
                 stats.total_som_bytes_served += entry.som_bytes as u64;
+                stats.total_webmcp_bytes_served += entry
+                    .webmcp_json
+                    .as_ref()
+                    .map_or(0, |catalog| catalog.len() as u64);
                 stats.total_html_bytes_avoided += entry.html_bytes as u64;
                 debug!(url, hit_count = entry.hit_count, "SOM cache hit");
                 return CacheLookup::Hit(entry.clone());
@@ -195,6 +206,10 @@ impl SomCache {
                 entry.hit_count += 1;
                 stats.hits += 1;
                 stats.total_som_bytes_served += entry.som_bytes as u64;
+                stats.total_webmcp_bytes_served += entry
+                    .webmcp_json
+                    .as_ref()
+                    .map_or(0, |catalog| catalog.len() as u64);
                 stats.total_html_bytes_avoided += entry.html_bytes as u64;
                 return Some(entry.clone());
             }
@@ -243,7 +258,40 @@ impl SomCache {
             None,
             som_json,
             html_bytes,
-            Some(effective_html),
+            Some((effective_html, None)),
+        );
+    }
+
+    /// Store full interactive page state together with its bounded WebMCP
+    /// catalog. This prevents external-script registrations from disappearing
+    /// when a later session restores the cached page. Oversized catalogs are
+    /// dropped rather than allowing an internal caller to bypass the aggregate
+    /// WebMCP response bound.
+    pub fn store_page_state_with_webmcp(
+        &self,
+        url: &str,
+        content_hash: u64,
+        som_json: Vec<u8>,
+        html_bytes: usize,
+        effective_html: String,
+        webmcp_json: Vec<u8>,
+    ) {
+        let webmcp_json = if webmcp_json.len() <= crate::webmcp::MAX_CATALOG_BYTES {
+            Some(webmcp_json)
+        } else {
+            tracing::warn!(
+                max_bytes = crate::webmcp::MAX_CATALOG_BYTES,
+                "oversized WebMCP catalog omitted from page-state cache"
+            );
+            None
+        };
+        self.store_with_selector_and_effective_html(
+            url,
+            content_hash,
+            None,
+            som_json,
+            html_bytes,
+            Some((effective_html, webmcp_json)),
         );
     }
 
@@ -254,8 +302,11 @@ impl SomCache {
         selector: Option<&str>,
         som_json: Vec<u8>,
         html_bytes: usize,
-        effective_html: Option<String>,
+        page_state: Option<(String, Option<Vec<u8>>)>,
     ) {
+        let (effective_html, webmcp_json) = page_state
+            .map(|(html, catalog)| (Some(html), catalog))
+            .unwrap_or((None, None));
         let som_bytes = som_json.len();
         let entry = CacheEntry {
             som_json,
@@ -265,6 +316,7 @@ impl SomCache {
             html_bytes,
             som_bytes,
             effective_html,
+            webmcp_json,
             hit_count: 0,
         };
 
@@ -340,6 +392,7 @@ impl SomCache {
             misses: stats.misses,
             evictions: stats.evictions,
             total_som_bytes_served: stats.total_som_bytes_served,
+            total_webmcp_bytes_served: stats.total_webmcp_bytes_served,
             total_html_bytes_avoided: stats.total_html_bytes_avoided,
             entries: entries.len(),
             max_hot_entries: self.config.max_hot_entries,
@@ -357,6 +410,7 @@ impl SomCache {
                 snapshot.total_effective_html_bytes += effective_html.len();
             }
             snapshot.total_som_bytes += entry.som_bytes;
+            snapshot.total_webmcp_bytes += entry.webmcp_json.as_ref().map_or(0, Vec::len);
             snapshot.total_html_bytes += entry.html_bytes;
         }
 
@@ -771,7 +825,52 @@ mod tests {
                     entry.effective_html.as_deref(),
                     Some("<html><body>hydrated</body></html>")
                 );
+                assert!(entry.webmcp_json.is_none());
             }
+            _ => panic!("Expected page-state cache hit"),
+        }
+    }
+
+    #[test]
+    fn test_page_state_cache_round_trips_webmcp_catalog() {
+        let cache = SomCache::new(CacheConfig::default());
+        let catalog =
+            br#"{"contract_version":"plasmate.webmcp.v1","tools":[{"name":"externalTool"}]}"#
+                .to_vec();
+        cache.store_page_state_with_webmcp(
+            "https://example.com/app",
+            112,
+            b"{\"regions\":[]}".to_vec(),
+            100,
+            "<html><body>hydrated</body></html>".to_string(),
+            catalog.clone(),
+        );
+
+        match cache.lookup("https://example.com/app", 112) {
+            CacheLookup::Hit(entry) => {
+                assert_eq!(entry.webmcp_json.as_deref(), Some(catalog.as_slice()));
+            }
+            _ => panic!("Expected page-state cache hit"),
+        }
+        let snapshot = cache.snapshot();
+        assert_eq!(snapshot.total_webmcp_bytes, catalog.len());
+        assert_eq!(snapshot.total_webmcp_bytes_served, catalog.len() as u64);
+    }
+
+    #[test]
+    fn test_page_state_cache_rejects_oversized_webmcp_catalog() {
+        let cache = SomCache::new(CacheConfig::default());
+        cache.store_page_state_with_webmcp(
+            "https://example.com/app",
+            113,
+            b"{\"regions\":[]}".to_vec(),
+            100,
+            "<html></html>".to_string(),
+            vec![b'x'; crate::webmcp::MAX_CATALOG_BYTES + 1],
+        );
+
+        match cache.lookup("https://example.com/app", 113) {
+            CacheLookup::Hit(entry) => assert!(entry.webmcp_json.is_none()),
             _ => panic!("Expected page-state cache hit"),
         }
     }

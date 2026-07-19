@@ -14,3 +14,4 @@ pub mod release_manifest;
 pub mod screenshot;
 pub mod session;
 pub mod som;
+pub mod webmcp;
