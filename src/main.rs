@@ -5,6 +5,7 @@ use tracing_subscriber::EnvFilter;
 
 mod mcp;
 
+use plasmate::agent_workflow;
 use plasmate::auth;
 use plasmate::awp;
 use plasmate::bench;
@@ -383,6 +384,27 @@ enum Commands {
         /// Exact HTTP Origin allowed to pass request validation (repeatable)
         #[arg(long = "allow-origin")]
         allowed_origins: Vec<String>,
+    },
+    /// Execute a validated stateful browser plan through a supervised MCP child
+    AgentRun {
+        /// Versioned JSON workflow plan
+        #[arg(long)]
+        plan: std::path::PathBuf,
+        /// Machine-readable execution report (written atomically)
+        #[arg(long, default_value = "agent-workflow-report.json")]
+        report: std::path::PathBuf,
+        /// Validate and report without spawning a process or making requests
+        #[arg(long)]
+        dry_run: bool,
+        /// Permit separately approved evaluate steps
+        #[arg(long)]
+        allow_evaluate: bool,
+        /// Permit separately approved set_cookies and clear_cookies steps
+        #[arg(long)]
+        allow_cookie_writes: bool,
+        /// Approve one mutating step by exact plan ID (repeat for each step)
+        #[arg(long = "confirm-step")]
+        confirm_steps: Vec<String>,
     },
     /// Manage authentication profiles for cookie-based browsing
     Auth {
@@ -867,6 +889,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ => return Err("unsupported MCP transport; expected 'stdio' or 'http'".into()),
         },
+        Commands::AgentRun {
+            plan,
+            report,
+            dry_run,
+            allow_evaluate,
+            allow_cookie_writes,
+            confirm_steps,
+        } => {
+            let options = agent_workflow::WorkflowOptions {
+                dry_run,
+                allow_evaluate,
+                allow_cookie_writes,
+                confirm_steps,
+            };
+            let workflow = agent_workflow::load_and_validate(&plan, &options)?;
+            let execution = agent_workflow::execute(workflow, &options)?;
+            agent_workflow::write_report(&report, &execution)?;
+            println!(
+                "workflow={} status={:?} succeeded={}/{} report={}",
+                execution.workflow,
+                execution.status,
+                execution.summary.succeeded,
+                execution.summary.total,
+                report.display()
+            );
+            if !execution.succeeded() {
+                return Err("agent workflow failed; inspect the redacted report".into());
+            }
+        }
         Commands::Auth { action } => {
             cmd_auth(action).await?;
         }

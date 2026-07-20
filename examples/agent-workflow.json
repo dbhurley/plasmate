@@ -1,0 +1,27 @@
+{
+  "schema": "plasmate.agent-workflow.v1",
+  "name": "inspect-example",
+  "trace": true,
+  "limits": {
+    "step_timeout_ms": 10000,
+    "workflow_timeout_ms": 30000,
+    "response_bytes": 524288,
+    "stderr_bytes": 65536,
+    "memory_mb": 0,
+    "fail_fast": true
+  },
+  "steps": [
+    {
+      "id": "open",
+      "tool": "open_page",
+      "arguments": {"url": "https://example.com"},
+      "expect": {"json_pointer": "/url", "equals": "https://example.com/"}
+    },
+    {
+      "id": "trace-status",
+      "tool": "trace_status",
+      "arguments": {},
+      "expect": {"is_error": false}
+    }
+  ]
+}

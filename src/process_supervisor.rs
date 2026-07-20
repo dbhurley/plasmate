@@ -2,11 +2,11 @@
 //!
 //! V8 fatal errors cannot be recovered with Rust unwinding. Callers that execute
 //! untrusted JavaScript should put that work in a child process and supervise it
-//! with this module. The coverage runner is the first consumer; MCP and long-lived
-//! server sessions can adopt the same boundary without changing this API.
+//! with this module. Batch coverage workers and the line-oriented MCP workflow
+//! runner share the same process-group containment primitives.
 
 use std::ffi::OsString;
-use std::io::{Read, Write};
+use std::io::{BufRead, Read, Write};
 use std::path::PathBuf;
 use std::process::ExitStatus;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -56,6 +56,323 @@ pub enum SupervisorError {
     MissingPipe(&'static str),
     #[error("supervisor task failed: {0}")]
     Task(String),
+}
+
+/// Specification for a bounded, line-oriented supervised child. This is used
+/// by protocol clients that cannot know all stdin up front (notably MCP).
+#[derive(Debug, Clone)]
+pub struct InteractiveProcessSpec {
+    pub program: PathBuf,
+    pub args: Vec<OsString>,
+    pub env: Vec<(OsString, OsString)>,
+    pub max_line_bytes: usize,
+    pub max_stderr_bytes: usize,
+    pub memory_limit_bytes: u64,
+}
+
+#[derive(Debug, Error)]
+pub enum InteractiveProcessError {
+    #[error("failed to spawn supervised protocol child: {0}")]
+    Spawn(#[source] std::io::Error),
+    #[error("supervised protocol child was missing its piped {0}")]
+    MissingPipe(&'static str),
+    #[error("failed to write to supervised protocol child: {0}")]
+    Write(#[source] std::io::Error),
+    #[error("failed to read from supervised protocol child: {0}")]
+    Read(String),
+    #[error("supervised protocol response exceeded the configured line limit")]
+    Oversized,
+    #[error("supervised protocol child closed stdout before responding")]
+    EarlyExit,
+    #[error("supervised protocol request timed out")]
+    TimedOut,
+}
+
+enum LineEvent {
+    Line(Vec<u8>),
+    Oversized,
+    Eof,
+    Error(String),
+}
+
+const INTERACTIVE_LINE_QUEUE_CAPACITY: usize = 2;
+const INTERACTIVE_WRITE_QUEUE_CAPACITY: usize = 1;
+
+struct WriteRequest {
+    bytes: Vec<u8>,
+    acknowledged: std::sync::mpsc::SyncSender<Result<(), std::io::Error>>,
+}
+
+fn write_capped_requests(
+    mut stdin: std::process::ChildStdin,
+    requests: std::sync::mpsc::Receiver<WriteRequest>,
+) {
+    while let Ok(request) = requests.recv() {
+        let result = stdin.write_all(&request.bytes).and_then(|()| stdin.flush());
+        let failed = result.is_err();
+        let _ = request.acknowledged.send(result);
+        if failed {
+            break;
+        }
+    }
+}
+
+fn read_capped_lines<R: Read>(reader: R, limit: usize, tx: std::sync::mpsc::SyncSender<LineEvent>) {
+    let mut reader = std::io::BufReader::new(reader);
+    let mut line = Vec::with_capacity(limit.min(16 * 1024));
+    let mut oversized = false;
+    loop {
+        let available = match reader.fill_buf() {
+            Ok(available) => available,
+            Err(error) => {
+                let _ = tx.send(LineEvent::Error(error.to_string()));
+                break;
+            }
+        };
+        if available.is_empty() {
+            if oversized {
+                let _ = tx.send(LineEvent::Oversized);
+            } else if !line.is_empty() {
+                let _ = tx.send(LineEvent::Line(line));
+            }
+            let _ = tx.send(LineEvent::Eof);
+            break;
+        }
+        let (segment, consumed, complete) = match available.iter().position(|byte| *byte == b'\n') {
+            Some(position) => (&available[..position], position + 1, true),
+            None => (available, available.len(), false),
+        };
+        let remaining = limit.saturating_sub(line.len());
+        let keep = remaining.min(segment.len());
+        line.extend_from_slice(&segment[..keep]);
+        if keep < segment.len() {
+            oversized = true;
+        }
+        reader.consume(consumed);
+        if complete {
+            let event = if oversized {
+                LineEvent::Oversized
+            } else {
+                LineEvent::Line(std::mem::take(&mut line))
+            };
+            if tx.send(event).is_err() {
+                break;
+            }
+            oversized = false;
+            line.clear();
+        }
+    }
+}
+
+/// A process-group-isolated, line-oriented child. Dropping it kills the whole
+/// group, so timeouts, malformed output, and caller cancellation cannot leave
+/// browser descendants behind.
+pub struct InteractiveProcess {
+    child: std::process::Child,
+    writes: Option<std::sync::mpsc::SyncSender<WriteRequest>>,
+    writer: Option<std::thread::JoinHandle<()>>,
+    lines: Option<std::sync::mpsc::Receiver<LineEvent>>,
+    reader: Option<std::thread::JoinHandle<()>>,
+    stderr: Option<std::thread::JoinHandle<std::io::Result<BoundedOutput>>>,
+    process_tree: ProcessTreeGuard,
+}
+
+impl InteractiveProcess {
+    pub fn spawn(spec: InteractiveProcessSpec) -> Result<Self, InteractiveProcessError> {
+        let mut command = std::process::Command::new(&spec.program);
+        command
+            .env_clear()
+            .args(&spec.args)
+            .envs(spec.env)
+            .env("PLASMATE_SUPERVISED_WORKER", "1")
+            .env(
+                "PLASMATE_WORKER_MEMORY_LIMIT_BYTES",
+                spec.memory_limit_bytes.to_string(),
+            )
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        configure_process(&mut command, spec.memory_limit_bytes);
+        let mut child = command.spawn().map_err(InteractiveProcessError::Spawn)?;
+        let pid = child.id();
+        establish_process_group(pid);
+        let process_tree = ProcessTreeGuard::new(pid);
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or(InteractiveProcessError::MissingPipe("stdin"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or(InteractiveProcessError::MissingPipe("stdout"))?;
+        let stderr_pipe = child
+            .stderr
+            .take()
+            .ok_or(InteractiveProcessError::MissingPipe("stderr"))?;
+        let (write_tx, write_rx) = std::sync::mpsc::sync_channel(INTERACTIVE_WRITE_QUEUE_CAPACITY);
+        let writer = std::thread::spawn(move || write_capped_requests(stdin, write_rx));
+        // A protocol peer is allowed one response per request. Keep only one
+        // response plus a terminal event in userspace; a child that floods
+        // short lines is backpressured by the OS pipe instead of growing the
+        // coordinator's heap without bound.
+        let (tx, lines) = std::sync::mpsc::sync_channel(INTERACTIVE_LINE_QUEUE_CAPACITY);
+        let line_limit = spec.max_line_bytes;
+        let reader = std::thread::spawn(move || read_capped_lines(stdout, line_limit, tx));
+        let stderr_limit = spec.max_stderr_bytes;
+        let stderr = std::thread::spawn(move || drain_bounded(stderr_pipe, stderr_limit));
+        Ok(Self {
+            child,
+            writes: Some(write_tx),
+            writer: Some(writer),
+            lines: Some(lines),
+            reader: Some(reader),
+            stderr: Some(stderr),
+            process_tree,
+        })
+    }
+
+    pub fn exchange(
+        &mut self,
+        line: &[u8],
+        timeout: Duration,
+    ) -> Result<Vec<u8>, InteractiveProcessError> {
+        let remaining = self.write_line(line, timeout)?;
+        let lines = self
+            .lines
+            .as_ref()
+            .ok_or(InteractiveProcessError::EarlyExit)?;
+        match lines.recv_timeout(remaining) {
+            Ok(LineEvent::Line(line)) => Ok(line),
+            Ok(LineEvent::Oversized) => Err(InteractiveProcessError::Oversized),
+            Ok(LineEvent::Eof) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                Err(InteractiveProcessError::EarlyExit)
+            }
+            Ok(LineEvent::Error(error)) => Err(InteractiveProcessError::Read(error)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                Err(InteractiveProcessError::TimedOut)
+            }
+        }
+    }
+
+    pub fn notify(
+        &mut self,
+        line: &[u8],
+        timeout: Duration,
+    ) -> Result<(), InteractiveProcessError> {
+        self.write_line(line, timeout).map(|_| ())
+    }
+
+    fn write_line(
+        &mut self,
+        line: &[u8],
+        timeout: Duration,
+    ) -> Result<Duration, InteractiveProcessError> {
+        if timeout.is_zero() {
+            return Err(InteractiveProcessError::TimedOut);
+        }
+        let started = Instant::now();
+        let mut bytes = Vec::with_capacity(line.len().saturating_add(1));
+        bytes.extend_from_slice(line);
+        bytes.push(b'\n');
+        let (acknowledged, completion) = std::sync::mpsc::sync_channel(1);
+        let request = WriteRequest {
+            bytes,
+            acknowledged,
+        };
+        let writes = self
+            .writes
+            .as_ref()
+            .ok_or(InteractiveProcessError::EarlyExit)?;
+        match writes.try_send(request) {
+            Ok(()) => {}
+            Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                return Err(InteractiveProcessError::TimedOut);
+            }
+            Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                return Err(InteractiveProcessError::Write(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "supervised protocol writer stopped",
+                )));
+            }
+        }
+        let remaining = timeout.saturating_sub(started.elapsed());
+        if remaining.is_zero() {
+            return Err(InteractiveProcessError::TimedOut);
+        }
+        match completion.recv_timeout(remaining) {
+            Ok(Ok(())) => {
+                let remaining = timeout.saturating_sub(started.elapsed());
+                if remaining.is_zero() {
+                    Err(InteractiveProcessError::TimedOut)
+                } else {
+                    Ok(remaining)
+                }
+            }
+            Ok(Err(error)) => Err(InteractiveProcessError::Write(error)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                Err(InteractiveProcessError::TimedOut)
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                Err(InteractiveProcessError::Write(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "supervised protocol writer stopped before acknowledgement",
+                )))
+            }
+        }
+    }
+
+    pub fn shutdown(mut self, timeout: Duration) -> ProcessOutcome {
+        self.writes.take();
+        // Unblock a reader applying queue backpressure before joining it.
+        self.lines.take();
+        let started = Instant::now();
+        let outcome = loop {
+            match self.child.try_wait() {
+                Ok(Some(status)) => break classify_status(status),
+                Ok(None) if started.elapsed() < timeout => {
+                    std::thread::sleep(Duration::from_millis(5))
+                }
+                _ => {
+                    self.process_tree.terminate();
+                    let _ = self.child.kill();
+                    let _ = self.child.wait();
+                    break ProcessOutcome::TimedOut;
+                }
+            }
+        };
+        self.process_tree.terminate();
+        if let Some(writer) = self.writer.take() {
+            let _ = writer.join();
+        }
+        if let Some(reader) = self.reader.take() {
+            let _ = reader.join();
+        }
+        if let Some(stderr) = self.stderr.take() {
+            let _ = stderr.join();
+        }
+        outcome
+    }
+}
+
+impl Drop for InteractiveProcess {
+    fn drop(&mut self) {
+        self.process_tree.terminate();
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        self.writes.take();
+        // A bounded sender may be waiting for queue capacity. Disconnecting
+        // the receiver makes that send fail and lets the reader terminate.
+        self.lines.take();
+        if let Some(writer) = self.writer.take() {
+            let _ = writer.join();
+        }
+        if let Some(reader) = self.reader.take() {
+            let _ = reader.join();
+        }
+        if let Some(stderr) = self.stderr.take() {
+            let _ = stderr.join();
+        }
+    }
 }
 
 struct BoundedOutput {

@@ -8,6 +8,7 @@ use std::alloc::{alloc, Layout};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Once;
 use std::time::Duration;
 
@@ -3033,7 +3034,7 @@ struct NativeModuleState {
     /// persistent handles and compare their underlying module identities.
     identities: Vec<NativeModuleIdentity>,
     aliases: HashMap<String, String>,
-    diagnostics: Vec<ModuleDiagnostic>,
+    diagnostics: RefCell<Vec<ModuleDiagnostic>>,
 }
 
 struct NativeModuleIdentity {
@@ -3135,9 +3136,10 @@ fn reject_dynamic_import<'s>(
 ) -> Option<v8::Local<'s, v8::Promise>> {
     let resource = resource_name.to_rust_string_lossy(scope);
     let context = scope.get_current_context();
-    if let Some(state) = context.get_slot_mut::<NativeModuleState>() {
-        if state.diagnostics.len() < MAX_MODULE_DIAGNOSTICS {
-            state.diagnostics.push(module_runtime_diagnostic(
+    if let Some(state) = context.get_slot::<NativeModuleState>() {
+        let mut diagnostics = state.diagnostics.borrow_mut();
+        if diagnostics.len() < MAX_MODULE_DIAGNOSTICS {
+            diagnostics.push(module_runtime_diagnostic(
                 &resource,
                 "resolve",
                 "unsupported-dynamic-import",
@@ -3365,7 +3367,7 @@ impl JsRuntime {
             modules: HashMap::new(),
             identities: Vec::new(),
             aliases: graph.aliases.clone(),
-            diagnostics: Vec::new(),
+            diagnostics: RefCell::new(Vec::new()),
         };
         let compile_handle = self.isolate.thread_safe_handle();
         let (compile_cancel_tx, compile_cancel_rx) = std::sync::mpsc::channel();
@@ -3450,7 +3452,7 @@ impl JsRuntime {
                     ),
                 }
             }
-            context.set_slot(state);
+            context.set_slot(Rc::new(state));
         }
 
         let _ = compile_cancel_tx.send(());
@@ -3510,9 +3512,9 @@ impl JsRuntime {
                             .get(root_url)
                             .map(String::as_str)
                             .unwrap_or(root_url);
-                        state.modules.get(canonical)
+                        state.modules.get(canonical).cloned()
                     })
-                    .map(|module| v8::Local::new(scope, module));
+                    .map(|module| v8::Local::new(scope, &module));
                 match module {
                     None => Err((
                         "module-not-loaded",
@@ -3597,7 +3599,7 @@ impl JsRuntime {
             let scope = &mut v8::HandleScope::new(&mut self.isolate);
             let context = v8::Local::new(scope, context_global);
             if let Some(state) = context.remove_slot::<NativeModuleState>() {
-                for diagnostic in state.diagnostics {
+                for diagnostic in state.diagnostics.borrow().iter().cloned() {
                     if report.diagnostics.len() >= MAX_MODULE_DIAGNOSTICS {
                         break;
                     }
@@ -3780,8 +3782,7 @@ impl JsRuntime {
 
     /// Get heap statistics.
     pub fn heap_stats(&mut self) -> HeapStats {
-        let mut stats = v8::HeapStatistics::default();
-        self.isolate.get_heap_statistics(&mut stats);
+        let stats = self.isolate.get_heap_statistics();
         HeapStats {
             used_bytes: stats.used_heap_size(),
             total_bytes: stats.total_heap_size(),
