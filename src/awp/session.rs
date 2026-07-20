@@ -234,6 +234,7 @@ impl Session {
             total: r.total,
             succeeded: r.succeeded,
             failed: r.failed,
+            containment_failure: r.containment_failure.clone(),
         });
 
         // Update session state - rotate previous SOM before updating current
@@ -313,6 +314,7 @@ impl Session {
             total: r.total,
             succeeded: r.succeeded,
             failed: r.failed,
+            containment_failure: r.containment_failure.clone(),
         });
 
         self.current_url = Some(final_url.clone());
@@ -379,4 +381,5 @@ pub struct JsReportSummary {
     pub total: usize,
     pub succeeded: usize,
     pub failed: usize,
+    pub containment_failure: Option<crate::js::worker::JsContainmentFailure>,
 }

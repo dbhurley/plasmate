@@ -335,11 +335,16 @@ async fn handle_page_navigate(
             });
 
             if let Some(js) = &result.js_report {
-                response["js"] = json!({
+                let mut js_summary = json!({
                     "scripts_total": js.total,
                     "scripts_ok": js.succeeded,
                     "scripts_err": js.failed,
                 });
+                if let Some(failure) = &js.containment_failure {
+                    js_summary["containment_failure"] = json!(failure);
+                    js_summary["source_som_fallback"] = json!(true);
+                }
+                response["js"] = js_summary;
             }
 
             Response::success(id, response)
