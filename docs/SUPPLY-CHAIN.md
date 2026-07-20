@@ -2,8 +2,10 @@
 
 Plasmate treats dependency metadata, lockfiles, CI actions, build tools, and
 coverage evidence as executable inputs. Pull requests and pushes to `master`
-run the same read-only dependency-security workflow; a weekly run refreshes
-the advisory data even when the repository is idle.
+run the same read-only dependency-security workflow. During P0 operational
+acceptance, a daily run supplies seven-UTC-day soak evidence even when the
+repository is frozen. Restoring the normal weekly steady-state cadence requires
+a reviewed workflow change after acceptance; it is not an automatic setting.
 
 ## Trust boundaries
 

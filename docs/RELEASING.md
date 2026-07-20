@@ -131,6 +131,19 @@ new production tag is pushed:
    workflow run IDs, attempts, logs, candidate SHA, corpus digest, and branch
    protection snapshots.
 
+The exact repository-side procedure is in `docs/P0-EXECUTION-PLAN.md`. It
+records the freeze and first full UTC date, dispatches the daily/manual
+workflows, exports run metadata, and produces a
+`plasmate.p0-soak-verification.v1` result. The verifier requires seven complete
+UTC dates of successful CI and dependency-security runs on exactly one SHA,
+at least one successful JS coverage run on that SHA during the window, and
+completion timestamps no later than the recorded verification cutoff.
+
+Workflow YAML does not prove that branch, tag, or environment protections are
+active. Retain the read-only GitHub settings snapshots alongside the verifier
+result and linked Actions evidence. If `master` moves during the soak, restart
+the full window on the new SHA; never combine evidence from two commits.
+
 Only after these controls and the soak are complete should the maintainer create
 and push an annotated release tag. The production workflow intentionally rejects
 prerelease and build-metadata versions because it always publishes a stable
