@@ -456,7 +456,7 @@
       </div>
     </nav>
     <main class="content">
-      <h1 id="openclaw-integration">OpenClaw Integration</h1><p><a href="https://openclaw.ai">OpenClaw</a> integration for Plasmate — install as a skill to give any OpenClaw agent a fast, token-efficient browser engine.</p>
+      <h1 id="openclaw-integration">OpenClaw Integration</h1><p><a href="https://openclaw.ai">OpenClaw</a> integration for Plasmate — install it as a skill to give an OpenClaw agent structured SOM browsing.</p>
 <p>Skill repo: <a href="https://github.com/plasmate-labs/skill-openclaw"><code>plasmate-labs/skill-openclaw</code></a></p>
 <h2 id="installation">Installation</h2><h3 id="install-plasmate">1. Install Plasmate</h3><pre><code class="language-bash">curl -fsSL https://plasmate.app/install.sh | sh
 </code></pre>
@@ -470,52 +470,16 @@ chmod +x /usr/local/bin/pf
 <pre><code class="language-bash"># Before
 web_fetch https://docs.stripe.com/api
 
-# After — ~96% fewer tokens, stats logged automatically
+# After — structured SOM output, stats logged automatically
 pf https://docs.stripe.com/api
 </code></pre>
-<p><code>pf</code> wraps <code>plasmate fetch</code>, prints timing + token savings to stderr, and appends a stat entry to <code>~/.plasmate/fetch-stats.jsonl</code>.</p>
-<h2 id="token-savings">Token Savings</h2><p>Real-world benchmark (SOM vs raw HTML, 12 sites):</p>
-<table>
-<thead>
-<tr>
-<th>Site</th>
-<th>Plasmate</th>
-<th>Raw HTML</th>
-<th>Savings</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Vercel docs</td>
-<td>2,206 tok</td>
-<td>556,464 tok</td>
-<td><strong>99.6%</strong></td>
-</tr>
-<tr>
-<td>Stripe API</td>
-<td>12,699 tok</td>
-<td>301,604 tok</td>
-<td><strong>95.8%</strong></td>
-</tr>
-<tr>
-<td>Next.js docs</td>
-<td>15,350 tok</td>
-<td>198,307 tok</td>
-<td><strong>92.3%</strong></td>
-</tr>
-<tr>
-<td>Stack Overflow</td>
-<td>41,699 tok</td>
-<td>289,090 tok</td>
-<td><strong>85.6%</strong></td>
-</tr>
-<tr>
-<td>Wikipedia</td>
-<td>25,448 tok</td>
-<td>147,538 tok</td>
-<td><strong>82.8%</strong></td>
-</tr>
-</tbody></table>
-<p><strong>1.56M tokens saved across 10 test fetches.</strong> Plasmate is most effective on SPAs and content-heavy pages.</p>
+<p><code>pf</code> wraps <code>plasmate fetch</code>, prints timing and estimated size statistics to stderr, and appends a stat entry to <code>~/.plasmate/fetch-stats.jsonl</code>.</p>
+<h2 id="output-size-evidence">Output-size evidence</h2><p>In the v0.5.1 observational benchmark snapshots, serialized SOM was smaller than
+raw HTML by a median 9.98x across 83 successful non-JavaScript inputs out of 98
+attempted, and by a median 9.32x across 82 successful JavaScript inputs out of
+98 attempted. Results vary by page. These are byte ratios, not universal token,
+cost, latency, or task-success guarantees. The wrapper&#39;s token fields are
+estimates; use your model&#39;s tokenizer when evaluating an OpenClaw workflow.</p>
 <h2 id="mcp-integration">MCP Integration</h2><p>For multi-step browsing, run Plasmate as an MCP server:</p>
 <pre><code class="language-bash">plasmate mcp
 </code></pre>
@@ -530,7 +494,7 @@ pf https://docs.stripe.com/api
   }
 }
 </code></pre>
-<p>Available MCP tools: <code>fetch_page</code>, <code>extract_text</code>, <code>screenshot_page</code>, <code>open_page</code>, <code>navigate_to</code>, <code>click</code>, <code>type_text</code>, <code>select_option</code>, <code>scroll</code>, <code>toggle</code>, <code>clear</code>, <code>evaluate</code>, <code>close_page</code>.</p>
+<p>Available MCP tools: <code>fetch_page</code>, <code>extract_text</code>, <code>extract_links</code>, <code>cache_status</code>, <code>session_status</code>, <code>screenshot_page</code>, <code>open_page</code>, <code>navigate_to</code>, <code>click</code>, <code>type_text</code>, <code>select_option</code>, <code>scroll</code>, <code>toggle</code>, <code>clear</code>, <code>evaluate</code>, <code>close_page</code>, <code>get_cookies</code>, <code>set_cookies</code>, <code>clear_cookies</code>.</p>
 <h2 id="cdp-mode-puppeteer-compatible">CDP Mode (Puppeteer-compatible)</h2><p>Run Plasmate as a CDP server to replace Chrome in existing Puppeteer/Playwright workflows:</p>
 <pre><code class="language-bash">plasmate serve --protocol cdp --port 9222
 export BROWSER_WS_ENDPOINT=&quot;ws://127.0.0.1:9222&quot;
@@ -542,7 +506,7 @@ log = os.path.expanduser(&quot;~/.plasmate/fetch-stats.jsonl&quot;)
 entries = [json.loads(l) for l in open(log) if l.strip()]
 n = len(entries)
 saved = sum(e.get(&quot;tokens_saved_est&quot;, 0) for e in entries)
-print(f&quot;{n} fetches | {saved:,} tokens saved&quot;)
+print(f&quot;{n} fetches | {saved:,} estimated tokens saved&quot;)
 EOF
 </code></pre>
 <h2 id="further-reading">Further Reading</h2><ul>

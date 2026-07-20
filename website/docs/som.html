@@ -701,48 +701,12 @@
 <li><code>opacity: 0</code> - element excluded from SOM</li>
 </ul>
 <p>This prevents hidden elements (dropdowns, modals, off-screen content) from polluting the agent&#39;s view.</p>
-<h2 id="benchmarks">Benchmarks</h2><table>
-<thead>
-<tr>
-<th>Site</th>
-<th>HTML</th>
-<th>SOM</th>
-<th>Compression</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Wikipedia</td>
-<td>589 KB</td>
-<td>56 KB</td>
-<td>10.4x</td>
-</tr>
-<tr>
-<td>BBC News</td>
-<td>~180 KB</td>
-<td>~12 KB</td>
-<td>15x</td>
-</tr>
-<tr>
-<td>GitHub</td>
-<td>~120 KB</td>
-<td>~12 KB</td>
-<td>10.1x</td>
-</tr>
-<tr>
-<td>Hacker News</td>
-<td>34 KB</td>
-<td>~26 KB</td>
-<td>1.3x</td>
-</tr>
-<tr>
-<td>x.com</td>
-<td>~15 KB</td>
-<td>~0.1 KB</td>
-<td>159x</td>
-</tr>
-</tbody></table>
-<p>Median across 38 URLs: <strong>9.4x compression</strong>.</p>
-<p>Note: Link-dense pages like HN compress less because links are interactive and cannot be dropped.</p>
+<h2 id="output-size-evidence">Output-size evidence</h2><p>Retained v0.5.1 observational snapshots attempted 98 URLs per run. The
+non-JavaScript report recorded a 9.98x median serialized-byte ratio over 83
+successful inputs; the JavaScript report recorded 9.32x over 82 successful
+inputs. Blocked and failed inputs remain in the denominator. These historical
+byte ratios are page- and corpus-dependent and do not establish universal token,
+cost, latency, or task-success savings. See <a href="https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md">Benchmarking</a>.</p>
 
     </main>
   </div>

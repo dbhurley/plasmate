@@ -1,5 +1,9 @@
 # Robots.txt for the Agentic Web
 
+> Proposal document. Numeric examples below are illustrative, not measured
+> Plasmate performance or universal token/cost claims. Actual representation
+> size depends on the page, endpoint, selector, budget, and tokenizer.
+
 The robots.txt standard was designed in 1994 for a simple question: should this crawler index my page?
 
 Thirty-two years later, we're using the same binary mechanism to manage a fundamentally different relationship. AI agents don't just index pages - they read, reason, extract, and act on web content. The conversation is stuck on a single axis: **block or allow**.
@@ -33,7 +37,9 @@ SOM-Scope: main-content
 SOM-Freshness: 3600
 ```
 
-When an AI agent sees these directives, instead of fetching the full HTML page (50,000+ tokens), it can request the SOM endpoint and get a clean, structured representation (~3,000 tokens).
+When an AI agent sees these directives, it can request a publisher-provided
+semantic representation instead of fetching the full HTML page. The size and
+fidelity of either representation must be measured for the actual endpoint.
 
 ## New Directives
 
@@ -49,7 +55,9 @@ When an AI agent sees these directives, instead of fetching the full HTML page (
 
 **For website owners:** Control without blocking. Direct agents to a representation you control - exclude ads, paywalls, and noise. Include what you want highlighted.
 
-**For agent developers:** 10-16x fewer tokens, better extraction quality, no headless browser needed. A single HTTP request instead of Chrome + JS execution + DOM parsing.
+**For agent developers:** a publisher-provided structured representation can
+avoid browser execution and omit irrelevant markup. Token and extraction impact
+is page- and implementation-dependent.
 
 **For the web ecosystem:** A cooperative alternative to the current adversarial dynamic where publishers block and agents circumvent.
 

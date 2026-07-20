@@ -1,73 +1,121 @@
 # Publishing Plasmate to the MCP Registry
 
-The [MCP Registry](https://registry.modelcontextprotocol.io/) is the official discovery surface
-for MCP servers — used by Claude, Cursor, and other MCP-compatible clients. Plasmate is not
-yet listed there. This guide covers the one-time setup to publish.
+The [MCP Registry](https://registry.modelcontextprotocol.io/) entry is an
+installable server declaration, not only a discovery record. The checked-in
+metadata declares the native engine as a version-pinned OCI image:
 
-## Prerequisites
-
-- Maintainer access to the `plasmate-labs` GitHub org (auth is tied to org ownership)
-- `node` / `npm` installed
-
-## Step 1 — Install mcp-publisher
-
-```bash
-curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
-  | tar xz mcp-publisher \
-  && sudo mv mcp-publisher /usr/local/bin/
+```text
+ghcr.io/plasmate-labs/plasmate:v0.6.0
 ```
 
-Verify:
+Registry clients run the image over stdio and pass the positional `mcp`
+argument. With the Docker `ENTRYPOINT ["plasmate"]`, that starts `plasmate mcp`.
+The npm and PyPI packages named `plasmate` are client SDKs and are deliberately
+not registry runtime packages.
+
+This is the next v0.6.0 release candidate, not a currently available image. The
+v0.5.1 image was built before the MCP ownership label existed and must remain
+immutable; it cannot be relabeled or republished as the corrected Registry
+runtime. Do not publish this Registry entry until the v0.6.0 release workflow
+builds the newly labeled image and an anonymous pull succeeds.
+
+## Release invariants
+
+Before publishing, all of these values must describe the same release:
+
+- `release-manifest.json` declares the Rust artifact version and both `ghcr`
+  and `mcp_registry` publication destinations.
+- `server.json` uses `registryType: "oci"`, package version `0.6.0`, identifier
+  `ghcr.io/plasmate-labs/plasmate:v0.6.0`, stdio transport, and a required
+  positional package argument whose value is `mcp`.
+- `Dockerfile` retains `ENTRYPOINT ["plasmate"]` and the label
+  `io.modelcontextprotocol.server.name="io.github.plasmate-labs/plasmate"`.
+- The immutable versioned GHCR image is publicly pullable without repository
+  credentials before the Registry entry is published. Do not substitute
+  `latest`; Registry installs must be repeatable.
+
+The checked-in release validator enforces the local parts of this contract:
+
+```bash
+cargo run --locked -- release-validate
+```
+
+## Install and validate the publisher
+
+Download `mcp-publisher` from the official Registry release page into a trusted
+location, then verify it is available:
 
 ```bash
 mcp-publisher --help
+mcp-publisher validate
 ```
 
-## Step 2 — Authenticate
+`mcp-publisher validate` validates `server.json` against the official schema.
+It does not prove that the declared image is already present or public in GHCR,
+so verify an anonymous pull separately after the release workflow publishes the
+versioned image. A result that succeeds only after `docker login` is not enough
+for Registry consumers:
 
-The `server.json` name is `io.github.plasmate-labs/plasmate`, so you must authenticate
-as a member of the `plasmate-labs` GitHub org:
+```bash
+docker manifest inspect ghcr.io/plasmate-labs/plasmate:v0.6.0
+```
+
+## Authenticate and publish
+
+The server name is `io.github.plasmate-labs/plasmate`; authentication therefore
+requires authority for the `plasmate-labs` GitHub organization.
 
 ```bash
 mcp-publisher login github
-# Visit the printed URL, enter the device code, authorize the app
-```
-
-## Step 3 — Publish
-
-From the repo root (where `server.json` lives):
-
-```bash
 mcp-publisher publish
 ```
 
-Expected output:
+Publishing is an explicit post-image release operation. Do not publish from an
+untagged candidate, before an anonymous GHCR pull succeeds, or with a moving
+image tag.
 
-```
-Publishing to https://registry.modelcontextprotocol.io...
-✓ Successfully published
-✓ Server io.github.plasmate-labs/plasmate version 0.4.0
-```
-
-## Step 4 — Verify
+## Verify the registry record
 
 ```bash
 curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.plasmate-labs/plasmate"
 ```
 
-## What was changed in this PR
+Confirm that the returned version, OCI identifier, stdio transport, and `mcp`
+package argument exactly match `server.json`. A valid local schema result does
+not replace this post-publication check.
 
-- `server.json` added at repo root — defines the registry entry (name, description, npm + PyPI packages, stdio transport, `plasmate mcp` invocation)
-- `sdk/python/README.md` — added `<!-- mcp-name: io.github.plasmate-labs/plasmate -->` comment required for PyPI ownership verification
-- `package.json` already has `mcpName: "io.github.plasmate-labs/plasmate"` — npm ownership already verified ✓
+## Retire invalid legacy records
 
-## Re-publishing after version bumps
+The public Registry currently retains active `0.1.0` and `0.4.0` Plasmate
+records that describe the npm/PyPI client SDKs as runnable MCP servers. Those
+records are historical metadata errors, not supported installation paths. As
+part of the v0.6.0 Registry publication session, use the authenticated Registry
+status-update workflow to mark both versions `deprecated` (or `deleted` if the
+Registry requires removal for invalid runtime metadata). Do not alter the
+separate `0.4.1` `plasmate-mcp` record: that npm package has a real executable
+server entry point.
 
-After each release, update the `version` field in `server.json` to match and re-run:
+After the status update, query the version-list endpoint and retain the JSON as
+release evidence. The corrected v0.6.0 OCI record must be `active`; the invalid
+legacy versions must no longer be presented as active installation choices:
 
 ```bash
-mcp-publisher publish
+curl "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.plasmate-labs%2Fplasmate/versions"
 ```
 
-Consider automating this with the
-[GitHub Actions publishing guide](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/github-actions.mdx).
+## Subsequent version bumps
+
+For every Rust engine release:
+
+1. Update the Rust artifact version and all declared sources through
+   `release-manifest.json`.
+2. Update both `server.json.version` and `packages[0].version`.
+3. Update the OCI identifier tag to exactly `v<new version>`.
+4. Run `cargo run --locked -- release-validate`, the official schema validator,
+   and the normal release test suite before creating the immutable Git tag.
+5. Wait for the matching GHCR image to publish and become anonymously pullable.
+6. Run `mcp-publisher publish`, then inspect the public Registry record.
+
+Never point the Registry entry at npm or PyPI unless that package independently
+installs and launches the native MCP server; SDK importability is not a server
+runtime contract.

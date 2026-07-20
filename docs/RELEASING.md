@@ -1,8 +1,25 @@
 # Release metadata and dry-run validation
 
-`release-manifest.json` is the source of truth for the version expected in each checked-in publication surface. Artifacts remain independently versioned: the Rust engine, Node SDK, Python SDK, parsers, adapters, and proxy do not have to share a number.
+`release-manifest.json` is the source of truth for the version expected in each checked-in publication surface. Artifacts remain independently versioned: the Rust engine, Node SDK, Python SDK, Go SDK, parsers, adapters, and proxy do not have to share a number.
 
-The manifest intentionally declares each artifact's publication destinations and every file that must agree with that artifact's version. For example, the Node SDK version is checked in its package manifest, lock file, MCP client identity, and MCP registry package entry. The Python SDK is checked in its project metadata, lock file, client identity, and registry entry.
+The manifest intentionally declares each artifact's publication destinations and every file that must agree with that artifact's version. The validator also discovers public package manifests, lock-root versions, Python `__version__` exports, and SDK client identities under `sdk/`, `packages/`, `integrations/`, and `tools/`; an identity absent from the manifest is a validation error. The Go SDK is an independently versioned Go submodule whose release tag is `sdk/go/v<VERSION>`.
+
+`server.json` declares the versioned GHCR image as the registry-installable MCP
+server. Its OCI identifier must be
+`ghcr.io/plasmate-labs/plasmate:v<VERSION>`, its package version must equal the
+Rust artifact version, its transport must be stdio, and its required positional
+package argument must be `mcp`. The Docker image retains `ENTRYPOINT
+["plasmate"]`, so the registry invocation resolves to `plasmate mcp`, and the
+Dockerfile must carry the ownership label
+`io.modelcontextprotocol.server.name="io.github.plasmate-labs/plasmate"`.
+The npm and PyPI `plasmate` packages remain client SDKs and must not be declared
+as runnable MCP packages unless they gain real executable entry points.
+
+The checked-in Rust engine and Registry metadata currently describe the v0.6.0
+next-release candidate. That image does not exist until the immutable v0.6.0
+release workflow builds it from the labeled Dockerfile. The old v0.5.1 image
+must not be rebuilt, retagged, or treated as label-compliant. Registry
+publication remains blocked until the new v0.6.0 image is anonymously pullable.
 
 Run the dry-run validator from the repository root with the committed lockfile:
 
@@ -16,7 +33,7 @@ To retain the machine-readable result:
 cargo run --locked -- release-validate --output release-validation.json
 ```
 
-The command performs no registry, Git, tag, or package mutations. It exits 2 if a source is missing, cannot be parsed, has no string version at the declared selector, or differs from the manifest. Source paths must be repository-relative, may not contain parent traversal, and may not resolve outside the repository through a symlink. It exits zero only when every declared source agrees.
+The command performs no registry, tag, or package mutations. It exits 2 if a source is missing, cannot be parsed, has no string version at the declared selector, differs from the manifest, exposes an undeclared public version identity, advertises a non-runnable MCP package, maps OCI metadata to anything other than the declared GHCR artifact and exact `v<version>` tag, omits the stdio/`mcp` runtime contract or Docker ownership label, or finds a tracked Browser Use wheel/sdist. Source paths must be repository-relative, may not contain parent traversal, and may not resolve outside the repository through a symlink. It exits zero only when every declared and discovered identity agrees.
 
 ## Updating a version
 
@@ -25,7 +42,9 @@ The command performs no registry, Git, tag, or package mutations. It exits 2 if 
 3. Update every source declared for that artifact; do not change unrelated artifacts merely to make the numbers uniform.
 4. Run `cargo run --locked -- release-validate`.
 5. Run the artifact's tests and package/build dry run.
-6. Review the generated package contents and changelog before any publish or tag operation.
+6. For the Rust engine, update the version in `server.json` and its OCI image
+   identifier together; the tag must remain exactly `v<VERSION>`.
+7. Review the generated package contents and changelog before any publish or tag operation.
 
 Adding a new publishable package requires adding it to the release manifest in the same change. Private test packages and the documentation website are not publication artifacts and are intentionally absent.
 
@@ -80,6 +99,10 @@ sequence is not transactional: if crates.io or GHCR succeeds and a later
 approval or job fails, the release is partially published. Do not restart it as
 a fresh release or move the tag; continue or recover the failed stage as a
 release incident using the original immutable tag and workflow evidence.
+Publish the matching MCP Registry entry only after the versioned GHCR image is
+publicly pullable without repository credentials; registry validation proves
+declaration consistency, not remote image existence or visibility. See
+`docs/publish-to-mcp-registry.md` for the operator procedure.
 
 Cargo resolution is locked in metadata validation, package dry-run, native and
 cross builds, and publication. Preflight, artifact builds, and crates.io

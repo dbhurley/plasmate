@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -679,6 +680,16 @@ func TestTokenEstimate(t *testing.T) {
 	est := TokenEstimate(som)
 	if est != 300 { // 1200 / 4
 		t.Errorf("TokenEstimate = %d, want 300", est)
+	}
+}
+
+func TestSDKVersionMatchesVersionFile(t *testing.T) {
+	version, err := os.ReadFile("VERSION")
+	if err != nil {
+		t.Fatalf("ReadFile VERSION failed: %v", err)
+	}
+	if got := strings.TrimSpace(string(version)); got != SDKVersion {
+		t.Fatalf("VERSION = %q, SDKVersion = %q", got, SDKVersion)
 	}
 }
 

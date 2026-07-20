@@ -1,6 +1,6 @@
 # LangChain Integration
 
-LangChain tools and document loader for Plasmate -  browse the web with **~10x fewer tokens** than raw HTML.
+LangChain tools and a document loader for Plasmate, returning structured SOM instead of raw HTML. Output size and token use depend on the source page and model tokenizer.
 
 Plasmate's SOM output compiles web pages into compact, structured representations that preserve interactive elements and content hierarchy. This integration provides LangChain-native tools for stateless fetching, persistent browsing, and batch document loading.
 
@@ -25,7 +25,7 @@ buttons = find_action_targets_by_role(som, "button", enabled_only=True)
 clicks = find_action_targets_by_action(som, "click", enabled_only=True)
 ```
 
-Source: [`integrations/langchain/`](https://github.com/nicepkg/plasmate/tree/master/integrations/langchain)
+Source: [`integrations/langchain/`](https://github.com/plasmate-labs/plasmate/tree/master/integrations/langchain)
 
 ## Installation
 
@@ -157,14 +157,13 @@ PlasmateSOMLoader(
 
 Document metadata includes: `url`, `title`, `lang`, `html_bytes`, `som_bytes`, `element_count`, `interactive_count`, and optionally `description`, `open_graph`, `json_ld`.
 
-## Token Efficiency
+## Output size
 
-Compared to LangChain's `WebBaseLoader` which passes raw HTML:
-
-| Source | Hacker News | Example.com | News Article |
-|--------|-------------|-------------|--------------|
-| Raw HTML (WebBaseLoader) | ~22,000 tokens | ~400 tokens | ~45,000 tokens |
-| **SOM (PlasmateSOMLoader)** | **~1,500 tokens** | **~80 tokens** | **~3,000 tokens** |
-| **Savings** | **~15x** | **~5x** | **~15x** |
-
-SOM preserves all interactive elements, headings, and content structure while stripping scripts, styles, hidden elements, and layout-only markup.
+SOM is designed to retain semantic regions and supported interactive elements
+while removing scripts, styles, hidden elements, and layout-only markup. The
+result is page-dependent. In the v0.5.1 observational snapshots, the median
+serialized-byte ratio was 9.98x across 83 successful non-JavaScript inputs out
+of 98 attempted and 9.32x across 82 successful JavaScript inputs out of 98
+attempted. Those byte ratios are not universal token, cost, latency, or
+task-success guarantees. Measure `PlasmateSOMLoader` and the alternative loader
+on your own corpus and tokenizer.

@@ -456,8 +456,8 @@
       </div>
     </nav>
     <main class="content">
-      <h1 id="smolagents-huggingface-integration">Smolagents (HuggingFace) Integration</h1><p>Use Plasmate as a web browsing tool in HuggingFace&#39;s smolagents framework -  structured SOM output for <strong>~10x fewer tokens</strong> than raw HTML.</p>
-<p>Source: <a href="https://github.com/nicepkg/plasmate/tree/master/integrations/smolagents"><code>integrations/smolagents/</code></a></p>
+      <h1 id="smolagents-huggingface-integration">Smolagents (HuggingFace) Integration</h1><p>Use Plasmate as a web browsing tool in HuggingFace&#39;s smolagents framework, returning structured SOM instead of raw HTML. Output size and token use vary by page and tokenizer.</p>
+<p>Source: <a href="https://github.com/plasmate-labs/plasmate/tree/master/integrations/smolagents"><code>integrations/smolagents/</code></a></p>
 <h2 id="installation">Installation</h2><pre><code class="language-bash">pip install plasmate smolagents
 </code></pre>
 <h2 id="quick-start">Quick Start</h2><pre><code class="language-python">from smolagents import CodeAgent, HfApiModel

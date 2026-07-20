@@ -241,7 +241,10 @@ Minimum clear space around the full lockup: the width of the "P" mark on all sid
 
 **Be direct.** "Plasmate compiles HTML into a Semantic Object Model." Not "Plasmate leverages cutting-edge AI to revolutionize how agents interact with the web."
 
-**Be specific.** "10.4x compression on Wikipedia. 4ms per page." Not "blazing fast performance."
+**Be evidence-specific.** Name the retained artifact, version, complete input
+denominator, successful-sample denominator, build/runner class, and whether the
+metric is bytes, tokens, latency, or task success. Do not turn one page or one
+runner into a universal headline.
 
 **Be honest about scope.** "v0.1 does not execute JavaScript dynamically" is better than silence. Open source trust is built on honesty.
 
@@ -267,7 +270,7 @@ Minimum clear space around the full lockup: the width of the "P" mark on all sid
 
 **Philosophical:** *The fourth state of the web.*
 
-**For developers:** *Drop-in Puppeteer replacement. 10x less tokens.*
+**For developers:** *Structured browser output for agents, with supported CDP compatibility.*
 
 ---
 

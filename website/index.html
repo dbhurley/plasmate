@@ -4,11 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Plasmate - The Better Browser for AI Agents</title>
-  <meta name="description" content="Plasmate is the better browser for AI agents. Compiles HTML into a Semantic Object Model (SOM) - 50x faster than Chrome, 10x fewer tokens. W3C Community Group member. Apache 2.0. One binary." />
+  <meta name="description" content="Plasmate is an open-source browser engine for AI agents. It compiles HTML into a structured Semantic Object Model and exposes native MCP, AWP, and CDP-compatible surfaces." />
   <meta name="keywords" content="browser for AI agents, semantic object model, SOM, agent web protocol, AWP, headless browser, AI browser, web scraping, browser automation, W3C, better browser for agents, Plasmate" />
 
   <meta property="og:title" content="Plasmate - The Better Browser for AI Agents" />
-  <meta property="og:description" content="The better browser for AI agents. HTML in, Semantic Object Model out. 50x faster, 10x fewer tokens. W3C Community Group member. Apache 2.0." />
+  <meta property="og:description" content="HTML in, structured Semantic Object Model out. Native MCP and AWP, with a CDP compatibility layer. Apache 2.0." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://plasmate.app" />
   <meta property="og:site_name" content="Plasmate" />
@@ -16,7 +16,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:site" content="@plasmate_labs" />
   <meta name="twitter:title" content="Plasmate - The Better Browser for AI Agents" />
-  <meta name="twitter:description" content="HTML in, Semantic Object Model out. 50x faster than Chrome, 10x fewer tokens. W3C Community Group member." />
+  <meta name="twitter:description" content="HTML in, structured Semantic Object Model out. Native MCP and AWP, with a CDP compatibility layer." />
 
   <link rel="canonical" href="https://plasmate.app" />
 
@@ -26,18 +26,18 @@
     "@type": "SoftwareApplication",
     "name": "Plasmate",
     "alternateName": "The Better Browser for AI Agents",
-    "description": "Open source headless browser engine for AI agents. Compiles HTML into a Semantic Object Model (SOM) with 17.5x average token compression. 13 MCP tools for full browser automation. First browser tool on the official MCP Registry. Written in Rust, Apache-2.0 licensed.",
+    "description": "Open-source headless browser engine for AI agents. Compiles HTML into a structured Semantic Object Model and exposes native MCP and AWP with a CDP compatibility layer. Written in Rust and Apache-2.0 licensed.",
     "applicationCategory": "DeveloperApplication",
     "applicationSubCategory": "AI Agent Infrastructure",
     "operatingSystem": "Linux, macOS, Windows",
-    "softwareVersion": "0.5.0",
+    "softwareVersion": "0.6.0 candidate",
     "datePublished": "2026-03-17",
-    "dateModified": "2026-04-01",
+    "dateModified": "2026-07-20",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "url": "https://plasmate.app",
     "downloadUrl": "https://plasmate.app/install.sh",
     "installUrl": "https://docs.plasmate.app/install",
-    "releaseNotes": "https://github.com/plasmate-labs/plasmate/releases/tag/v0.5.0",
+    "releaseNotes": "https://github.com/plasmate-labs/plasmate/blob/master/CHANGELOG.md",
     "softwareRequirements": "None (single binary)",
     "programmingLanguage": "Rust",
     "codeRepository": "https://github.com/plasmate-labs/plasmate",
@@ -73,12 +73,10 @@
       "description": "Open source under Apache 2.0"
     },
     "featureList": [
-      "17.5x average token compression across 51 websites",
-      "13 MCP tools for AI agent browser automation",
       "Semantic Object Model (SOM) structured JSON output",
-      "4ms compile time per page",
-      "200ms warm fetch with daemon mode",
-      "30MB memory for 100 pages",
+      "Native MCP server with dynamically advertised tools",
+      "Native Agent Web Protocol with a seven-method foundational core and extensions",
+      "Denominator-complete deterministic and public-web benchmark reports",
       "CDP compatible (Puppeteer/Playwright)",
       "WASM compiler for serverless/edge deployment",
       "Structured change detection (som-diff)",
@@ -664,7 +662,7 @@
         </div>
         <div class="meta">
           <span><strong>License</strong> Apache-2.0</span>
-          <span><strong>v0.5.1</strong></span>
+          <span><strong>v0.6.0 candidate</strong></span>
           <span><strong>Rust</strong></span>
         </div>
       </header>
@@ -673,8 +671,8 @@
         <!-- HERO -->
         <div class="hero-section">
           <h1 class="headline">The <span class="accent">browser engine</span> for agents.</h1>
-          <p class="subhead">Plasmate compiles HTML into a Semantic Object Model, a structured representation that LLMs can reason about directly. 50x faster than Chrome. 10x fewer tokens.</p>
-          <p class="cost-hero">1,000 pages/day: <strong>$99 in HTML tokens</strong> vs <strong class="accent">$5.69 in SOM</strong>. Same content. 94% less cost.</p>
+          <p class="subhead">Plasmate compiles HTML into a Semantic Object Model, a structured representation that agents can reason about directly. Output reduction and performance depend on the page, configuration, corpus, and runner.</p>
+          <p class="cost-hero">Benchmark claims retain every attempted input and state the exact successful-sample denominator. Compression is supporting byte evidence, not a universal token, cost, latency, or task-success promise.</p>
           <p class="no-motion note">Reduced motion is enabled. Background particles are disabled.</p>
         </div>
 
@@ -685,7 +683,7 @@
           </a>
           <a href="https://registry.modelcontextprotocol.io" target="_blank" rel="noreferrer" class="badge">
             <span class="badge-dot" style="background: var(--ember);"></span>
-            First browser tool on the MCP Registry
+            MCP Registry metadata
           </a>
           <a href="https://somordom.com" target="_blank" rel="noreferrer" class="badge">
             <span class="badge-dot" style="background: var(--corona);"></span>
@@ -696,24 +694,24 @@
         <!-- THE NUMBERS -->
         <div class="perf-grid">
           <div class="card">
-            <div class="kicker">Speed</div>
-            <div class="value">4-5 ms/page</div>
-            <p class="desc">Chrome takes 252ms. Lightpanda takes 23ms. Plasmate takes 4.</p>
+            <div class="kicker">Release gate</div>
+            <div class="value">5 fixture contracts</div>
+            <p class="desc">Deterministic loopback tasks retain cold/warm cache state, latency, outcomes, and provenance.</p>
           </div>
           <div class="card">
-            <div class="kicker">Memory</div>
-            <div class="value">28 MB</div>
-            <p class="desc">Chrome uses ~20GB for 100 concurrent pages. Plasmate uses 28MB.</p>
+            <div class="kicker">Agent workflow gate</div>
+            <div class="value">6 scenarios</div>
+            <p class="desc">Real supervised MCP sessions exercise actions, traces, replay refusal, and failure containment.</p>
           </div>
           <div class="card">
-            <div class="kicker">Tokens</div>
-            <div class="value">94% token savings</div>
-            <p class="desc">Across 98 sites. Up to 1,544x on heavy SPAs. Mean 44.9x, median 9x. <a href="https://docs.plasmate.app/benchmark-cost" style="color: var(--ember);">See the benchmark</a>.</p>
+            <div class="kicker">Public-web evidence</div>
+            <div class="value">98 attempted URLs</div>
+            <p class="desc">Historical v0.5.1 snapshots retain successful, blocked, and failed inputs; byte-ratio samples use explicit denominators. <a href="https://docs.plasmate.app/coverage" style="color: var(--ember);">Inspect the evidence</a>.</p>
           </div>
           <div class="card">
-            <div class="kicker">Cost</div>
-            <div class="value" style="color: var(--ember);">$5.69 <span style="font-size: 15px; color: rgba(240,237,232,0.5);">vs $99</span></div>
-            <p class="desc">Per 1,000 pages/day with GPT-4o. SOM tokens vs raw HTML tokens. <a href="https://somordom.com" style="color: var(--ember);">Calculate yours</a>.</p>
+            <div class="kicker">Claim policy</div>
+            <div class="value" style="color: var(--ember);">Measure your corpus</div>
+            <p class="desc">Byte reduction does not establish token cost or task success. <a href="https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md" style="color: var(--ember);">Read the methodology</a>.</p>
           </div>
         </div>
 
@@ -729,36 +727,36 @@
             <div class="token-compare">
               <div class="token-box dom-box">
                 <p class="token-label">DOM</p>
-                <p class="token-val">47,000 tokens</p>
+                <p class="token-val">Rendering-oriented tree</p>
               </div>
               <div class="token-box som-box">
                 <p class="token-label">SOM</p>
-                <p class="token-val">4,500 tokens</p>
+                <p class="token-val">Agent-oriented structure</p>
               </div>
             </div>
-            <p class="token-caption">Wikipedia homepage, same page.</p>
+            <p class="token-caption">Measure serialized bytes and tokens on the exact page and configuration you use.</p>
 
             <p class="para" style="margin-top: 14px;">SOM is not lossy compression. It's a different representation for a different purpose.</p>
           </div>
 
           <div class="panel">
             <div class="section-label">Agent Web Protocol</div>
-            <h2 class="section-title">7 methods. That's the protocol.</h2>
+            <h2 class="section-title">Seven foundational methods, plus extensions.</h2>
             <p class="para">Chrome DevTools Protocol has hundreds of methods. Most exist for debugging, profiling, and human-driven inspection.</p>
-            <p class="para">AWP has seven:</p>
+            <p class="para">AWP's foundational v0.1 core has seven wire methods:</p>
 
             <div class="awp-methods">
-              <span class="awp-method">navigate</span>
-              <span class="awp-method">snapshot</span>
-              <span class="awp-method">click</span>
-              <span class="awp-method">type</span>
-              <span class="awp-method">scroll</span>
-              <span class="awp-method">select</span>
-              <span class="awp-method">extract</span>
+              <span class="awp-method">awp.hello</span>
+              <span class="awp-method">session.create</span>
+              <span class="awp-method">session.close</span>
+              <span class="awp-method">page.navigate</span>
+              <span class="awp-method">page.observe</span>
+              <span class="awp-method">page.act</span>
+              <span class="awp-method">page.extract</span>
             </div>
 
-            <p class="para">These are intents, not instructions. Plasmate handles the implementation. Your agent handles the reasoning.</p>
-            <p class="para">If you've used Puppeteer, the API will feel familiar. The token cost will not.</p>
+            <p class="para">The current handler also exposes session listing, network interception, plugin inspection, cookie operations, and proxy-pool extensions. Click, type, select, scroll, toggle, and clear are actions carried by <code>page.act</code>, not additional wire methods.</p>
+            <p class="para">These are intents, not coordinate instructions. Plasmate handles the implementation; your agent handles the reasoning.</p>
 
             <div class="rule"></div>
             <p class="note">CDP compatibility is included as a legacy bridge. AWP is the native protocol.</p>
@@ -828,61 +826,24 @@
             <p class="para">Publishers can pre-compute SOM for their pages and serve it at a well-known endpoint. Agents discover it automatically, just like sitemaps for search engines.</p>
             <div class="install-cmd" style="font-size: 13px;">/.well-known/som.json</div>
             <p class="para">This is the cooperative path: instead of blocking agents or serving them expensive raw HTML, give them a structured format designed for their consumption. Lower bandwidth costs, content control, and provenance metadata for attribution.</p>
-            <p class="para">The economics: mid-size publishers serving 1M agent requests/month save ~68% on infrastructure by serving SOM instead of HTML. <a href="https://dbhurley.com/blog/the-publishers-dilemma" style="color: var(--ember);">Read the full analysis</a>.</p>
+            <p class="para">Publisher bandwidth and infrastructure impact depends on the source page, cached representation, traffic profile, and delivery stack. Measure both paths before projecting savings. <a href="https://dbhurley.com/blog/the-publishers-dilemma" style="color: var(--ember);">Read the exploratory analysis</a>.</p>
             <p class="note">plasmate.app and somordom.com already serve /.well-known/som.json. <a href="https://dbhurley.com/papers" style="color: var(--ember);">robots.txt extension proposal</a> in the research papers.</p>
           </div>
         </div>
 
         <!-- v0.5.1 -->
         <div class="panel" style="margin-top: 20px;">
-          <div class="section-label">v0.4.0 - March 2026</div>
-          <h2 class="section-title" style="font-size: 22px;">What's new</h2>
-          <p class="para">SPA rendering bridge with bidirectional V8/DOM sync. Network interception. TLS fingerprint tuning. Wasm plugin system. Multi-page sessions (50 concurrent). page.click(), page.type(), page.waitForSelector(). Auth profiles with encrypted storage. ~25K lines of Rust. 230 tests passing.</p>
+          <div class="section-label">v0.6.0 next candidate</div>
+          <h2 class="section-title" style="font-size: 22px;">Release status</h2>
+          <p class="para">The v0.6.0 Rust engine and MCP metadata are unreleased. The OCI Registry entry remains unavailable until the immutable, newly labeled v0.6.0 image is built and anonymously pullable. Published SDKs and adapters retain their independent versions.</p>
         </div>
 
         <!-- BENCHMARK TABLE -->
         <div class="panel" style="margin-top: 20px;">
-          <div class="section-label">Measured, not claimed</div>
-          <h2 class="section-title" style="font-size: 22px;">Performance in context</h2>
-
-          <div class="table-wrap">
-          <table aria-label="Plasmate benchmark comparisons">
-            <thead>
-              <tr>
-                <th>Engine</th>
-                <th>Per page</th>
-                <th>100 pages</th>
-                <th>Memory</th>
-                <th>Binary</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>Plasmate</strong></td>
-                <td class="good"><strong>4-5 ms</strong></td>
-                <td class="good"><strong>405-512 ms</strong></td>
-                <td><strong>28 MB</strong></td>
-                <td><strong>45.8 MB</strong></td>
-              </tr>
-              <tr>
-                <td>Lightpanda</td>
-                <td>23 ms</td>
-                <td>2,300 ms</td>
-                <td>~2.4 GB</td>
-                <td>59-111 MB</td>
-              </tr>
-              <tr>
-                <td>Chrome</td>
-                <td>252 ms</td>
-                <td>25,200 ms</td>
-                <td>~20 GB</td>
-                <td>300-500 MB</td>
-              </tr>
-            </tbody>
-          </table>
-          </div>
-
-          <p class="note">Local harness, 100 pages, 231KB average HTML. No caching. Methodology matches Lightpanda's published benchmarks.</p>
+          <div class="section-label">Measured with context</div>
+          <h2 class="section-title" style="font-size: 22px;">Performance is workload-specific</h2>
+          <p class="para">The deterministic release benchmark retains build profile, runner, cache state, JavaScript mode, latency, memory high-water mark, and every task outcome. Public-web coverage uses a separate observational schema and preserves blocked, failed, crash, and timeout inputs.</p>
+          <p class="note">Do not compare debug and release reports, public-network and loopback samples, or different corpus digests as one series. Byte reduction is supporting evidence, not task success. <a href="https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md" style="color: var(--ember);">Read the benchmark policy</a>.</p>
         </div>
 
         <div class="foot">

@@ -477,21 +477,22 @@
 <p><a href="quickstart">Quick Start</a> | Install Plasmate and run your first fetch in 60 seconds |
 | <a href="spec">Product Spec</a> | Full architecture, market analysis, and technical vision |
 | <a href="awp">AWP Protocol</a> | Agent Web Protocol draft specification |
-| <a href="awp-mvp">AWP MVP v0.1</a> | The 7-method subset shipped in v0.1 |
+| <a href="awp-mvp">AWP MVP v0.1</a> | The seven-method foundational core; the current wire handler adds extension groups |
 | <a href="som">SOM Reference</a> | Semantic Object Model structure and element addressing |
 | <a href="roadmap">Roadmap (v0.2)</a> | V8 integration, CDP compatibility, SOM cache, parallel sessions |
 | <a href="brand">Brand Guide</a> | Colors, typography, voice, and the pixie dust system |</p>
-<h2 id="key-numbers">Key Numbers</h2><ul>
-<li><strong>4-5 ms per page</strong> throughput (100-page local benchmark, 231KB average)</li>
-<li><strong>10.4x compression</strong> on Wikipedia (HTML to SOM token reduction)</li>
-<li><strong>~30 MB RSS</strong> memory baseline per page</li>
-<li><strong>43 MB</strong> single binary (macOS arm64)</li>
-<li><strong>184 tests</strong> passing</li>
-<li><strong>Apache 2.0</strong> license</li>
+<h2 id="evidence-policy">Evidence policy</h2><ul>
+<li>Deterministic loopback release benchmarks retain task outcomes, cold/warm
+cache state, latency, memory high-water mark, and build/runner provenance.</li>
+<li>Observational public-web reports retain the complete attempted-input
+denominator, including blocked and failed inputs.</li>
+<li>Output reduction is page-, configuration-, corpus-, and serialization-dependent;
+byte ratios are not universal token, cost, latency, or task-success claims.</li>
+<li>Plasmate is Apache-2.0 licensed.</li>
 </ul>
 <h2 id="architecture-at-a-glance">Architecture at a Glance</h2><pre><code>Agent (Python/JS/Rust)
   |
-  |-- AWP (native, 7 methods)
+  |-- AWP (seven foundational methods plus current extensions)
   |-- CDP (legacy compatibility)
   |
 Plasmate Engine

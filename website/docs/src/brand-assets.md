@@ -127,7 +127,7 @@ Use this badge in your README, docs, or marketing materials to indicate your pro
 | Primary | *The browser engine for agents.* |
 | Technical | *HTML in. Semantic Object Model out.* |
 | Philosophical | *The fourth state of the web.* |
-| Developer | *Drop-in Puppeteer replacement. 10x less tokens.* |
+| Developer | *Structured browser output for agents, with supported CDP compatibility.* |
 
 ---
 

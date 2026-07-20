@@ -85,7 +85,7 @@
       <p>Initial public release. The browser engine for agents.</p>
       <ul>
         <li><span class="change-type feat">feat</span> <strong>Semantic Object Model (SOM)</strong> compiler: HTML to structured, token-efficient representation.</li>
-        <li><span class="change-type feat">feat</span> <strong>Agent Web Protocol (AWP)</strong>: 7-method protocol for agent-native browsing (navigate, snapshot, click, type, scroll, select, extract).</li>
+        <li><span class="change-type feat">feat</span> <strong>Agent Web Protocol (AWP)</strong>: shipped the historical seven-method foundational v0.1 core. The current handler also includes extension groups; primitive interactions are <code>page.act</code> actions.</li>
         <li><span class="change-type feat">feat</span> <strong>V8 JavaScript runtime</strong> with DOM shim for JS-rendered pages.</li>
         <li><span class="change-type feat">feat</span> <strong>CDP compatibility layer</strong> for Puppeteer/Playwright drop-in usage.</li>
         <li><span class="change-type feat">feat</span> <strong>MCP server mode</strong> (<code>plasmate mcp</code>) with stateful tools: open_page, evaluate, click, close_page.</li>
@@ -93,9 +93,8 @@
         <li><span class="change-type feat">feat</span> <strong>Chrome extension bridge</strong> for importing auth sessions from a real browser.</li>
         <li><span class="change-type feat">feat</span> <strong>Docker image</strong> on GHCR (multi-arch).</li>
         <li><span class="change-type feat">feat</span> <strong>Node.js and Python SDKs</strong>.</li>
-        <li><span class="change-type perf">perf</span> 4-5ms per page (50x faster than Chrome, 5x faster than Lightpanda).</li>
-        <li><span class="change-type perf">perf</span> ~30MB memory for 100 concurrent pages.</li>
-        <li><span class="change-type perf">perf</span> 10.4x token compression vs raw DOM.</li>
+        <li><span class="change-type perf">perf</span> Historical launch notes contained local speed and memory observations without the current retained-artifact requirements; they are not current product claims.</li>
+        <li><span class="change-type perf">perf</span> Historical release notes reported a page-specific output reduction; current claims require a retained artifact and exact denominator under the benchmark policy.</li>
       </ul>
 
       <h3>Architecture</h3>

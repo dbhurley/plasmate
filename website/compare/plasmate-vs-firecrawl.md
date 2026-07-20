@@ -1,6 +1,6 @@
 ---
 title: "Plasmate vs Firecrawl: Web Scraping for AI Agents Compared"
-description: "Compare Plasmate and Firecrawl for LLM-ready web scraping. See how SOM compression, local deployment, and MCP support stack up against Firecrawl's hosted markdown API."
+description: "Compare Plasmate and Firecrawl for LLM-ready web scraping across output structure, local deployment, MCP support, and page-dependent output size."
 ---
 
 # Plasmate vs Firecrawl
@@ -22,15 +22,15 @@ Both tools solve the same core problem: web pages are too noisy for LLMs. They d
 | Feature | Plasmate | Firecrawl |
 |---------|----------|-----------|
 | **Output format** | SOM (structured JSON) | Markdown |
-| **Compression ratio** | 10-800x vs raw HTML | ~5-10x typical |
+| **Output-size behavior** | Page-dependent structured SOM | Page-dependent markdown |
 | **Deployment** | Local CLI, Docker, self-hosted | Cloud API |
 | **JavaScript execution** | Yes (V8 engine) | Yes |
 | **Pricing** | Free (open source) | API pricing (usage-based) |
-| **Protocol support** | MCP, CDP, AWP | REST API |
-| **License** | Apache-2.0 | Proprietary |
-| **Structured data** | Built-in (JSON-LD, forms, actions) | Markdown text |
+| **Protocol support** | MCP, CDP, AWP | Hosted API and documented integrations |
+| **License / terms** | Apache-2.0 | Review the current open-source and hosted-service terms |
+| **Structured data** | SOM roles, regions, forms, and actions | Markdown and configured extraction formats |
 | **Action annotations** | Yes (click, type, select) | No |
-| **Self-hosted option** | Yes (native) | Enterprise only |
+| **Self-hosted option** | Native local runtime | Review current Firecrawl self-hosting support and feature coverage |
 
 ---
 
@@ -56,26 +56,16 @@ For agents that need to act on pages (clicking, filling forms, navigating), SOM 
 
 ---
 
-## Compression: Why It Matters
+## Output size: why measurement matters
 
-Token costs compound at scale. A 500KB HTML page costs ~125K tokens. At GPT-4 pricing ($10/M input), that's $1.25 per page.
-
-**Plasmate** achieves 10-800x compression depending on the page:
-
-| Site | Raw HTML | SOM Output | Compression |
-|------|----------|------------|-------------|
-| cloud.google.com | 1.9 MB | 16 KB | 117x |
-| linear.app | 2.2 MB | 21 KB | 105x |
-| reddit.com | 484 KB | 4.7 KB | 104x |
-| vercel.com | 795 KB | 22 KB | 36x |
-| Median (49 sites) | - | - | 10.5x |
-
-**Firecrawl** reports ~5-10x typical compression (markdown vs HTML). Good, but an order of magnitude less than SOM on complex sites.
-
-At 1M pages/month with GPT-4:
-- Raw HTML: ~$1,000/month
-- Firecrawl markdown: ~$100-200/month
-- Plasmate SOM: ~$60/month
+Raw HTML, markdown, and SOM have different schemas, and byte counts do not map
+to a fixed number of model tokens or dollars. In the v0.5.1 Plasmate
+observational snapshots, serialized SOM was smaller than raw HTML by a median
+9.98x across 83 successful non-JavaScript inputs out of 98 attempted and by a
+median 9.32x across 82 successful JavaScript inputs out of 98 attempted.
+Firecrawl was not measured in those runs. These page-corpus byte ratios are not
+universal token, cost, latency, or task-success guarantees. Compare both outputs
+on the same pages with the tokenizer and pricing used by your application.
 
 ---
 
@@ -94,7 +84,9 @@ docker run -p 9222:9222 plasmate/browser
 plasmate mcp
 ```
 
-No API keys. No rate limits. No data leaving your infrastructure. Latency is network fetch time only.
+No hosted-service API key is required, and URLs can remain on your
+infrastructure. Local capacity and latency still depend on the page, network,
+hardware, JavaScript work, and configured concurrency.
 
 **Firecrawl** is API-first:
 
@@ -104,7 +96,8 @@ curl -X POST https://api.firecrawl.dev/v0/scrape \
   -d '{"url": "https://example.com"}'
 ```
 
-Simpler to start, but adds API latency, requires credentials management, and means your URLs go through their servers.
+This managed path requires credentials and sends requested URLs through the
+service. End-to-end latency depends on both the service and the target site.
 
 ---
 
@@ -115,7 +108,9 @@ Simpler to start, but adds API latency, requires credentials management, and mea
 - **CDP** (Chrome DevTools Protocol): Drop-in replacement for Puppeteer/Playwright workflows
 - **AWP** (Agent Web Protocol): Purpose-built WebSocket protocol for agents
 
-**Firecrawl** uses REST. Standard and well-understood, but no native integration with agent tooling.
+**Firecrawl** exposes a hosted API and integrations. Check its current
+documentation for the protocols and agent frameworks supported by the version
+you plan to deploy.
 
 ---
 
@@ -180,15 +175,15 @@ plasmate mcp
 ## When to Use Plasmate
 
 - **Local-first workflows**: No API keys, no external dependencies, no data egress
-- **Token-sensitive agents**: 10-800x compression vs markdown's 5-10x
+- **Structured-context agents**: SOM exposes semantic roles and actions; measure token use on your pages
 - **Agent automation**: Structured actions (click, type, select) for tool-use agents
 - **MCP integration**: First-class support for Claude Code, Cursor, and other MCP clients
 - **Self-hosted requirements**: Run entirely on your infrastructure
-- **High-volume scraping**: No rate limits, no per-page costs
+- **Self-managed volume**: No hosted per-page charge, but you operate and size the runtime
 
 ## When to Use Firecrawl
 
-- **Quick prototypes**: API is faster to integrate than running a local service
+- **Managed prototypes**: Use an API instead of operating a local service
 - **Managed service preference**: Let someone else handle infrastructure
 - **Markdown output needed**: If your pipeline expects markdown specifically
 - **Crawling features**: Firecrawl has built-in site crawling and sitemap handling
@@ -202,9 +197,13 @@ Plasmate and Firecrawl take different approaches to the same problem.
 
 Firecrawl is a hosted API that produces markdown. Quick to integrate, no infrastructure to manage, usage-based pricing.
 
-Plasmate is a local tool that produces SOM. Deeper compression, structured output, self-hosted, open source. Better suited for agents that need to understand and act on page structure, not just read text.
+Plasmate is a local tool that produces structured SOM and is open source.
+Firecrawl provides managed markdown extraction. Suitability and output size
+depend on the target pages and downstream workflow.
 
-If you're building token-sensitive agents, need MCP integration, or prefer local-first tools, Plasmate is the better fit.
+If you need structured action metadata, MCP integration, or a local-first
+runtime, evaluate Plasmate. If you prefer managed markdown extraction, evaluate
+Firecrawl. Compare both on representative pages before choosing.
 
 ---
 

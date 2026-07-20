@@ -2,38 +2,22 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.plasmate-labs/plasmate",
   "title": "Plasmate",
-  "description": "Agent-native headless browser. HTML in, Semantic Object Model out. 17x token compression.",
+  "description": "Agent-native browser. HTML to structured Semantic Object Model; results vary by page and corpus.",
   "repository": {
     "url": "https://github.com/plasmate-labs/plasmate",
     "source": "github"
   },
-  "version": "0.5.1",
+  "version": "0.6.0",
+  "websiteUrl": "https://plasmate.app",
   "packages": [
     {
-      "registryType": "npm",
-      "identifier": "plasmate",
-      "version": "0.4.0",
-      "runtimeHint": "npx",
+      "registryType": "oci",
+      "identifier": "ghcr.io/plasmate-labs/plasmate:v0.6.0",
+      "version": "0.6.0",
       "transport": {
         "type": "stdio"
       },
-      "arguments": [
-        {
-          "type": "positional",
-          "value": "mcp",
-          "isRequired": true
-        }
-      ]
-    },
-    {
-      "registryType": "pypi",
-      "identifier": "plasmate",
-      "version": "0.4.1",
-      "runtimeHint": "uvx",
-      "transport": {
-        "type": "stdio"
-      },
-      "arguments": [
+      "packageArguments": [
         {
           "type": "positional",
           "value": "mcp",

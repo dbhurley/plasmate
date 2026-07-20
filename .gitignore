@@ -20,3 +20,6 @@ __pycache__/
 packages/*/node_modules/
 packages/*/.venv/
 packages/*/dist/
+/integrations/*/dist/
+/tools/*/dist/
+/sdk/python/src/*.egg-info/

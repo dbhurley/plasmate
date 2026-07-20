@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Plasmate - Executive Guide</title>
-<meta name="description" content="Plasmate reduces AI agent infrastructure costs by 94% while improving reliability. A guide for decision-makers." />
+<meta name="description" content="A decision-maker's guide to Plasmate's structured browser output, deployment model, evidence policy, and integration surfaces." />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -123,9 +123,9 @@ a:hover { text-decoration: underline; }
     <img src="/brand/plasmate-mark.png" alt="Plasmate" />
     <span>Plasmate</span>
   </div>
-  <div class="mark">Your AI agents are<br>burning money on<br><span>the wrong browser.</span></div>
-  <div class="subtitle">Every time an AI agent reads a web page, it processes thousands of tokens of irrelevant code. Plasmate eliminates 94% of that waste. Here's what that means for your business.</div>
-  <div class="meta">Executive Guide &mdash; March 2026</div>
+  <div class="mark">Give AI agents<br>structured web data<br><span>with explicit evidence.</span></div>
+  <div class="subtitle">Plasmate converts pages into a Semantic Object Model with regions, content, and actions. Output size, latency, memory, tokenization, and cost depend on the workload and must be measured with complete denominators.</div>
+  <div class="meta">Executive Guide &mdash; updated July 2026</div>
 </div>
 
 <!-- THE PROBLEM -->
@@ -134,7 +134,7 @@ a:hover { text-decoration: underline; }
   <h1>AI agents use Chrome. Chrome wasn't built for them.</h1>
   <p class="lead">When your AI agents browse the web, they're using the same browser you use to watch YouTube. It's like hiring a translator who reads every word in the dictionary before answering a question.</p>
 
-  <p>Chrome returns raw HTML: a massive blob of layout code, tracking scripts, ad containers, CSS classes, and SVG paths. Your agent has to process all of it, even though <strong>80-95% of that data is completely irrelevant</strong> to what the agent actually needs to know.</p>
+  <p>Browser workflows can return HTML containing layout code, tracking scripts, ad containers, CSS classes, and SVG paths. How much of that data is irrelevant depends on the page and the agent's task.</p>
 
   <p>This creates three problems:</p>
 
@@ -145,14 +145,14 @@ a:hover { text-decoration: underline; }
       <div class="context">LLM tokens are priced per million. More tokens = higher bills. Most of those tokens are noise.</div>
     </div>
     <div class="stat-card">
-      <div class="number">252ms</div>
+      <div class="number">Measure</div>
       <div class="label">Latency</div>
-      <div class="context">Chrome takes a quarter second per page. At scale, your agents are waiting, not working.</div>
+      <div class="context">Compare the same corpus, cache state, JavaScript mode, build profile, and runner.</div>
     </div>
     <div class="stat-card">
-      <div class="number">20GB</div>
-      <div class="label">Memory</div>
-      <div class="context">100 Chrome tabs use 20GB of RAM. That's expensive cloud infrastructure doing nothing useful.</div>
+      <div class="number">Retain</div>
+      <div class="label">Memory evidence</div>
+      <div class="context">Record the process high-water mark and concurrency instead of projecting one local sample.</div>
     </div>
   </div>
 
@@ -169,20 +169,20 @@ a:hover { text-decoration: underline; }
     <div class="compare-col before">
       <div class="compare-tag">Today (Chrome)</div>
       <ul>
-        <li>Returns 50,000+ tokens of raw HTML per page</li>
+        <li>Can expose rendering-oriented HTML or browser representations</li>
         <li>Includes CSS, scripts, tracking, and layout code</li>
         <li>Agent can't tell a button from a paragraph</li>
-        <li>252ms per page, 20GB for 100 concurrent pages</li>
+        <li>Performance depends on page, browser configuration, and runner</li>
         <li>No built-in understanding of page structure</li>
       </ul>
     </div>
     <div class="compare-col after">
       <div class="compare-tag">With Plasmate</div>
       <ul>
-        <li>Returns 3,000 tokens of structured data per page</li>
+        <li>Returns structured SOM data with explicit regions and actions</li>
         <li>Only semantic content: text, links, buttons, forms</li>
         <li>Every element labeled with its role and actions</li>
-        <li>4ms per page, 30MB for 100 concurrent pages</li>
+        <li>Performance is recorded by denominator-complete benchmark reports</li>
         <li>Agent knows exactly what it can click, type, and read</li>
       </ul>
     </div>
@@ -193,63 +193,30 @@ a:hover { text-decoration: underline; }
 
 <!-- THE NUMBERS -->
 <div class="page">
-  <div class="section-label">The Numbers</div>
-  <h1>94% reduction in token costs.</h1>
-  <p class="lead">We tested Plasmate against 98 of the most popular websites on the internet. The results are consistent and dramatic.</p>
+  <div class="section-label">The Evidence</div>
+  <h1>Measure the exact workload.</h1>
+  <p class="lead">Retained v0.5.1 observational snapshots attempted 98 URLs per run. The non-JavaScript report recorded a 9.98x median serialized-byte ratio over 83 successful inputs; the JavaScript report recorded 9.32x over 82 successful inputs. Blocked and failed inputs remain in the denominator.</p>
 
   <div class="stat-row">
     <div class="stat-card">
-      <div class="number">94%</div>
-      <div class="label">Token Savings</div>
-      <div class="context">Average across 49 benchmarked sites</div>
+      <div class="number">83 / 98</div>
+      <div class="label">Non-JS byte samples</div>
+      <div class="context">Historical observational v0.5.1 snapshot</div>
     </div>
     <div class="stat-card">
-      <div class="number">50x</div>
-      <div class="label">Faster</div>
-      <div class="context">Than Chrome (4ms vs 252ms per page)</div>
+      <div class="number">82 / 98</div>
+      <div class="label">JS byte samples</div>
+      <div class="context">Historical observational v0.5.1 snapshot</div>
     </div>
     <div class="stat-card">
-      <div class="number">660x</div>
-      <div class="label">Less Memory</div>
-      <div class="context">30MB vs 20GB for 100 pages</div>
+      <div class="number">All outcomes</div>
+      <div class="label">Complete denominator</div>
+      <div class="context">Success, blocked, failed, crash, and timeout stay visible</div>
     </div>
   </div>
 
   <h2>What this means in dollars</h2>
-  <p>Cost to process all 49 benchmark URLs, 1,000 times each:</p>
-
-  <table class="cost-table">
-    <thead>
-      <tr>
-        <th>LLM Model</th>
-        <th>With Chrome</th>
-        <th>With Plasmate</th>
-        <th>You Save</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>GPT-4</td>
-        <td class="old">$50,397</td>
-        <td>$3,042</td>
-        <td class="savings">$47,355</td>
-      </tr>
-      <tr>
-        <td>GPT-4o</td>
-        <td class="old">$12,599</td>
-        <td>$761</td>
-        <td class="savings">$11,839</td>
-      </tr>
-      <tr>
-        <td>Claude Sonnet</td>
-        <td class="old">$15,119</td>
-        <td>$913</td>
-        <td class="savings">$14,207</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <p>At enterprise scale (1 million pages per month), Plasmate saves <strong>$966/month on GPT-4 input costs alone</strong>. Multiply across models, agents, and workflows, and the savings are substantial.</p>
+  <p>Nothing universal. Cost requires the exact tokenizer, model price, request volume, cache policy, successful-input rate, and task-quality result. Serialized-byte reduction alone does not prove token cost or business value. Use the retained artifacts and <a href="https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md">benchmark policy</a> to construct a workload-specific model.</p>
 </div>
 
 <!-- USE CASES -->
@@ -267,7 +234,7 @@ a:hover { text-decoration: underline; }
     <div class="scenario">
       <div class="icon">🤖</div>
       <h4>Customer-Facing AI Agents</h4>
-      <p>Agents that browse on behalf of users respond faster and more accurately when they get clean, structured page data instead of raw HTML. Lower latency, better answers.</p>
+      <p>Agents that browse on behalf of users can consume explicit regions and actions instead of interpreting raw markup. Validate latency and answer quality on the deployed task.</p>
     </div>
     <div class="scenario">
       <div class="icon">📊</div>
@@ -304,12 +271,12 @@ a:hover { text-decoration: underline; }
     <div class="scenario">
       <div class="icon">🔌</div>
       <h4>Puppeteer / Playwright compatible</h4>
-      <p>If your agents already use Puppeteer or Playwright, they can connect to Plasmate with minimal configuration changes. Same API, dramatically better performance.</p>
+      <p>If your agents already use supported Puppeteer/CDP operations, they can connect to Plasmate with limited configuration changes. Verify required method compatibility and performance.</p>
     </div>
     <div class="scenario">
       <div class="icon">🧠</div>
       <h4>MCP Server for AI assistants</h4>
-      <p>Claude, GPT, and other MCP-compatible AI assistants can use Plasmate as a tool directly. One line of configuration gives your assistant fast, structured web access.</p>
+      <p>MCP-compatible AI assistants can use the native Plasmate server directly for structured web access.</p>
     </div>
     <div class="scenario">
       <div class="icon">📦</div>
@@ -344,16 +311,16 @@ a:hover { text-decoration: underline; }
     </thead>
     <tbody>
       <tr>
-        <td><strong>Speed</strong></td>
-        <td style="color: var(--ember); font-weight: 600;">4ms/page</td>
-        <td>252ms/page</td>
-        <td>23ms/page</td>
+        <td><strong>Performance evidence</strong></td>
+        <td style="color: var(--ember); font-weight: 600;">Retained Plasmate reports</td>
+        <td>Measure configured workload</td>
+        <td>Consult current upstream reports</td>
       </tr>
       <tr>
-        <td><strong>Memory (100 pages)</strong></td>
-        <td style="color: var(--ember); font-weight: 600;">30MB</td>
-        <td>20GB</td>
-        <td>2.4GB</td>
+        <td><strong>Memory</strong></td>
+        <td style="color: var(--ember); font-weight: 600;">Runner/concurrency dependent</td>
+        <td>Runner/concurrency dependent</td>
+        <td>Runner/concurrency dependent</td>
       </tr>
       <tr>
         <td><strong>Output</strong></td>
@@ -362,10 +329,10 @@ a:hover { text-decoration: underline; }
         <td>Raw HTML</td>
       </tr>
       <tr>
-        <td><strong>Token reduction</strong></td>
-        <td style="color: var(--ember); font-weight: 600;">94%</td>
-        <td>0%</td>
-        <td>0%</td>
+        <td><strong>Agent representation</strong></td>
+        <td style="color: var(--ember); font-weight: 600;">Structured SOM</td>
+        <td>Workflow-selected</td>
+        <td>Workflow-selected</td>
       </tr>
       <tr>
         <td><strong>License</strong></td>

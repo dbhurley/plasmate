@@ -2,8 +2,17 @@
 
 ## Unreleased
 
-- Post-v0.5.1 work remains unreleased and is being brought back behind required formatting, all-feature lint, test, conformance, and smoke gates.
+- v0.6.0 is the next Rust engine release candidate. It remains unreleased and unavailable until required formatting, all-feature lint, test, conformance, smoke, package, and immutable-image gates pass.
 - Current development includes expanded SOM action metadata, cache/session observability, proxy and cookie surfaces, iframe and Shadow DOM extraction, and broader SDK/adapter conformance.
+- Hardened release metadata validation against false greens by discovering public
+  SDK/package version identities, covering Python `__version__` exports and the
+  independently tagged Go submodule, rejecting SDK-only MCP runtime packages,
+  and removing stale tracked Browser Use distributions. MCP registry metadata
+  now prepares the v0.6.0 candidate's version-pinned GHCR image for stdio with
+  the required `mcp` invocation, while the release validator enforces its tag,
+  artifact mapping, entrypoint, and ownership label instead of advertising
+  npm/PyPI client SDKs as executable servers. Publication waits for the new
+  labeled image to be built and anonymously pullable.
 - Moved ordinary page JavaScript plus MCP/CDP stateful evaluation and mutation
   into a shared process-group-supervised worker with hard wall, request, heap,
   and output bounds. Fatal V8 exits and infinite scripts can no longer terminate

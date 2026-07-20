@@ -1,8 +1,8 @@
 # AutoGen Integration
 
-Add structured web browsing to your Microsoft AutoGen multi-agent conversations -  Plasmate delivers **~10x fewer tokens** than raw HTML.
+Add structured web browsing to your Microsoft AutoGen multi-agent conversations. Plasmate returns SOM instead of raw HTML; the size difference depends on the page and tokenizer.
 
-Source: [`integrations/autogen/`](https://github.com/nicepkg/plasmate/tree/master/integrations/autogen)
+Source: [`integrations/autogen/`](https://github.com/plasmate-labs/plasmate/tree/master/integrations/autogen)
 
 ## Installation
 
@@ -72,9 +72,9 @@ result = plasmate_browse(
 
 ## Why Plasmate for AutoGen?
 
-- **Token-efficient** -  multi-agent conversations amplify token costs; SOM keeps them manageable
-- **Structured output** -  agents parse SOM content more reliably than raw HTML
-- **No browser required** -  runs headless, perfect for server-based AutoGen deployments
+- **Compact by design** -  SOM removes markup that does not contribute to the semantic page model; measure token use with your pages and model
+- **Structured output** -  SOM exposes explicit regions, roles, and actions instead of raw markup
+- **No Chrome installation required** -  runs headlessly in server-based AutoGen deployments
 - **Tool-compatible** -  works with AutoGen's function calling and tool registration
 
 ## Links

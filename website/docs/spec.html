@@ -551,43 +551,40 @@
 <thead>
 <tr>
 <th>Method</th>
-<th>Tokens for a typical e-commerce page</th>
-<th>Notes</th>
+<th>Primary representation</th>
+<th>Measurement considerations</th>
 </tr>
 </thead>
 <tbody><tr>
 <td>Raw HTML</td>
-<td>15,000-50,000</td>
-<td>Includes scripts, styles, metadata</td>
+<td>Rendering and runtime markup</td>
+<td>Page, response state, and tokenizer dependent</td>
 </tr>
 <tr>
 <td>Cleaned HTML</td>
-<td>5,000-15,000</td>
-<td>Strip scripts/styles, still verbose</td>
+<td>Filtered markup</td>
+<td>Cleaner policy and retained structure vary</td>
 </tr>
 <tr>
 <td>Accessibility tree</td>
-<td>2,000-8,000</td>
-<td>Better, but inconsistent across sites</td>
+<td>Assistive semantic tree</td>
+<td>Browser and page-state dependent</td>
 </tr>
 <tr>
 <td>Screenshot + vision</td>
-<td>1,000-3,000 (image tokens)</td>
-<td>Expensive, can&#39;t interact with elements</td>
+<td>Pixels/image tokens</td>
+<td>Model, resolution, and visual task dependent</td>
 </tr>
 <tr>
-<td><strong>SOM (proposed)</strong></td>
-<td><strong>500-2,000</strong></td>
-<td>Semantic elements with affordances only</td>
+<td><strong>SOM</strong></td>
+<td><strong>Semantic regions, elements, and actions</strong></td>
+<td>Selector, budget, JavaScript mode, serialization, and tokenizer dependent</td>
 </tr>
 </tbody></table>
-<p>A 10x reduction in tokens per page interaction means:</p>
-<ul>
-<li>10x cheaper per agent action</li>
-<li>10x more context available for reasoning</li>
-<li>10x faster response times</li>
-<li>10x more pages processable within context windows</li>
-</ul>
+<p>Serialized-byte reduction does not translate mechanically into token cost,
+latency, context capacity, or task success. Measure those outcomes independently
+on the exact corpus and runner, retain all attempted inputs, and follow the
+<a href="https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md">benchmark policy</a>.</p>
 <h3 id="4-what-exists-today">2.4 What Exists Today</h3><table>
 <thead>
 <tr>

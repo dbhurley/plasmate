@@ -1,8 +1,8 @@
 # Smolagents (HuggingFace) Integration
 
-Use Plasmate as a web browsing tool in HuggingFace's smolagents framework -  structured SOM output for **~10x fewer tokens** than raw HTML.
+Use Plasmate as a web browsing tool in HuggingFace's smolagents framework, returning structured SOM instead of raw HTML. Output size and token use vary by page and tokenizer.
 
-Source: [`integrations/smolagents/`](https://github.com/nicepkg/plasmate/tree/master/integrations/smolagents)
+Source: [`integrations/smolagents/`](https://github.com/plasmate-labs/plasmate/tree/master/integrations/smolagents)
 
 ## Installation
 

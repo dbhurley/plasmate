@@ -1,77 +1,57 @@
-# Install Plasmate in 30 Seconds
+# Install the Native MCP Server
 
-One command. Your AI gets a better browser.
+Install the native Plasmate engine first:
+
+```bash
+curl -fsSL https://plasmate.app/install.sh | sh
+# or
+cargo install plasmate
+```
+
+The npm and PyPI packages named `plasmate` are client SDKs; they do not install
+the native MCP server executable.
 
 ## Claude Code
 
 ```bash
-claude mcp add plasmate -- npx plasmate-mcp
+claude mcp add plasmate -- plasmate mcp
 ```
 
-Done. Your Claude Code agent now has 13 web browsing tools.
-
-## Cursor
-
-```bash
-npx plasmate-mcp --install cursor
-```
-
-This auto-detects your Cursor config path and adds Plasmate. Restart Cursor.
-
-## Claude Desktop
-
-```bash
-npx plasmate-mcp --install claude-desktop
-```
-
-This adds the MCP config to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or the equivalent on Linux/Windows. Restart Claude Desktop.
-
-## Any MCP Client
-
-If your client supports MCP stdio servers, add this to your config:
+## Cursor, Claude Desktop, Windsurf, and other MCP clients
 
 ```json
 {
   "mcpServers": {
     "plasmate": {
-      "command": "npx",
-      "args": ["plasmate-mcp"]
+      "command": "plasmate",
+      "args": ["mcp"]
     }
   }
 }
 ```
 
-## Verify It Works
+Restart clients that do not reload MCP configuration automatically.
 
-Ask your AI: "What are the top stories on Hacker News?"
+## Verify it works
 
-It should use `fetch_page` and return structured content instead of raw HTML. If you see region names like `navigation` and `main` in the response, Plasmate is working.
+Ask your agent to fetch `https://example.com`. A successful response contains a
+structured SOM with regions, content, and interactive elements rather than raw
+HTML.
 
-## What Your AI Gets
+The native server advertises its current capabilities with MCP `tools/list`.
+Discover that surface instead of depending on a fixed tool count. It includes
+stateless fetch and extraction, discovery and inspection, cache/session/trace
+status, screenshots, stateful page interaction, cookies, and validation-only
+replay.
 
-| Tool | What it does |
-|------|-------------|
-| `fetch_page` | Fetch any URL as structured JSON (17x fewer tokens than HTML) |
-| `extract_text` | Plain text only (for reading, not interacting) |
-| `extract_links` | All links with region context |
-| `cache_status` | Inspect local MCP SOM cache hits, misses, selector entries, and avoided HTML work |
-| `session_status` | Inspect active browser sessions, loaded URLs, SOM/node inventory, capacity, age, and idle time |
-| `open_page` | Start an interactive session |
-| `navigate_to` | Go to a new URL in an existing session |
-| `click` | Click buttons and links |
-| `type_text` | Fill form fields |
-| `select_option` | Choose dropdown options |
-| `scroll` | Scroll the page |
-| `toggle` | Check/uncheck boxes, expand details |
-| `clear` | Clear input fields |
-| `evaluate` | Run JavaScript |
-| `close_page` | End session |
+SOM output size varies by page, selector, JavaScript mode, budget, and corpus.
+Do not infer universal token, cost, latency, or task-success savings from a
+single page. See the
+[benchmark policy](https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md).
 
-## What Changes for the User
+## v0.6.0 candidate status
 
-Nothing visible changes. Your AI just gets better at reading the web:
-
-- **Faster**: 17x fewer tokens means faster responses
-- **Cheaper**: 75% less token cost on web pages
-- **More accurate**: Structured input reduces hallucination
-- **Interactive**: Can fill forms, click buttons, navigate multi-step workflows
+The checked-in OCI Registry declaration is for the next v0.6.0 candidate. It is
+not installable until the immutable, newly labeled v0.6.0 GHCR image is built
+and anonymously pullable. The old v0.5.1 image must not be rebuilt or treated
+as label-compliant.

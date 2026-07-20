@@ -456,7 +456,12 @@
       </div>
     </nav>
     <main class="content">
-      <h1 id="awp-v01-mvp-implementable-specification">AWP v0.1 MVP - Implementable Specification</h1><p>This document is the tightened, build-ready subset of the full AWP draft. Everything here is MUST-implement for the Rust PoC. Anything not listed here is deferred to v0.2.</p>
+      <h1 id="awp-v01-mvp-implementable-specification">AWP v0.1 MVP - Implementable Specification</h1><p>This document records the seven-method foundational v0.1 core. The current
+Plasmate wire handler implements this core and additional session-listing,
+network-interception, plugin, cookie, and proxy-pool extension groups. Treat the
+tables below as the historical core contract, not the complete current method
+inventory. Primitive click, type, select, scroll, toggle, and clear operations
+are carried through <code>page.act</code>.</p>
 <p>An agentic engineering team should be able to implement a working AWP server from this document alone.</p>
 <hr>
 <h2 id="scope">1. Scope</h2><h3 id="v01-implements">v0.1 implements</h3><table>
@@ -1317,7 +1322,10 @@ https://store.steampowered.com
 https://www.bbc.com/news
 https://www.reuters.com
 </code></pre>
-<h3 id="output-reportmd">Output (report.md)</h3><pre><code class="language-markdown"># Plasmate SOM Benchmark Report
+<h3 id="output-reportmd">Output (report.md)</h3><p>The following block is an illustrative report shape from the historical MVP
+specification, not a retained product benchmark. Its numbers must not be cited
+as current performance or output-size evidence.</p>
+<pre><code class="language-markdown"># Plasmate SOM Benchmark Report
 
 Date: 2026-03-XX
 Engine: plasmate v0.1.0

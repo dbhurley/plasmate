@@ -457,7 +457,7 @@
     </nav>
     <main class="content">
       <h1 id="som-specification">SOM Specification</h1><p>The Semantic Object Model (SOM) is a formal, open specification for representing web pages as structured JSON documents optimized for LLM and agent consumption. SOM compiles raw HTML into compact, semantically meaningful output that preserves interactive elements and content hierarchy while stripping presentational noise.</p>
-<p>The full specification is at <a href="https://github.com/nicepkg/plasmate/blob/master/specs/SOM-SPEC-v1.0.md"><code>specs/SOM-SPEC-v1.0.md</code></a> in the repository.</p>
+<p>The full specification is at <a href="https://github.com/plasmate-labs/plasmate/blob/master/specs/SOM-SPEC-v1.0.md"><code>specs/SOM-SPEC-v1.0.md</code></a> in the repository.</p>
 <h2 id="document-structure">Document Structure</h2><p>Every SOM document is a JSON object with these top-level fields:</p>
 <table>
 <thead>
@@ -694,7 +694,7 @@ optional <code>selected</code>, optional <code>disabled</code>, and optional opt
 </tr>
 </tbody></table>
 <p>Non-interactive elements omit the <code>actions</code> field entirely.</p>
-<h2 id="json-schema">JSON Schema</h2><p>The formal JSON Schema is at <a href="https://github.com/nicepkg/plasmate/blob/master/specs/som-schema.json"><code>specs/som-schema.json</code></a>. Use it to validate SOM output from any producer:</p>
+<h2 id="json-schema">JSON Schema</h2><p>The formal JSON Schema is at <a href="https://github.com/plasmate-labs/plasmate/blob/master/specs/som-schema.json"><code>specs/som-schema.json</code></a>. Use it to validate SOM output from any producer:</p>
 <pre><code class="language-bash"># Using ajv-cli
 npm install -g ajv-cli
 ajv validate -s specs/som-schema.json -d output.json
@@ -709,7 +709,7 @@ jsonschema.validate(doc, schema)
 print(&#39;Valid SOM document&#39;)
 &quot;
 </code></pre>
-<h2 id="conformance-tests">Conformance Tests</h2><p>The conformance test suite at <a href="https://github.com/nicepkg/plasmate/tree/master/specs/conformance"><code>specs/conformance/</code></a> contains HTML inputs paired with expected SOM outputs. Use these to verify a SOM producer handles all element types, region detection, ID generation, and budget enforcement correctly.</p>
+<h2 id="conformance-tests">Conformance Tests</h2><p>The conformance test suite at <a href="https://github.com/plasmate-labs/plasmate/tree/master/specs/conformance"><code>specs/conformance/</code></a> contains HTML inputs paired with expected SOM outputs. Use these to verify a SOM producer handles all element types, region detection, ID generation, and budget enforcement correctly.</p>
 <h2 id="whats-next">What's Next</h2><ul>
 <li>Read the <a href="som">SOM Reference</a> for implementation details on budgets, hints, and compression</li>
 <li>Read the <a href="awp">AWP Protocol</a> for the WebSocket API that serves SOM</li>

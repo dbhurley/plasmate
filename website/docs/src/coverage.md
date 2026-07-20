@@ -1,6 +1,12 @@
 # Coverage Scorecard
 
-Real-world compression across 100 agent-relevant websites. Plasmate's SOM compiler reduces HTML to a semantic representation that agents can reason about efficiently. Higher compression = fewer tokens = lower cost.
+Historical v0.5.1 observational public-web snapshot. It attempted 98 URLs: 83
+produced byte-ratio samples, 12 were blocked, and 3 failed. The retained report
+records a 9.98x median serialized-byte ratio over the 83 successful inputs.
+These results are page-, corpus-, configuration-, and runner-dependent; they do
+not establish universal token savings, cost, latency, or task success. This
+legacy artifact predates the current provenance/corpus-digest schema and must
+not be combined with current release-gate reports.
 
 - Data source: `coverage.json`
 - Generator: `plasmate coverage --urls bench/top100.txt --output website/docs/coverage.json`

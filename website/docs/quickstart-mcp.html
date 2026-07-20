@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Install Plasmate in 30 Seconds - Plasmate Docs | The Better Browser for AI Agents</title>
-  <meta name="description" content="Install Plasmate in 30 Seconds - Plasmate documentation. The better browser for AI agents, built on the Semantic Object Model (SOM). W3C Community Group member." />
-  <meta name="keywords" content="Plasmate, browser for AI agents, SOM, semantic object model, agent web protocol, AWP, W3C, install plasmate in 30 seconds" />
+  <title>Install the Native MCP Server - Plasmate Docs | The Better Browser for AI Agents</title>
+  <meta name="description" content="Install the Native MCP Server - Plasmate documentation. The better browser for AI agents, built on the Semantic Object Model (SOM). W3C Community Group member." />
+  <meta name="keywords" content="Plasmate, browser for AI agents, SOM, semantic object model, agent web protocol, AWP, W3C, install the native mcp server" />
   <link rel="canonical" href="https://docs.plasmate.app/quickstart-mcp" />
   <link rel="alternate" type="application/som+json" href="/.well-known/som.json" title="SOM (Plasmate)" />
 
@@ -456,103 +456,41 @@
       </div>
     </nav>
     <main class="content">
-      <h1 id="install-plasmate-in-30-seconds">Install Plasmate in 30 Seconds</h1><p>One command. Your AI gets a better browser.</p>
-<h2 id="claude-code">Claude Code</h2><pre><code class="language-bash">claude mcp add plasmate -- npx plasmate-mcp
+      <h1 id="install-the-native-mcp-server">Install the Native MCP Server</h1><p>Install the native Plasmate engine first:</p>
+<pre><code class="language-bash">curl -fsSL https://plasmate.app/install.sh | sh
+# or
+cargo install plasmate
 </code></pre>
-<p>Done. Your Claude Code agent now has 13 web browsing tools.</p>
-<h2 id="cursor">Cursor</h2><pre><code class="language-bash">npx plasmate-mcp --install cursor
+<p>The npm and PyPI packages named <code>plasmate</code> are client SDKs; they do not install
+the native MCP server executable.</p>
+<h2 id="claude-code">Claude Code</h2><pre><code class="language-bash">claude mcp add plasmate -- plasmate mcp
 </code></pre>
-<p>This auto-detects your Cursor config path and adds Plasmate. Restart Cursor.</p>
-<h2 id="claude-desktop">Claude Desktop</h2><pre><code class="language-bash">npx plasmate-mcp --install claude-desktop
-</code></pre>
-<p>This adds the MCP config to <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS) or the equivalent on Linux/Windows. Restart Claude Desktop.</p>
-<h2 id="any-mcp-client">Any MCP Client</h2><p>If your client supports MCP stdio servers, add this to your config:</p>
-<pre><code class="language-json">{
+<h2 id="cursor-claude-desktop-windsurf-and-other-mcp-clients">Cursor, Claude Desktop, Windsurf, and other MCP clients</h2><pre><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;plasmate&quot;: {
-      &quot;command&quot;: &quot;npx&quot;,
-      &quot;args&quot;: [&quot;plasmate-mcp&quot;]
+      &quot;command&quot;: &quot;plasmate&quot;,
+      &quot;args&quot;: [&quot;mcp&quot;]
     }
   }
 }
 </code></pre>
-<h2 id="verify-it-works">Verify It Works</h2><p>Ask your AI: &quot;What are the top stories on Hacker News?&quot;</p>
-<p>It should use <code>fetch_page</code> and return structured content instead of raw HTML. If you see region names like <code>navigation</code> and <code>main</code> in the response, Plasmate is working.</p>
-<h2 id="what-your-ai-gets">What Your AI Gets</h2><table>
-<thead>
-<tr>
-<th>Tool</th>
-<th>What it does</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>fetch_page</code></td>
-<td>Fetch any URL as structured JSON (17x fewer tokens than HTML)</td>
-</tr>
-<tr>
-<td><code>extract_text</code></td>
-<td>Plain text only (for reading, not interacting)</td>
-</tr>
-<tr>
-<td><code>extract_links</code></td>
-<td>All links with region context</td>
-</tr>
-<tr>
-<td><code>cache_status</code></td>
-<td>Inspect local MCP SOM cache hits, misses, selector entries, and avoided HTML work</td>
-</tr>
-<tr>
-<td><code>session_status</code></td>
-<td>Inspect active browser sessions, loaded URLs, SOM/node inventory, capacity, age, and idle time</td>
-</tr>
-<tr>
-<td><code>open_page</code></td>
-<td>Start an interactive session</td>
-</tr>
-<tr>
-<td><code>navigate_to</code></td>
-<td>Go to a new URL in an existing session</td>
-</tr>
-<tr>
-<td><code>click</code></td>
-<td>Click buttons and links</td>
-</tr>
-<tr>
-<td><code>type_text</code></td>
-<td>Fill form fields</td>
-</tr>
-<tr>
-<td><code>select_option</code></td>
-<td>Choose dropdown options</td>
-</tr>
-<tr>
-<td><code>scroll</code></td>
-<td>Scroll the page</td>
-</tr>
-<tr>
-<td><code>toggle</code></td>
-<td>Check/uncheck boxes, expand details</td>
-</tr>
-<tr>
-<td><code>clear</code></td>
-<td>Clear input fields</td>
-</tr>
-<tr>
-<td><code>evaluate</code></td>
-<td>Run JavaScript</td>
-</tr>
-<tr>
-<td><code>close_page</code></td>
-<td>End session</td>
-</tr>
-</tbody></table>
-<h2 id="what-changes-for-the-user">What Changes for the User</h2><p>Nothing visible changes. Your AI just gets better at reading the web:</p>
-<ul>
-<li><strong>Faster</strong>: 17x fewer tokens means faster responses</li>
-<li><strong>Cheaper</strong>: 75% less token cost on web pages</li>
-<li><strong>More accurate</strong>: Structured input reduces hallucination</li>
-<li><strong>Interactive</strong>: Can fill forms, click buttons, navigate multi-step workflows</li>
-</ul>
+<p>Restart clients that do not reload MCP configuration automatically.</p>
+<h2 id="verify-it-works">Verify it works</h2><p>Ask your agent to fetch <code>https://example.com</code>. A successful response contains a
+structured SOM with regions, content, and interactive elements rather than raw
+HTML.</p>
+<p>The native server advertises its current capabilities with MCP <code>tools/list</code>.
+Discover that surface instead of depending on a fixed tool count. It includes
+stateless fetch and extraction, discovery and inspection, cache/session/trace
+status, screenshots, stateful page interaction, cookies, and validation-only
+replay.</p>
+<p>SOM output size varies by page, selector, JavaScript mode, budget, and corpus.
+Do not infer universal token, cost, latency, or task-success savings from a
+single page. See the
+<a href="https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md">benchmark policy</a>.</p>
+<h2 id="v060-candidate-status">v0.6.0 candidate status</h2><p>The checked-in OCI Registry declaration is for the next v0.6.0 candidate. It is
+not installable until the immutable, newly labeled v0.6.0 GHCR image is built
+and anonymously pullable. The old v0.5.1 image must not be rebuilt or treated
+as label-compliant.</p>
 
     </main>
   </div>

@@ -1,6 +1,6 @@
 # OpenClaw Integration
 
-[OpenClaw](https://openclaw.ai) integration for Plasmate — install as a skill to give any OpenClaw agent a fast, token-efficient browser engine.
+[OpenClaw](https://openclaw.ai) integration for Plasmate — install it as a skill to give an OpenClaw agent structured SOM browsing.
 
 Skill repo: [`plasmate-labs/skill-openclaw`](https://github.com/plasmate-labs/skill-openclaw)
 
@@ -35,25 +35,20 @@ Replace `web_fetch` calls with `pf`:
 # Before
 web_fetch https://docs.stripe.com/api
 
-# After — ~96% fewer tokens, stats logged automatically
+# After — structured SOM output, stats logged automatically
 pf https://docs.stripe.com/api
 ```
 
-`pf` wraps `plasmate fetch`, prints timing + token savings to stderr, and appends a stat entry to `~/.plasmate/fetch-stats.jsonl`.
+`pf` wraps `plasmate fetch`, prints timing and estimated size statistics to stderr, and appends a stat entry to `~/.plasmate/fetch-stats.jsonl`.
 
-## Token Savings
+## Output-size evidence
 
-Real-world benchmark (SOM vs raw HTML, 12 sites):
-
-| Site | Plasmate | Raw HTML | Savings |
-|---|---|---|---|
-| Vercel docs | 2,206 tok | 556,464 tok | **99.6%** |
-| Stripe API | 12,699 tok | 301,604 tok | **95.8%** |
-| Next.js docs | 15,350 tok | 198,307 tok | **92.3%** |
-| Stack Overflow | 41,699 tok | 289,090 tok | **85.6%** |
-| Wikipedia | 25,448 tok | 147,538 tok | **82.8%** |
-
-**1.56M tokens saved across 10 test fetches.** Plasmate is most effective on SPAs and content-heavy pages.
+In the v0.5.1 observational benchmark snapshots, serialized SOM was smaller than
+raw HTML by a median 9.98x across 83 successful non-JavaScript inputs out of 98
+attempted, and by a median 9.32x across 82 successful JavaScript inputs out of
+98 attempted. Results vary by page. These are byte ratios, not universal token,
+cost, latency, or task-success guarantees. The wrapper's token fields are
+estimates; use your model's tokenizer when evaluating an OpenClaw workflow.
 
 ## MCP Integration
 
@@ -99,7 +94,7 @@ log = os.path.expanduser("~/.plasmate/fetch-stats.jsonl")
 entries = [json.loads(l) for l in open(log) if l.strip()]
 n = len(entries)
 saved = sum(e.get("tokens_saved_est", 0) for e in entries)
-print(f"{n} fetches | {saved:,} tokens saved")
+print(f"{n} fetches | {saved:,} estimated tokens saved")
 EOF
 ```
 

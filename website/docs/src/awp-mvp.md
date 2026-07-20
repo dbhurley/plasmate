@@ -7,7 +7,12 @@ version: 0.1-mvp
 
 # AWP v0.1 MVP - Implementable Specification
 
-This document is the tightened, build-ready subset of the full AWP draft. Everything here is MUST-implement for the Rust PoC. Anything not listed here is deferred to v0.2.
+This document records the seven-method foundational v0.1 core. The current
+Plasmate wire handler implements this core and additional session-listing,
+network-interception, plugin, cookie, and proxy-pool extension groups. Treat the
+tables below as the historical core contract, not the complete current method
+inventory. Primitive click, type, select, scroll, toggle, and clear operations
+are carried through `page.act`.
 
 An agentic engineering team should be able to implement a working AWP server from this document alone.
 
@@ -830,6 +835,10 @@ https://www.reuters.com
 ```
 
 ### Output (report.md)
+
+The following block is an illustrative report shape from the historical MVP
+specification, not a retained product benchmark. Its numbers must not be cited
+as current performance or output-size evidence.
 
 ```markdown
 # Plasmate SOM Benchmark Report

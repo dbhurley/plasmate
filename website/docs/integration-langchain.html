@@ -456,7 +456,7 @@
       </div>
     </nav>
     <main class="content">
-      <h1 id="langchain-integration">LangChain Integration</h1><p>LangChain tools and document loader for Plasmate -  browse the web with <strong>~10x fewer tokens</strong> than raw HTML.</p>
+      <h1 id="langchain-integration">LangChain Integration</h1><p>LangChain tools and a document loader for Plasmate, returning structured SOM instead of raw HTML. Output size and token use depend on the source page and model tokenizer.</p>
 <p>Plasmate&#39;s SOM output compiles web pages into compact, structured representations that preserve interactive elements and content hierarchy. This integration provides LangChain-native tools for stateless fetching, persistent browsing, and batch document loading.</p>
 <p>Interactive form controls include action-state cues such as <code>[disabled]</code>,
 <code>[enabled]</code>, <code>[required]</code>, <code>[group=&quot;Billing&quot;]</code>, <code>[current=&quot;page&quot;]</code>,
@@ -475,7 +475,7 @@ index = action_target_index(som, enabled_only=True)
 buttons = find_action_targets_by_role(som, &quot;button&quot;, enabled_only=True)
 clicks = find_action_targets_by_action(som, &quot;click&quot;, enabled_only=True)
 </code></pre>
-<p>Source: <a href="https://github.com/nicepkg/plasmate/tree/master/integrations/langchain"><code>integrations/langchain/</code></a></p>
+<p>Source: <a href="https://github.com/plasmate-labs/plasmate/tree/master/integrations/langchain"><code>integrations/langchain/</code></a></p>
 <h2 id="installation">Installation</h2><pre><code class="language-bash">pip install langchain-plasmate
 </code></pre>
 <p>Requires the <code>plasmate</code> binary on your PATH:</p>
@@ -556,36 +556,14 @@ tools = get_plasmate_tools(client=client)
 )
 </code></pre>
 <p>Document metadata includes: <code>url</code>, <code>title</code>, <code>lang</code>, <code>html_bytes</code>, <code>som_bytes</code>, <code>element_count</code>, <code>interactive_count</code>, and optionally <code>description</code>, <code>open_graph</code>, <code>json_ld</code>.</p>
-<h2 id="token-efficiency">Token Efficiency</h2><p>Compared to LangChain&#39;s <code>WebBaseLoader</code> which passes raw HTML:</p>
-<table>
-<thead>
-<tr>
-<th>Source</th>
-<th>Hacker News</th>
-<th>Example.com</th>
-<th>News Article</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Raw HTML (WebBaseLoader)</td>
-<td>~22,000 tokens</td>
-<td>~400 tokens</td>
-<td>~45,000 tokens</td>
-</tr>
-<tr>
-<td><strong>SOM (PlasmateSOMLoader)</strong></td>
-<td><strong>~1,500 tokens</strong></td>
-<td><strong>~80 tokens</strong></td>
-<td><strong>~3,000 tokens</strong></td>
-</tr>
-<tr>
-<td><strong>Savings</strong></td>
-<td><strong>~15x</strong></td>
-<td><strong>~5x</strong></td>
-<td><strong>~15x</strong></td>
-</tr>
-</tbody></table>
-<p>SOM preserves all interactive elements, headings, and content structure while stripping scripts, styles, hidden elements, and layout-only markup.</p>
+<h2 id="output-size">Output size</h2><p>SOM is designed to retain semantic regions and supported interactive elements
+while removing scripts, styles, hidden elements, and layout-only markup. The
+result is page-dependent. In the v0.5.1 observational snapshots, the median
+serialized-byte ratio was 9.98x across 83 successful non-JavaScript inputs out
+of 98 attempted and 9.32x across 82 successful JavaScript inputs out of 98
+attempted. Those byte ratios are not universal token, cost, latency, or
+task-success guarantees. Measure <code>PlasmateSOMLoader</code> and the alternative loader
+on your own corpus and tokenizer.</p>
 
     </main>
   </div>

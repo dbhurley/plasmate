@@ -8,24 +8,14 @@
 
       <h2>The Problem</h2>
 
-      <p>A typical web page weighs 300-500KB of HTML. Between <strong>80% and 95%</strong> of that markup is presentation: class names, inline styles, script blocks, SVG paths, tracking pixels, and deeply nested layout divs. None of it carries meaning.</p>
+      <p>Web pages commonly contain presentation and runtime markup—class names, inline styles, script blocks, SVG paths, tracking elements, and deeply nested layout containers—that is not useful to every agent task.</p>
 
       <p>But when an AI agent reads a web page, all of that noise goes straight into the context window. And context windows cost money.</p>
 
-      <div class="hero-stats">
-        <div class="stat-card">
-          <div class="stat-value">$10/M</div>
-          <div class="stat-label">GPT-4 Input Tokens</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">80-95%</div>
-          <div class="stat-label">HTML That's Noise</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">$50+/day</div>
-          <div class="stat-label">Wasted at 1K pages/day</div>
-        </div>
-      </div>
+      <p>How much of that material can be removed depends on the page, the SOM
+      selector and budget, JavaScript mode, serialization, and the downstream
+      tokenizer. Measure the exact workflow rather than applying a universal
+      savings percentage.</p>
 
       <p>Here's the deeper issue: the DOM is a <strong>rendering tree</strong>, not a <strong>meaning tree</strong>. It tells you WHERE things go on screen, not WHAT things are. A <code>&lt;div&gt;</code> with twelve CSS classes might be a navigation link, a button, a heading, or a decorative container. The DOM doesn't know and doesn't care. It was designed to paint pixels, not convey semantics.</p>
 
@@ -59,7 +49,9 @@
 }</code></pre>
       </div>
 
-      <p>Same information. Fraction of the tokens. And the agent actually knows it's a clickable link.</p>
+      <p>The example preserves the link's meaning and action while omitting its
+      presentation classes. Whether it uses fewer tokens, and by how much,
+      depends on the surrounding page and tokenizer.</p>
 
       <h3>Key Properties</h3>
 
@@ -73,63 +65,20 @@
 
       <hr>
 
-      <h2>The Numbers</h2>
+      <h2>Retained Output-Size Evidence</h2>
 
-      <p>We benchmarked SOM against raw HTML on <strong>49 real-world websites</strong>. Not toy examples. Real production pages from Google Cloud, Reddit, Stripe, The New York Times, and 45 others.</p>
+      <p>The retained v0.5.1 public-web snapshots attempted 98 URLs per run. The
+      non-JavaScript snapshot recorded a 9.98x median serialized-byte ratio over
+      83 successful inputs; the JavaScript snapshot recorded a 9.32x median
+      over 82 successful inputs. Blocked and failed URLs remain in the full
+      denominator.</p>
 
-      <div class="hero-stats">
-        <div class="stat-card">
-          <div class="stat-value">16.6x</div>
-          <div class="stat-label">Overall Compression</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">10.5x</div>
-          <div class="stat-label">Median Compression</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">94%</div>
-          <div class="stat-label">Cost Savings</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">49</div>
-          <div class="stat-label">Sites Tested</div>
-        </div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Model</th>
-            <th>HTML Cost</th>
-            <th>SOM Cost</th>
-            <th>Savings</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>GPT-4 ($10/M)</td>
-            <td>$50,397</td>
-            <td>$3,042</td>
-            <td class="savings">$47,355 (94%)</td>
-          </tr>
-          <tr>
-            <td>GPT-4o ($2.50/M)</td>
-            <td>$12,599</td>
-            <td>$761</td>
-            <td class="savings">$11,839 (94%)</td>
-          </tr>
-          <tr>
-            <td>Claude Sonnet ($3/M)</td>
-            <td>$15,119</td>
-            <td>$913</td>
-            <td class="savings">$14,207 (94%)</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <p>Best case: <strong>cloud.google.com</strong> compressed 116.9x, from 464K tokens down to 4K. Even minimal sites like postgresql.org still showed 1.2x compression.</p>
-
-      <p><a href="benchmark-cost">See the full benchmark with all 49 sites &rarr;</a></p>
+      <p>These are historical observational byte ratios. They are not universal
+      token savings, cost savings, latency, or task-success claims, and the
+      legacy snapshots predate the current provenance/corpus-digest schema. See
+      the <a href="coverage">retained non-JavaScript snapshot</a>, the <a
+      href="coverage-js">JavaScript snapshot</a>, and the <a
+      href="https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md">benchmark policy</a>.</p>
 
       <hr>
 
@@ -170,7 +119,7 @@
       <p>Vision models can look at screenshots. So why not just send a screenshot?</p>
 
       <ul>
-        <li><strong>Token cost.</strong> Image tokens are 4-10x more expensive than text tokens. A screenshot of a page costs far more than its SOM representation.</li>
+        <li><strong>Representation cost varies.</strong> Image and text tokenization depends on the model and input. Measure both paths for the selected model instead of assuming a fixed multiplier.</li>
         <li><strong>Hallucination.</strong> Vision models hallucinate UI elements. They'll "see" buttons that aren't there and miss ones that are.</li>
         <li><strong>No structured data.</strong> You can't extract JSON-LD, form values, or link targets from pixels.</li>
         <li><strong>No interaction model.</strong> You can't identify elements by selector from a screenshot. You can't tell the model "click the third link in the navigation" if all it has is an image.</li>
@@ -201,7 +150,7 @@
       <ul>
         <li><strong>Agent framework developers</strong> (Browser Use, LangChain, CrewAI): lower token costs, faster inference, structured page data out of the box</li>
         <li><strong>Enterprise AI teams</strong>: predictable, structured web data instead of HTML soup. No more prompt-engineering around broken DOM structures.</li>
-        <li><strong>Web scraping at scale</strong>: 10x reduction in LLM costs. When you're processing millions of pages, 94% savings is the difference between viable and bankrupt.</li>
+        <li><strong>Web processing at scale</strong>: structured output can omit irrelevant markup, but cost impact must be measured on the actual corpus, tokenizer, and task.</li>
         <li><strong>Tool-use agents</strong>: explicit action annotations tell the model exactly what's clickable, typeable, and selectable. No guessing.</li>
       </ul>
 
