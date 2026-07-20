@@ -301,6 +301,12 @@ enum Commands {
         #[arg(long, default_value = "100")]
         max: usize,
     },
+    /// Validate a public coverage scorecard's schema and denominator invariants.
+    CoverageValidate {
+        /// Coverage JSON produced by `plasmate coverage`.
+        #[arg(long, default_value = "website/docs/coverage.json")]
+        input: String,
+    },
     /// Internal single-page coverage worker. Input/output are JSON over stdio.
     #[command(name = "__coverage-worker", hide = true)]
     CoverageWorker,
@@ -766,6 +772,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 max,
             )
             .await?;
+        }
+        Commands::CoverageValidate { input } => {
+            let bytes = std::fs::read(&input)?;
+            let report: coverage::runner::CoverageReport = serde_json::from_slice(&bytes)?;
+            coverage::runner::validate_evidence(&report).map_err(std::io::Error::other)?;
+            println!("coverage evidence is valid: {input}");
         }
         Commands::CoverageWorker => {
             use std::io::Read;
@@ -1712,6 +1724,7 @@ async fn cmd_coverage(
 
     info!(count = urls.len(), "Running coverage suite");
     let report = coverage::runner::run(&urls, &opts).await;
+    coverage::runner::validate_evidence(&report).map_err(std::io::Error::other)?;
 
     let json = serde_json::to_string_pretty(&report)?;
     std::fs::write(output, json)?;
