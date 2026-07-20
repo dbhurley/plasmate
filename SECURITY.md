@@ -94,9 +94,13 @@ weakening production defaults.
 
 ## Residual risks
 
-V8 executes untrusted page JavaScript inside the Plasmate process. Resource
-limits reduce exposure but are not a process or OS sandbox. Run Plasmate with
-least privilege, do not expose control protocols to other users, and use an OS
-sandbox for adversarial workloads. Auth-profile encryption protects files at
-rest; it does not protect against another process already running as the same
-OS user.
+Ordinary untrusted page JavaScript executes in a supervised child process with
+bounded input/output, a hard deadline, an empty inherited environment, and
+process-tree cleanup. This containment prevents fatal V8 failures from ending
+the CLI, daemon, MCP, AWP, or CDP coordinator, but it is not a complete OS
+sandbox. Direct `JsRuntime` construction and the explicit
+`PipelineConfig::isolate_js = false` escape hatch remain in-process surfaces for
+trusted tests or an already-supervised worker. Run Plasmate with least
+privilege, do not expose control protocols to other users, and use an OS sandbox
+for adversarial workloads. Auth-profile encryption protects files at rest; it
+does not protect against another process already running as the same OS user.

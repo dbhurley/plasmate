@@ -33,11 +33,13 @@ interactive counts, region identity, stable element IDs, roles, bounded
 text/labels, actions, and explicit omission counters.
 
 Page JavaScript is disabled by default. Setting `javascript=true` explicitly
-opts into Plasmate's existing in-process V8 pipeline before the screenshot
-subprocess is started. That pipeline can improve dynamic-page structure, but it
-still carries the documented residual risk that a fatal V8 failure can end the
-long-lived MCP server. Chrome process containment does not isolate this earlier
-pipeline execution.
+opts into Plasmate's supervised `plasmate.js-worker.v1` pipeline before the
+screenshot subprocess is started. That pipeline can improve dynamic-page
+structure while keeping fatal V8 failures, hangs, oversized output, and worker
+protocol failures outside the long-lived MCP server. A containment failure
+returns bounded source-HTML structure with typed execution diagnostics; it does
+not silently retry JavaScript in-process. The later Chrome screenshot remains a
+separate, independently supervised process tree.
 
 `visual_mode` has exactly three values:
 
