@@ -100,6 +100,40 @@ jobs:
         working-directory: smoke
         run: npm ci
 
+      - name: Resolve Chrome rendering evidence binary
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        id: chrome-evidence-browser
+        shell: bash
+        run: |
+          chrome_bin=""
+          for candidate in google-chrome-stable google-chrome chromium chromium-browser; do
+            if resolved="$(type -P "$candidate" 2>/dev/null)"; then
+              chrome_bin="$resolved"
+              break
+            fi
+          done
+          if [[ -z "$chrome_bin" ]]; then
+            echo "Chrome rendering evidence requires Chrome or Chromium on the Ubuntu runner" >&2
+            exit 1
+          fi
+          chrome_bin="$(realpath -- "$chrome_bin")"
+          if [[ ! -f "$chrome_bin" || ! -x "$chrome_bin" ]]; then
+            echo "Resolved Chrome rendering evidence binary is not an executable file: $chrome_bin" >&2
+            exit 1
+          fi
+          timeout 15s "$chrome_bin" --version
+          printf 'binary=%s\n' "$chrome_bin" >> "$GITHUB_OUTPUT"
+
+      - name: Chrome rendering containment evidence
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        env:
+          PLASMATE_CHROME_TEST_BINARY: ${{ steps.chrome-evidence-browser.outputs.binary }}
+          PLASMATE_REQUIRE_CHROME_EVIDENCE: '1'
+        run: >-
+          timeout 2m cargo test --locked --lib
+          screenshot::tests::chromium_boundary_blocks_script_execution_and_cross_file_rendering
+          -- --exact --nocapture
+
       - name: CDP smoke test (Puppeteer)
         if: ${{ matrix.os == 'ubuntu-latest' }}
         env:
