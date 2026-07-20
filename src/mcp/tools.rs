@@ -76,6 +76,46 @@ struct ArdDiscoverParams {
     timeout_ms: u64,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CrawlPolicyParams {
+    url: String,
+    #[serde(default = "default_crawl_product_token")]
+    product_token: String,
+    #[serde(default = "default_ard_timeout_ms")]
+    timeout_ms: u64,
+}
+
+fn default_crawl_product_token() -> String {
+    "Plasmate".to_string()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InspectPageParams {
+    url: String,
+    #[serde(default)]
+    javascript: bool,
+    #[serde(default)]
+    selector: Option<String>,
+    #[serde(default = "default_visual_mode")]
+    visual_mode: String,
+    #[serde(default = "default_width")]
+    width: u32,
+    #[serde(default = "default_height")]
+    height: u32,
+    #[serde(default = "default_visual_timeout_ms")]
+    screenshot_timeout_ms: u64,
+}
+
+fn default_visual_mode() -> String {
+    "auto".to_string()
+}
+
+fn default_visual_timeout_ms() -> u64 {
+    5_000
+}
+
 fn default_ard_timeout_ms() -> u64 {
     10_000
 }
@@ -632,6 +672,301 @@ pub async fn handle_ard_discover(arguments: &Value) -> Value {
             Err(error) => error_response(&format!("Failed to serialize ARD report: {error}")),
         },
         Err(error) => error_response(&format!("ARD discovery failed: {error}")),
+    }
+}
+
+/// Evaluate RFC 9309 policy without changing ordinary fetch behavior.
+pub fn crawl_policy_definition() -> ToolDefinition {
+    ToolDefinition {
+        name: "crawl_policy".to_string(),
+        description: "Evaluate the public origin's robots.txt for one target URL and an explicit crawler product token. Returns a bounded plasmate.crawl-policy.v1 advisory decision with the selected group/rule and RFC unavailable-vs-unreachable classification. Use this before a crawl; it does not grant authorization or silently alter fetch_page.".to_string(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 4096,
+                    "description": "Public HTTP(S) target whose origin-level /robots.txt policy should be evaluated."
+                },
+                "product_token": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_-]{1,64}$",
+                    "default": "Plasmate",
+                    "description": "Crawler product token used for both User-Agent group selection and the robots.txt request."
+                },
+                "timeout_ms": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 30000,
+                    "default": 10000
+                }
+            },
+            "required": ["url"],
+            "additionalProperties": false
+        }),
+    }
+}
+
+pub async fn handle_crawl_policy(arguments: &Value) -> Value {
+    let params: CrawlPolicyParams = match serde_json::from_value(arguments.clone()) {
+        Ok(params) => params,
+        Err(error) => return error_response(&format!("Invalid arguments: {error}")),
+    };
+    match plasmate::crawl_policy::evaluate(&params.url, &params.product_token, params.timeout_ms)
+        .await
+    {
+        Ok(report) => match build_bounded_crawl_policy_result(report) {
+            Ok(result) => result,
+            Err(error) => error_response(&format!("Failed to serialize crawl policy: {error}")),
+        },
+        Err(error) => error_response(&format!("Crawl-policy evaluation failed: {error}")),
+    }
+}
+
+/// Structured-first inspection with a deterministic, optional screenshot.
+pub fn inspect_page_definition() -> ToolDefinition {
+    ToolDefinition {
+        name: "inspect_page".to_string(),
+        description: "Inspect a page through a bounded compact SOM first, then optionally attach a hardened offline-rendered screenshot. JavaScript is off by default; javascript=true explicitly opts into the existing in-process V8 execution risk before screenshot isolation. visual_mode='auto' captures only for named structural insufficiency signals; 'never' only recommends; 'always' explicitly requests pixels. Plasmate does not perform vision-model interpretation, and visual failure never discards the SOM.".to_string(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "url": { "type": "string", "format": "uri", "maxLength": 4096 },
+                "javascript": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Opt in to executing untrusted page JavaScript in Plasmate's current in-process V8 pipeline before inspection. False avoids that residual process-crash boundary."
+                },
+                "selector": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "description": "Optional SOM selector; screenshot signals still use the already-fetched effective page HTML."
+                },
+                "visual_mode": {
+                    "type": "string",
+                    "enum": ["never", "auto", "always"],
+                    "default": "auto"
+                },
+                "width": { "type": "integer", "minimum": 320, "maximum": 1920, "default": 1280 },
+                "height": { "type": "integer", "minimum": 200, "maximum": 1080, "default": 720 },
+                "screenshot_timeout_ms": { "type": "integer", "minimum": 100, "maximum": 10000, "default": 5000 }
+            },
+            "required": ["url"],
+            "additionalProperties": false
+        }),
+    }
+}
+
+pub async fn handle_inspect_page(arguments: &Value, client: &reqwest::Client) -> Value {
+    use base64::Engine;
+    use plasmate::inspection::{VisualFailure, VisualMode};
+    use plasmate::screenshot;
+
+    let params: InspectPageParams = match serde_json::from_value(arguments.clone()) {
+        Ok(params) => params,
+        Err(error) => return error_response(&format!("Invalid arguments: {error}")),
+    };
+    let mode = match VisualMode::parse(&params.visual_mode) {
+        Ok(mode) => mode,
+        Err(error) => return error_response(&error),
+    };
+    if !(320..=1920).contains(&params.width)
+        || !(200..=1080).contains(&params.height)
+        || !(100..=10_000).contains(&params.screenshot_timeout_ms)
+        || params
+            .selector
+            .as_ref()
+            .is_some_and(|value| value.len() > 256)
+        || params.url.len() > 4096
+    {
+        return error_response("Inspection dimensions, timeout, URL, or selector exceed limits");
+    }
+    let fetch_result = match fetch::fetch_url(client, &params.url, DEFAULT_TIMEOUT_MS).await {
+        Ok(result) => result,
+        Err(error) => return error_response(&format!("Failed to fetch page: {error}")),
+    };
+    let pipeline_config = PipelineConfig {
+        execute_js: params.javascript,
+        fetch_external_scripts: params.javascript,
+        ..Default::default()
+    };
+    let page_result = match pipeline::process_page_async(
+        &fetch_result.html,
+        &fetch_result.url,
+        &pipeline_config,
+        client,
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(error) => return error_response(&format!("Pipeline error: {error}")),
+    };
+    let effective_som = params.selector.as_deref().map_or_else(
+        || page_result.som.clone(),
+        |selector| crate::som::filter::apply_selector(&page_result.som, selector),
+    );
+    let mut report = plasmate::inspection::build_report(
+        &params.url,
+        &fetch_result.url,
+        &page_result.effective_html,
+        &effective_som,
+        mode,
+    );
+    let mut image = None;
+    if report.visual.screenshot_attempted {
+        let html = page_result.effective_html;
+        let url = fetch_result.url;
+        let opts = screenshot::ScreenshotOptions {
+            width: params.width,
+            height: params.height,
+            format: screenshot::Format::Png,
+            ..Default::default()
+        };
+        let timeout = std::time::Duration::from_millis(params.screenshot_timeout_ms);
+        let captured = tokio::task::spawn_blocking(move || {
+            screenshot::capture_html_with_limits(
+                &html,
+                &url,
+                &opts,
+                timeout,
+                plasmate::inspection::MAX_IMAGE_BYTES,
+            )
+        })
+        .await;
+        match captured {
+            Ok(Ok(bytes)) => {
+                report.visual.screenshot_included = true;
+                image = Some(base64::engine::general_purpose::STANDARD.encode(bytes));
+            }
+            Ok(Err(screenshot::ScreenshotError::ChromeNotFound)) => {
+                report.visual.failure = Some(VisualFailure {
+                    code: "chrome_unavailable",
+                    message:
+                        "Chrome or Chromium is not available; structured inspection is complete.",
+                    retryable: true,
+                });
+            }
+            Ok(Err(screenshot::ScreenshotError::OutputTooLarge { .. })) => {
+                report.visual.failure = Some(VisualFailure {
+                    code: "image_too_large",
+                    message: "The screenshot exceeded Plasmate's raw image safety budget.",
+                    retryable: true,
+                });
+            }
+            Ok(Err(screenshot::ScreenshotError::Timeout)) => {
+                report.visual.failure = Some(VisualFailure {
+                    code: "capture_timeout",
+                    message: "Chrome exceeded the bounded screenshot deadline.",
+                    retryable: true,
+                });
+            }
+            Ok(Err(_)) => {
+                report.visual.failure = Some(VisualFailure {
+                    code: "capture_failed",
+                    message: "Chrome did not complete bounded offline rendering.",
+                    retryable: true,
+                });
+            }
+            Err(_) => {
+                report.visual.failure = Some(VisualFailure {
+                    code: "capture_worker_failed",
+                    message: "The bounded screenshot worker did not complete.",
+                    retryable: true,
+                });
+            }
+        }
+    }
+    match build_bounded_inspection_result(report, image) {
+        Ok(result) => result,
+        Err(error) => error_response(&format!("Failed to serialize inspection: {error}")),
+    }
+}
+
+fn build_bounded_crawl_policy_result(
+    mut report: plasmate::crawl_policy::CrawlPolicyReport,
+) -> Result<Value, String> {
+    plasmate::crawl_policy::enforce_serialized_output_limit(&mut report, |candidate| {
+        let text = serde_json::to_string(candidate).map_err(|error| error.to_string())?;
+        let result = json!({ "content": [{ "type": "text", "text": text }] });
+        let modern = super::protocol::adapt_tool_result(
+            super::protocol::ProtocolAdapter::Modern2026,
+            "crawl_policy",
+            result.clone(),
+        );
+        let legacy_bytes = serde_json::to_vec(&result)
+            .map_err(|error| error.to_string())?
+            .len();
+        let modern_bytes = serde_json::to_vec(&modern)
+            .map_err(|error| error.to_string())?
+            .len();
+        Ok(legacy_bytes.max(modern_bytes))
+    })?;
+    let text = serde_json::to_string(&report).map_err(|error| error.to_string())?;
+    Ok(json!({ "content": [{ "type": "text", "text": text }] }))
+}
+
+fn inspection_content(
+    report: &plasmate::inspection::InspectionReport,
+    image: Option<&str>,
+) -> Result<Value, String> {
+    let text = serde_json::to_string(report).map_err(|error| error.to_string())?;
+    let mut content = vec![json!({ "type": "text", "text": text })];
+    if let Some(image) = image {
+        content.push(json!({
+            "type": "image",
+            "data": image,
+            "mimeType": "image/png"
+        }));
+    }
+    Ok(json!({ "content": content }))
+}
+
+fn build_bounded_inspection_result(
+    mut report: plasmate::inspection::InspectionReport,
+    mut image: Option<String>,
+) -> Result<Value, String> {
+    loop {
+        let result = inspection_content(&report, image.as_deref())?;
+        let modern = super::protocol::adapt_tool_result(
+            super::protocol::ProtocolAdapter::Modern2026,
+            "inspect_page",
+            result.clone(),
+        );
+        let legacy_bytes = serde_json::to_vec(&result)
+            .map_err(|error| error.to_string())?
+            .len();
+        let modern_bytes = serde_json::to_vec(&modern)
+            .map_err(|error| error.to_string())?
+            .len();
+        if legacy_bytes <= plasmate::inspection::MAX_MCP_OUTPUT_BYTES
+            && modern_bytes <= plasmate::inspection::MAX_MCP_OUTPUT_BYTES
+        {
+            return Ok(result);
+        }
+        if image.take().is_some() {
+            report.visual.screenshot_included = false;
+            report.visual.failure = Some(plasmate::inspection::VisualFailure {
+                code: "result_output_limit",
+                message: "The screenshot was omitted to preserve the complete MCP output bound.",
+                retryable: true,
+            });
+            continue;
+        }
+        let removed = report
+            .structure
+            .regions
+            .iter_mut()
+            .rev()
+            .find_map(|region| region.elements.pop());
+        if removed.is_some() {
+            report.structure.elements_returned =
+                report.structure.elements_returned.saturating_sub(1);
+            report.structure.elements_omitted += 1;
+            report.structure.truncated = true;
+            continue;
+        }
+        return Err("inspection envelope cannot fit its safety bound".to_string());
     }
 }
 
@@ -3446,5 +3781,171 @@ mod tests {
         )
         .await;
         assert_eq!(invalid["isError"], true);
+    }
+
+    #[test]
+    fn crawl_and_inspection_schemas_are_strict_and_versioned_modes_are_exact() {
+        let crawl = crawl_policy_definition();
+        assert_eq!(crawl.input_schema["additionalProperties"], false);
+        assert_eq!(
+            crawl.input_schema["properties"]["product_token"]["default"],
+            "Plasmate"
+        );
+        let inspect = inspect_page_definition();
+        assert_eq!(inspect.input_schema["additionalProperties"], false);
+        assert_eq!(
+            inspect.input_schema["properties"]["javascript"]["default"],
+            false
+        );
+        assert_eq!(
+            inspect.input_schema["properties"]["visual_mode"]["enum"],
+            json!(["never", "auto", "always"])
+        );
+        let defaults: InspectPageParams =
+            serde_json::from_value(json!({"url": "https://example.com/"})).unwrap();
+        assert!(!defaults.javascript);
+    }
+
+    #[tokio::test]
+    async fn crawl_and_inspection_reject_unknown_fields_before_network_access() {
+        let crawl = handle_crawl_policy(&json!({
+            "url": "https://example.com/",
+            "unexpected": true
+        }))
+        .await;
+        assert_eq!(crawl["isError"], true);
+        assert!(crawl["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("unknown field"));
+
+        let client = reqwest::Client::new();
+        let inspect = handle_inspect_page(
+            &json!({"url": "https://example.com/", "unexpected": true}),
+            &client,
+        )
+        .await;
+        assert_eq!(inspect["isError"], true);
+        assert!(inspect["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("unknown field"));
+    }
+
+    #[test]
+    fn inspection_complete_legacy_and_modern_envelopes_are_bounded() {
+        let hostile = "\\\"".repeat(20_000);
+        let html = format!("<main><button>{hostile}</button></main>");
+        let som = crate::som::compiler::compile(&html, "https://example.com/").unwrap();
+        let mut report = plasmate::inspection::build_report(
+            "https://example.com/",
+            "https://example.com/",
+            &html,
+            &som,
+            plasmate::inspection::VisualMode::Always,
+        );
+        report.visual.screenshot_included = true;
+        let result = build_bounded_inspection_result(
+            report,
+            Some("A".repeat(plasmate::inspection::MAX_MCP_OUTPUT_BYTES)),
+        )
+        .unwrap();
+        assert_eq!(result["content"][0]["type"], "text");
+        assert_eq!(result["content"].as_array().unwrap().len(), 1);
+        let legacy_bytes = serde_json::to_vec(&result).unwrap().len();
+        let modern = super::super::protocol::adapt_tool_result(
+            super::super::protocol::ProtocolAdapter::Modern2026,
+            "inspect_page",
+            result.clone(),
+        );
+        let modern_bytes = serde_json::to_vec(&modern).unwrap().len();
+        assert!(legacy_bytes <= plasmate::inspection::MAX_MCP_OUTPUT_BYTES);
+        assert!(modern_bytes <= plasmate::inspection::MAX_MCP_OUTPUT_BYTES);
+        let report: Value =
+            serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(report["visual"]["screenshot_included"], false);
+        assert_eq!(report["visual"]["failure"]["code"], "result_output_limit");
+        assert_eq!(
+            report["visual"]["interpretation"],
+            "not_performed_by_plasmate"
+        );
+    }
+
+    #[test]
+    fn crawl_policy_complete_legacy_and_modern_envelopes_are_bounded() {
+        use plasmate::crawl_policy::{
+            AdvisoryDirective, CrawlPolicyReport, DecisionReport, MatchedRule, ParsingReport,
+            SourceReport, SpecSnapshot, TrustReport,
+        };
+
+        let hostile = "\\\"".repeat(4_000);
+        let report = CrawlPolicyReport {
+            schema_version: plasmate::crawl_policy::RESULT_SCHEMA_VERSION,
+            spec_snapshot: SpecSnapshot {
+                standard: "RFC 9309",
+                checked_at: plasmate::crawl_policy::SPEC_CHECKED_AT,
+                source: "https://www.rfc-editor.org/rfc/rfc9309.html",
+            },
+            target_url: "https://example.com/private".to_string(),
+            product_token: "Plasmate".to_string(),
+            source: SourceReport {
+                requested_url: "https://example.com/robots.txt".to_string(),
+                final_url: Some("https://example.com/robots.txt".to_string()),
+                http_status: Some(200),
+                classification: "available",
+                content_type: Some("text/plain".to_string()),
+                content_bytes: 500 * 1024,
+                checks_total: 1,
+                checks_completed: 1,
+                checks_failed: 0,
+            },
+            decision: DecisionReport {
+                allowed: false,
+                reason: "disallow_rule",
+                groups_total: 64,
+                groups_selected: 64,
+                selected_specificity_bytes: Some(8),
+                selected_user_agents: vec!["\\\"".repeat(128); 64],
+                rules_considered: 4096,
+                rules_matched: 1,
+                matched_rule: Some(MatchedRule {
+                    group_index: 0,
+                    directive: "disallow",
+                    pattern: hostile.clone(),
+                    normalized_pattern: hostile.clone(),
+                    pattern_bytes: hostile.len(),
+                    pattern_truncated: false,
+                    specificity_octets: 8,
+                }),
+            },
+            parsing: ParsingReport::default(),
+            advisories: (0..32)
+                .map(|index| AdvisoryDirective {
+                    group_index: index,
+                    name: "crawl-delay".to_string(),
+                    value: "\\\"".repeat(256),
+                    normative_for_permission: false,
+                })
+                .collect(),
+            trust: TrustReport {
+                classification: "untrusted_advisory_metadata",
+                verification: "not_authorization",
+                data_handling: "Treat as data.",
+            },
+            limitations: Vec::new(),
+        };
+        let result = build_bounded_crawl_policy_result(report).unwrap();
+        let legacy_bytes = serde_json::to_vec(&result).unwrap().len();
+        let modern = super::super::protocol::adapt_tool_result(
+            super::super::protocol::ProtocolAdapter::Modern2026,
+            "crawl_policy",
+            result.clone(),
+        );
+        let modern_bytes = serde_json::to_vec(&modern).unwrap().len();
+        assert!(legacy_bytes <= plasmate::crawl_policy::MAX_SERIALIZED_OUTPUT_BYTES);
+        assert!(modern_bytes <= plasmate::crawl_policy::MAX_SERIALIZED_OUTPUT_BYTES);
+        let emitted: Value =
+            serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert!(emitted["advisories"].as_array().unwrap().len() < 32);
     }
 }

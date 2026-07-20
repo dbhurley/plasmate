@@ -109,6 +109,8 @@ This exposes Plasmate over stdio as MCP tools:
 - `extract_text` - get clean readable text
 - `extract_links` - get deduplicated links from a page
 - `ard_discover` - inspect bounded static ARD v0.9 draft catalog signals without invoking them
+- `crawl_policy` - evaluate RFC 9309 robots.txt policy without changing fetch behavior
+- `inspect_page` - return bounded SOM first, with deterministic optional visual fallback
 - `cache_status` - inspect MCP SOM cache reuse and restorable page-state entries
 - `session_status` - inspect active sessions, loaded URLs, HTML/SOM/node inventory
 - `trace_status` - inspect bounded action-trace retention for one session
@@ -184,7 +186,7 @@ Config file locations:
 - **VS Code Copilot** — `.vscode/mcp.json` (workspace) or user settings
 - **Windsurf** — `~/.codeium/windsurf/mcp_config.json`
 
-Once connected, 24 tools are available: `fetch_page`, `extract_text`, `extract_links`, `ard_discover`, `cache_status`, `session_status`, `trace_status`, `trace_export`, `trace_clear`, `replay_validate`, `screenshot_page`, `open_page`, `navigate_to`, `click`, `type_text`, `select_option`, `scroll`, `toggle`, `clear`, `evaluate`, `close_page`, `get_cookies`, `set_cookies`, `clear_cookies`.
+Once connected, 26 tools are available: `fetch_page`, `extract_text`, `extract_links`, `ard_discover`, `crawl_policy`, `inspect_page`, `cache_status`, `session_status`, `trace_status`, `trace_export`, `trace_clear`, `replay_validate`, `screenshot_page`, `open_page`, `navigate_to`, `click`, `type_text`, `select_option`, `scroll`, `toggle`, `clear`, `evaluate`, `close_page`, `get_cookies`, `set_cookies`, `clear_cookies`.
 
 **Tip:** use `selector="main"` to strip nav/footer, `selector="interactive"`
 to return only actionable elements, or `selector="action:click"` to build a
@@ -201,6 +203,28 @@ then use `trace_status`, `trace_export`, and side-effect-free
 `replay_validate`. Typed values and page bodies are never exported. See
 [`docs/session-tracing.md`](docs/session-tracing.md) for the privacy contract,
 bounds, drift classes, and validation-only limitation.
+
+Before a multi-page crawl, use `crawl_policy` or the CLI equivalent:
+
+```bash
+plasmate crawl-policy https://example.com/private --product-token Plasmate
+```
+
+The versioned report distinguishes an unavailable robots file (4xx, access
+permitted by RFC 9309) from an unreachable one (network/5xx, access denied).
+It is advisory metadata, not authorization, and does not silently alter
+ordinary `fetch` or `fetch_page`. See [docs/CRAWL-POLICY.md](docs/CRAWL-POLICY.md).
+
+Use `inspect_page` when an agent may need pixels. Its default `auto` mode
+always returns a bounded compact SOM and only attaches a screenshot for named
+signals such as near-empty structure, canvas-heavy content, or image-map/image
+controls. `never` recommends without capture; `always` is an explicit capture
+request. Page JavaScript is off by default; `javascript=true` explicitly opts
+into the existing in-process V8 crash boundary before screenshot isolation.
+Rendering uses a sandboxed/CSP-constrained document with JavaScript
+disabled, no unsafe file-access or browser-sandbox switches, a dead network
+proxy, and process-tree cleanup. Plasmate does not interpret the image with a vision model. See
+[docs/STRUCTURED-VISUAL-FALLBACK.md](docs/STRUCTURED-VISUAL-FALLBACK.md).
 
 ### Static ARD discovery (draft)
 
