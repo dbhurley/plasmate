@@ -779,6 +779,13 @@ and adapter docs over one-off integration logic.
 5. Stay local-first by default: hosted competitors can own scale infrastructure;
    Plasmate should own local speed, privacy, and open protocol fit.
 
+Release evidence for requirement 3 includes a deterministic supervised-agent
+task suite, not only parser microbenchmarks or compression ratios. Its required
+gate must use repository-owned fixtures, the real MCP child, exact
+task/step denominators and provenance, and no public network or model judgment.
+Expected failure-containment workflows remain observed failures even when the
+task contract passes; product claims must not relabel them as successful runs.
+
 ## Current Run Changes
 
 - 2026-05-17:

@@ -2260,19 +2260,36 @@ pub async fn handle_type_text(
         .with_session(&params.session_id, |session| {
             let effective_html = session.target.effective_html.clone();
             let url = session.target.current_url.clone();
-            (effective_html, url)
+            let som = session.target.current_som.clone();
+            (effective_html, url, som)
         })
         .await;
 
-    let (effective_html, url) = match session_data {
-        Some((Some(html), Some(url))) => (html, url),
-        Some((None, _)) | Some((_, None)) => {
+    let (effective_html, url, som) = match session_data {
+        Some((Some(html), Some(url), Some(som))) => (html, url, som),
+        Some((None, _, _)) | Some((_, None, _)) | Some((_, _, None)) => {
             return error_response("No page loaded in session");
         }
         None => {
             return error_response(&format!("Session not found: {}", params.session_id));
         }
     };
+
+    let element = match find_som_element_by_id(&som, &params.element_id) {
+        Some(element) => element,
+        None => return error_response(&format!("Element not found: {}", params.element_id)),
+    };
+    if !element
+        .actions
+        .as_ref()
+        .is_some_and(|actions| actions.iter().any(|action| action == "type"))
+    {
+        return error_response(&format!(
+            "Element does not support type: {}",
+            params.element_id
+        ));
+    }
+    let html_id = element.html_id.clone();
 
     // Run JS to type text into the element
     let element_id = params.element_id.clone();
@@ -2288,22 +2305,34 @@ pub async fn handle_type_text(
 
         runtime.bootstrap_dom(&effective_html, &url_clone);
 
-        let escaped_text = text
-            .replace('\\', "\\\\")
-            .replace('\'', "\\'")
-            .replace('\n', "\\n");
+        let element_id = serde_json::to_string(&element_id).unwrap_or_else(|_| "null".to_string());
+        let html_id = serde_json::to_string(&html_id).unwrap_or_else(|_| "null".to_string());
+        let text = serde_json::to_string(&text).unwrap_or_else(|_| "null".to_string());
 
         let type_js = format!(
             r#"
             (function() {{
-                var el = document.querySelector('[data-plasmate-id="{}"]');
+                var somId = {};
+                var htmlId = {};
+                var value = {};
+                var el = null;
+                var identified = document.querySelectorAll('[data-plasmate-id]');
+                for (var i = 0; i < identified.length; i++) {{
+                    if (identified[i].getAttribute('data-plasmate-id') === somId) {{
+                        el = identified[i];
+                        break;
+                    }}
+                }}
+                if (!el && htmlId !== null) {{
+                    el = document.getElementById(htmlId);
+                }}
                 if (!el) {{
                     return JSON.stringify({{ error: 'Element not found in DOM' }});
                 }}
                 if ({}) {{
-                    el.value = (el.value || '') + '{}';
+                    el.value = (el.value || '') + value;
                 }} else {{
-                    el.value = '{}';
+                    el.value = value;
                 }}
                 var inputEvt = new Event('input', {{ bubbles: true }});
                 el.dispatchEvent(inputEvt);
@@ -2313,9 +2342,9 @@ pub async fn handle_type_text(
             }})()
             "#,
             element_id,
+            html_id,
+            text,
             if append { "true" } else { "false" },
-            escaped_text,
-            escaped_text
         );
 
         let result = runtime.eval(&type_js).map_err(|e| e.to_string())?;

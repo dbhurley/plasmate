@@ -294,10 +294,14 @@ class WorkflowPolicyTests(unittest.TestCase):
         authorization = preflight.index("Authorize tag commit and required checks")
         rust_install = preflight.index("Install Rust")
         metadata = preflight.index("cargo run --locked -- release-validate")
+        agent_benchmark = preflight.index("cargo run --locked -- agent-task-benchmark-v1")
+        agent_validation = preflight.index("cargo run --locked -- agent-task-benchmark-validate")
         package = preflight.index("cargo publish --locked --dry-run")
         self.assertLess(authorization, rust_install)
         self.assertLess(rust_install, metadata)
-        self.assertLess(metadata, package)
+        self.assertLess(metadata, agent_benchmark)
+        self.assertLess(agent_benchmark, agent_validation)
+        self.assertLess(agent_validation, package)
         self.assertEqual(preflight.count("GITHUB_TOKEN:"), 1)
 
 

@@ -125,6 +125,24 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: python3 -m unittest smoke/test_mcp_smoke_harness.py
 
+      - name: Deterministic agent task benchmark
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          mkdir -p artifacts
+          ./target/release/plasmate agent-task-benchmark-v1 \
+            --output artifacts/agent-task-benchmark-v1.json
+          ./target/release/plasmate agent-task-benchmark-validate \
+            --input artifacts/agent-task-benchmark-v1.json
+
+      - name: Upload agent task benchmark evidence
+        if: ${{ matrix.os == 'ubuntu-latest' && always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: agent-task-benchmark-${{ github.run_id }}
+          path: artifacts/agent-task-benchmark-v1.json
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: ES module smoke test
         if: ${{ matrix.os == 'ubuntu-latest' }}
         env:

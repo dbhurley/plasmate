@@ -49,6 +49,54 @@ cargo run --release -- benchmark-v1 \
 
 Do not compare debug and release reports as if their latency were equivalent. Do not treat byte compression as task success.
 
+## Deterministic agent task benchmark
+
+The agent task suite is a separate release gate for the supervised workflow
+product surface:
+
+```bash
+cargo run --locked -- agent-task-benchmark-v1 \
+  --output agent-task-benchmark-v1.json
+cargo run --locked -- agent-task-benchmark-validate \
+  --input agent-task-benchmark-v1.json
+```
+
+`plasmate.agent-task-benchmark.v1` runs six checked-in scenarios through a
+real supervised Plasmate MCP stdio child. The child uses the ordinary MCP
+session, action, trace, and replay-validation implementations. The inputs are
+compiled into the binary from `benchmarks/agent-workflow-v1/`; an ephemeral
+loopback server is the only network destination. The runner gives only that
+child the private-network development opt-in, and neither the command nor its
+internal plan builder accepts a caller-controlled URL. No public service,
+model call, or model judgment is part of the required gate.
+
+The scenarios cover navigation, approved typing plus state observation,
+privacy-safe trace export, cross-session replay refusal, an expected tool error
+that permits the workflow to continue, and fail-fast containment of an
+unexpected tool error. A healthy report therefore has six passing **task
+contracts** but five succeeded workflow outcomes and one deliberately failed
+workflow outcome. Reporting six successful workflows would be false.
+
+`summary.tasks_total` is the complete scenario denominator. Exactly one of
+`observed_succeeded`, `observed_failed`, `observed_crash`, and
+`observed_timeout` accounts for every scenario. Task-contract pass/fail is a
+separate complete partition, because an expected failure-containment scenario
+can pass its contract while its observed workflow outcome is `failed`. Step
+totals are also partitioned into succeeded, failed, and skipped rows.
+
+The report includes the ordered scenario descriptors, a canonical manifest
+digest, a length-framed digest over the manifest and exact HTML fixture bytes,
+plan fingerprints, executable digest, Git/compiler/build/OS/architecture
+provenance, and every redacted step outcome. The validator recomputes the
+compiled corpus identity and all denominators, rejects unknown schema majors,
+and confirms that the release gate agrees with the task rows.
+
+Per-scenario wall time is observational. It is not a microbenchmark, has no
+release threshold, and must not be compared across runner classes. Optional
+live evaluations involving public sites or models must use a separate schema
+and artifact; they must never replace, alter, or be averaged into this required
+deterministic gate.
+
 ## Optional public-web methodology
 
 Public-web runs answer a different question: how Plasmate behaved against a named corpus from a named environment at a particular time. They are not deterministic release gates.

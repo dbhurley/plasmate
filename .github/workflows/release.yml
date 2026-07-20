@@ -48,6 +48,22 @@ jobs:
       - name: Validate checked-in release metadata
         run: cargo run --locked -- release-validate
 
+      - name: Validate deterministic agent task contracts
+        run: |
+          mkdir -p artifacts
+          cargo run --locked -- agent-task-benchmark-v1 \
+            --output artifacts/agent-task-benchmark-v1.json
+          cargo run --locked -- agent-task-benchmark-validate \
+            --input artifacts/agent-task-benchmark-v1.json
+
+      - name: Retain deterministic agent task evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-agent-task-benchmark-${{ github.run_id }}
+          path: artifacts/agent-task-benchmark-v1.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Verify crates.io package without publishing
         run: cargo publish --locked --dry-run
 
