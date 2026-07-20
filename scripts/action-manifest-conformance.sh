@@ -61,6 +61,10 @@ run_in() {
   )
 }
 
+run_in "." \
+  "Focused WPT module corpus contract" \
+  "$PYTHON" scripts/check-wpt-module-corpus.py
+
 if [ "$MODE" = "--quick" ]; then
   run_in "packages/som-parser-python" \
     "Python parser action manifest" \

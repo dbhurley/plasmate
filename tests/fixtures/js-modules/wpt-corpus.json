@@ -1,0 +1,81 @@
+{
+  "schema": "plasmate.wpt-module-corpus.v1",
+  "upstream": {
+    "repository": "https://github.com/web-platform-tests/wpt",
+    "commit": "ff372ea4a4b10d75830d4bad6445b2904d00a537",
+    "checked_at": "2026-07-20"
+  },
+  "scope": "A reduced, deterministic module-script behavior corpus for Plasmate's documented ES-module subset; it is not a claim of full WPT conformance.",
+  "cases": [
+    {
+      "id": "module-classic-order",
+      "relationship": "reduced_behavior",
+      "upstream_path": "html/semantics/scripting-1/the-script-element/module/module-vs-script-1.html",
+      "upstream_sha256": "cfb64e54d3b33bfe09d29532f42555e9eb049d3b0971adf770ff04417ae5dc8d",
+      "local_assertions": ["src/js/pipeline.rs::classic_scripts_run_before_deferred_modules_in_document_order"]
+    },
+    {
+      "id": "module-execution-order",
+      "relationship": "reduced_behavior",
+      "upstream_path": "html/semantics/scripting-1/the-script-element/module/execorder.html",
+      "upstream_sha256": "c917500fad786dfdc42fdf8efd80dc9a74ccee335d3a808ec28ef794306c8177",
+      "local_assertions": ["src/js/pipeline.rs::classic_scripts_run_before_deferred_modules_in_document_order"]
+    },
+    {
+      "id": "module-cycle-live-bindings",
+      "relationship": "reduced_behavior",
+      "upstream_path": "html/semantics/scripting-1/the-script-element/module/imports-cycle.js",
+      "upstream_sha256": "00a6dbb2040448d2f0144c307e7d7726cf4989805bb530ec0b13828139d1b623",
+      "local_assertions": ["src/js/runtime.rs::native_modules_preserve_bindings_cycles_strictness_and_import_meta"]
+    },
+    {
+      "id": "module-single-evaluation",
+      "relationship": "reduced_behavior",
+      "upstream_path": "html/semantics/scripting-1/the-script-element/module/duplicated-imports-1.html",
+      "upstream_sha256": "3a75e120c728ee5fad19493d7248f4427e519b183cf2cda5f8355891ac466306",
+      "local_assertions": ["src/js/runtime.rs::native_module_dependency_and_duplicate_root_evaluate_once"]
+    },
+    {
+      "id": "import-meta-url",
+      "relationship": "reduced_behavior",
+      "upstream_path": "html/semantics/scripting-1/the-script-element/module/import-meta/import-meta-url.html",
+      "upstream_sha256": "319810513b89bb1f0a9f276be8a1e368eb1bea8ce68f77e22f0929a554d80910",
+      "local_assertions": ["src/js/runtime.rs::native_modules_preserve_bindings_cycles_strictness_and_import_meta"]
+    },
+    {
+      "id": "module-mime-enforcement",
+      "relationship": "reduced_behavior",
+      "upstream_path": "html/semantics/scripting-1/the-script-element/module/errorhandling-wrongMimetype.js",
+      "upstream_sha256": "bf2db138b3074e7532a2920799f83226872384d2eff8a699f79ae0ddda72ee40",
+      "local_assertions": ["src/js/modules.rs::javascript_module_content_type_uses_exact_whatwg_essence_list"]
+    },
+    {
+      "id": "module-evaluation-errors",
+      "relationship": "reduced_behavior",
+      "upstream_path": "html/semantics/scripting-1/the-script-element/module/evaluation-error-1.html",
+      "upstream_sha256": "e302fac0aef6be441ff87aa3c77e4bc1d47cbbb53616cc1246b0c347402709fb",
+      "local_assertions": ["src/js/runtime.rs::native_module_syntax_runtime_and_top_level_await_errors_are_explicit"]
+    },
+    {
+      "id": "dynamic-import-scope-boundary",
+      "relationship": "documented_scope_boundary",
+      "upstream_path": "html/semantics/scripting-1/the-script-element/module/dynamic-import/dynamic-imports.html",
+      "upstream_sha256": "46813dc891f8d6f698564e3219207f7670d7979103ee565dd671f379905f60c1",
+      "local_assertions": ["src/js/runtime.rs::native_dynamic_import_is_rejected_and_reported"]
+    }
+  ],
+  "local_fixtures": [
+    {
+      "path": "tests/fixtures/js-modules/live-dependency.js",
+      "sha256": "366ab888dc7fc241d52174f84b97517f769951e2e05cfbb7ebba3731647a86db"
+    },
+    {
+      "path": "tests/fixtures/js-modules/live-main.js",
+      "sha256": "cf738841b6d61e524d4e164220492d105dcf6c152407f1929c42c273ca4e1047"
+    },
+    {
+      "path": "tests/fixtures/js-modules/ordering.html",
+      "sha256": "a0273b99a5694679335b909440711eb2eace13fbbb1da2cb565a6c9e3c69b90c"
+    }
+  ]
+}

@@ -112,6 +112,7 @@ pub struct JsReportSummary {
     pub total: usize,
     pub succeeded: usize,
     pub failed: usize,
+    pub containment_failure: Option<crate::js::worker::JsContainmentFailure>,
 }
 
 #[derive(Debug, Clone)]
@@ -253,6 +254,7 @@ impl Session {
             total: r.total,
             succeeded: r.succeeded,
             failed: r.failed,
+            containment_failure: r.containment_failure.clone(),
         });
 
         self.url = Some(final_url.clone());
@@ -519,6 +521,8 @@ pub struct JsReportInfo {
     pub total: usize,
     pub succeeded: usize,
     pub failed: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub containment_failure: Option<crate::js::worker::JsContainmentFailure>,
 }
 
 async fn fetch_single(
@@ -565,6 +569,7 @@ async fn fetch_single(
             total: r.total,
             succeeded: r.succeeded,
             failed: r.failed,
+            containment_failure: r.containment_failure.clone(),
         }),
     })
 }

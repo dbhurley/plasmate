@@ -1,13 +1,23 @@
 # Module conformance fixture provenance
 
 These fixtures are original, minimal Plasmate fixtures whose behavioral
-assertions are derived from the Web Platform Tests module-script coverage:
+assertions are derived from the Web Platform Tests module-script coverage.
+The source snapshot is pinned to WPT commit
+`ff372ea4a4b10d75830d4bad6445b2904d00a537` (checked 2026-07-20); this avoids
+quietly moving conformance evidence when WPT `master` changes.
 
 - `html/semantics/scripting-1/the-script-element/module/`
 - `html/semantics/scripting-1/the-script-element/moving-between-documents/`
 - `html/webappapis/dynamic-markup-insertion/opening-the-input-stream/`
 
-Upstream: <https://github.com/web-platform-tests/wpt/tree/master/html/semantics/scripting-1/the-script-element/module>
+The machine-readable case-to-test map, upstream source hashes, and local
+fixture hashes are in [`wpt-corpus.json`](wpt-corpus.json). CI runs
+`python3 scripts/check-wpt-module-corpus.py` to fail if a mapped assertion is
+renamed, a local fixture changes without review, or provenance becomes
+unpinned. Maintainers can additionally supply a checkout of that exact WPT
+commit with `--upstream-root` to verify the recorded upstream hashes.
+
+Upstream: <https://github.com/web-platform-tests/wpt/tree/ff372ea4a4b10d75830d4bad6445b2904d00a537/html/semantics/scripting-1/the-script-element/module>
 
 Standards references:
 

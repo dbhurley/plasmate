@@ -1,6 +1,6 @@
 use clap::{Args, Parser, Subcommand};
 use std::sync::Arc;
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
 mod mcp;
@@ -1521,6 +1521,15 @@ async fn cmd_fetch(
             err = report.failed,
             "JS execution"
         );
+        if let Some(failure) = &report.containment_failure {
+            warn!(
+                kind = ?failure.kind,
+                code = %failure.code,
+                message = %failure.message,
+                source_som_fallback = true,
+                "JavaScript worker was contained; returning the source SOM fallback"
+            );
+        }
     }
 
     info!(

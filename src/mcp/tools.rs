@@ -22,7 +22,7 @@ use crate::cache::store::{CacheLookup, SomCache};
 use crate::cdp::cookies::{cookie_from_cdp_params, Cookie};
 use crate::js::pipeline::{self, PipelineConfig};
 use crate::js::runtime::RuntimeConfig;
-use crate::js::worker::{self, EvaluationRequest, EvaluationResponse, JsWorkerOptions};
+use crate::js::worker::{self, EvaluationRequest, EvaluationResponse, JsWorkerError};
 use crate::network::fetch;
 use crate::som::types::Som;
 
@@ -258,11 +258,12 @@ fn store_page_state_in_session(
 }
 
 async fn run_session_javascript(
+    sessions: &SessionManager,
     effective_html: String,
     url: String,
     expression: String,
     return_effective_html: bool,
-) -> Result<EvaluationResponse, String> {
+) -> Result<EvaluationResponse, JsWorkerError> {
     worker::evaluate(
         EvaluationRequest {
             protocol_version: worker::WORKER_PROTOCOL_VERSION.to_string(),
@@ -276,20 +277,43 @@ async fn run_session_javascript(
                 ..Default::default()
             },
         },
-        JsWorkerOptions::default(),
+        sessions.js_worker_options(),
     )
     .await
-    .map_err(|error| format!("JavaScript containment error [{}]: {error}", error.code()))
 }
 
-fn mutation_output(response: EvaluationResponse) -> Result<(String, String), String> {
+fn mutation_output(response: EvaluationResponse) -> Result<(String, String), JsWorkerError> {
     response
         .effective_html
         .map(|html| (response.result, html))
         .ok_or_else(|| {
-            "JavaScript containment error [js_worker_protocol]: mutating worker response omitted effective HTML"
-                .to_string()
+            JsWorkerError::Protocol("mutating worker response omitted effective HTML".to_string())
         })
+}
+
+fn containment_error_response(context: &str, error: &JsWorkerError) -> Value {
+    let failure = error.containment_failure();
+    error_response(
+        &json!({
+            "error": format!("{context}: {error}"),
+            "containment_failure": failure,
+            "state_preserved": true,
+        })
+        .to_string(),
+    )
+}
+
+fn js_report_summary(report: &crate::js::runtime::JsExecutionReport) -> Value {
+    let mut summary = json!({
+        "scripts_total": report.total,
+        "scripts_ok": report.succeeded,
+        "scripts_err": report.failed,
+    });
+    if let Some(failure) = &report.containment_failure {
+        summary["containment_failure"] = json!(failure);
+        summary["source_som_fallback"] = Value::Bool(true);
+    }
+    summary
 }
 
 async fn load_session_page_for_mcp(
@@ -1675,19 +1699,26 @@ pub async fn handle_open_page(
         }
     };
 
-    // Return session ID + SOM
+    let mut payload = json!({
+        "session_id": session_id,
+        "title": page_result.som.title,
+        "url": final_url,
+        "cache_restored": cache_restored,
+        "regions": som_json.get("regions"),
+        "webmcp": page_result.webmcp
+    });
+    if let Some(report) = &page_result.js_report {
+        payload["js"] = js_report_summary(report);
+    }
+
+    // Return session ID + SOM. A contained page-worker failure is successful
+    // structured fallback, so expose it in the JS summary instead of turning
+    // the whole tool call into an error.
     json!({
         "content": [
             {
                 "type": "text",
-                "text": json!({
-                    "session_id": session_id,
-                    "title": page_result.som.title,
-                    "url": final_url,
-                    "cache_restored": cache_restored,
-                    "regions": som_json.get("regions"),
-                    "webmcp": page_result.webmcp
-                }).to_string()
+                "text": payload.to_string()
             }
         ]
     })
@@ -1732,7 +1763,8 @@ pub async fn handle_evaluate(arguments: &Value, sessions: &Arc<SessionManager>) 
         "(function() {{ var __r = ({}); return typeof __r === 'object' && __r !== null ? JSON.stringify(__r) : __r; }})()",
         expression
     );
-    let eval_result = run_session_javascript(effective_html, url, wrapped_expr, false).await;
+    let eval_result =
+        run_session_javascript(sessions, effective_html, url, wrapped_expr, false).await;
 
     match eval_result {
         Ok(response) => {
@@ -1757,7 +1789,7 @@ pub async fn handle_evaluate(arguments: &Value, sessions: &Arc<SessionManager>) 
                 ]
             })
         }
-        Err(error) => error_response(&error),
+        Err(error) => containment_error_response("Evaluate failed", &error),
     }
 }
 
@@ -1865,15 +1897,14 @@ pub async fn handle_click(
             .replace('\n', " ")
     );
 
-    let click_result = run_session_javascript(effective_html, url.clone(), click_js, true).await;
+    let click_result =
+        run_session_javascript(sessions, effective_html, url.clone(), click_js, true).await;
     let (click_result_json, updated_html) = match click_result {
         Ok(response) => match mutation_output(response) {
             Ok(output) => output,
-            Err(error) => return error_response(&error),
+            Err(error) => return containment_error_response("Click failed", &error),
         },
-        Err(error) => {
-            return error_response(&format!("Click failed: {error}"));
-        }
+        Err(error) => return containment_error_response("Click failed", &error),
     };
 
     // Parse click result to check for navigation
@@ -2334,15 +2365,14 @@ pub async fn handle_type_text(
         text,
         if append { "true" } else { "false" },
     );
-    let type_result = run_session_javascript(effective_html, url.clone(), type_js, true).await;
+    let type_result =
+        run_session_javascript(sessions, effective_html, url.clone(), type_js, true).await;
     let (result_json, updated_html) = match type_result {
         Ok(response) => match mutation_output(response) {
             Ok(output) => output,
-            Err(error) => return error_response(&error),
+            Err(error) => return containment_error_response("Type failed", &error),
         },
-        Err(error) => {
-            return error_response(&format!("Type failed: {error}"));
-        }
+        Err(error) => return containment_error_response("Type failed", &error),
     };
 
     // Check for errors from JS
@@ -2461,15 +2491,14 @@ pub async fn handle_select_option(
             "#,
         element_id, escaped_value, escaped_value, escaped_value
     );
-    let select_result = run_session_javascript(effective_html, url.clone(), select_js, true).await;
+    let select_result =
+        run_session_javascript(sessions, effective_html, url.clone(), select_js, true).await;
     let (result_json, updated_html) = match select_result {
         Ok(response) => match mutation_output(response) {
             Ok(output) => output,
-            Err(error) => return error_response(&error),
+            Err(error) => return containment_error_response("Select failed", &error),
         },
-        Err(error) => {
-            return error_response(&format!("Select failed: {error}"));
-        }
+        Err(error) => return containment_error_response("Select failed", &error),
     };
 
     // Check for errors from JS
@@ -2591,15 +2620,14 @@ pub async fn handle_scroll(
             scroll_action
         )
     };
-    let scroll_result = run_session_javascript(effective_html, url.clone(), scroll_js, true).await;
+    let scroll_result =
+        run_session_javascript(sessions, effective_html, url.clone(), scroll_js, true).await;
     let (result_json, updated_html) = match scroll_result {
         Ok(response) => match mutation_output(response) {
             Ok(output) => output,
-            Err(error) => return error_response(&error),
+            Err(error) => return containment_error_response("Scroll failed", &error),
         },
-        Err(error) => {
-            return error_response(&format!("Scroll failed: {error}"));
-        }
+        Err(error) => return containment_error_response("Scroll failed", &error),
     };
 
     // Check for errors from JS
@@ -2719,15 +2747,14 @@ pub async fn handle_toggle(
             "#,
         element_id
     );
-    let toggle_result = run_session_javascript(effective_html, url.clone(), toggle_js, true).await;
+    let toggle_result =
+        run_session_javascript(sessions, effective_html, url.clone(), toggle_js, true).await;
     let (result_json, updated_html) = match toggle_result {
         Ok(response) => match mutation_output(response) {
             Ok(output) => output,
-            Err(error) => return error_response(&error),
+            Err(error) => return containment_error_response("Toggle failed", &error),
         },
-        Err(error) => {
-            return error_response(&format!("Toggle failed: {error}"));
-        }
+        Err(error) => return containment_error_response("Toggle failed", &error),
     };
 
     // Check for errors from JS
@@ -2833,15 +2860,14 @@ pub async fn handle_clear(
             "#,
         element_id
     );
-    let clear_result = run_session_javascript(effective_html, url.clone(), clear_js, true).await;
+    let clear_result =
+        run_session_javascript(sessions, effective_html, url.clone(), clear_js, true).await;
     let (result_json, updated_html) = match clear_result {
         Ok(response) => match mutation_output(response) {
             Ok(output) => output,
-            Err(error) => return error_response(&error),
+            Err(error) => return containment_error_response("Clear failed", &error),
         },
-        Err(error) => {
-            return error_response(&format!("Clear failed: {error}"));
-        }
+        Err(error) => return containment_error_response("Clear failed", &error),
     };
 
     // Check for errors from JS
@@ -3238,12 +3264,184 @@ fn cookie_to_json(cookie: &Cookie) -> Value {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsString;
+    use std::path::PathBuf;
+    use std::sync::OnceLock;
+    use std::time::{Duration, Instant};
+
     use super::*;
     use crate::cache::store::CacheConfig;
     use crate::cdp::session::CdpTarget;
     use crate::js::pipeline::{PageResult, PipelineTiming};
     use crate::som::metadata::StructuredData;
     use crate::som::types::{Element, ElementRole, Region, RegionRole, ShadowRoot, SomMeta};
+
+    fn stateful_worker_fixture() -> PathBuf {
+        static FIXTURE: OnceLock<PathBuf> = OnceLock::new();
+        FIXTURE
+            .get_or_init(|| {
+                let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/js_worker_fixture.rs");
+                let mut output = std::env::temp_dir().join(format!(
+                    "plasmate-stateful-mcp-worker-fixture-{}",
+                    std::process::id()
+                ));
+                if cfg!(windows) {
+                    output.set_extension("exe");
+                }
+                let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| OsString::from("rustc"));
+                let compilation = std::process::Command::new(rustc)
+                    .args([
+                        "--edition=2021",
+                        "--crate-name",
+                        "stateful_mcp_worker_fixture",
+                    ])
+                    .arg(&source)
+                    .arg("-o")
+                    .arg(&output)
+                    .output()
+                    .expect("failed to launch rustc for stateful MCP worker fixture");
+                assert!(
+                    compilation.status.success(),
+                    "fixture compilation failed: {}",
+                    String::from_utf8_lossy(&compilation.stderr)
+                );
+                output
+            })
+            .clone()
+    }
+
+    fn stateful_worker_options(timeout: Duration) -> worker::JsWorkerOptions {
+        worker::JsWorkerOptions {
+            executable: Some(stateful_worker_fixture()),
+            timeout,
+            max_stdout_bytes: 4096,
+            max_stderr_bytes: 4096,
+            memory_limit_bytes: 0,
+        }
+    }
+
+    async fn seeded_stateful_session(
+        options: worker::JsWorkerOptions,
+    ) -> (Arc<SessionManager>, String) {
+        let sessions = Arc::new(SessionManager::with_worker_options(options));
+        let session_id = sessions.create_session().await.unwrap();
+        sessions
+            .with_session(&session_id, |session| {
+                let html = "<html><head><title>Last good</title></head><body><main id='state'>safe</main></body></html>";
+                session.target.current_url = Some("https://example.test/state".to_string());
+                session.target.current_html = Some(html.to_string());
+                session.target.effective_html = Some(html.to_string());
+                session.target.current_som = Some(
+                    plasmate::som::compiler::compile(html, "https://example.test/state").unwrap(),
+                );
+                session.target.rebuild_node_map();
+            })
+            .await
+            .unwrap();
+        (sessions, session_id)
+    }
+
+    fn tool_payload(response: &Value) -> Value {
+        serde_json::from_str(response["content"][0]["text"].as_str().unwrap()).unwrap()
+    }
+
+    async fn state_fingerprint(sessions: &SessionManager, session_id: &str) -> String {
+        sessions
+            .with_session(session_id, |session| {
+                let mut nodes: Vec<_> = session
+                    .target
+                    .node_map
+                    .iter()
+                    .map(|(id, node)| {
+                        (
+                            *id,
+                            node.backend_node_id,
+                            node.som_element_id.clone(),
+                            node.node_type,
+                            node.node_name.clone(),
+                            node.node_value.clone(),
+                            node.children_ids.clone(),
+                        )
+                    })
+                    .collect();
+                nodes.sort_by_key(|node| node.0);
+                serde_json::to_string(&json!({
+                    "url": session.target.current_url,
+                    "html": session.target.current_html,
+                    "effective_html": session.target.effective_html,
+                    "som": session.target.current_som,
+                    "nodes": nodes,
+                }))
+                .unwrap()
+            })
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn stateful_mcp_worker_crash_preserves_last_good_state_and_coordinator() {
+        let options = stateful_worker_options(Duration::from_secs(5));
+        let (sessions, session_id) = seeded_stateful_session(options).await;
+        let before = state_fingerprint(&sessions, &session_id).await;
+
+        let failed = handle_evaluate(
+            &json!({"session_id": session_id, "expression": "'__fixture_abort__'"}),
+            &sessions,
+        )
+        .await;
+        assert_eq!(failed["isError"], true);
+        let failure = tool_payload(&failed);
+        assert!(matches!(
+            failure["containment_failure"]["kind"].as_str(),
+            Some("crash" | "exit")
+        ));
+        assert_eq!(failure["state_preserved"], true);
+        assert_eq!(state_fingerprint(&sessions, &session_id).await, before);
+
+        let survived = handle_evaluate(
+            &json!({"session_id": session_id, "expression": "1 + 1"}),
+            &sessions,
+        )
+        .await;
+        assert!(survived.get("isError").is_none(), "{survived}");
+        assert_eq!(tool_payload(&survived)["result"], "ok");
+        assert_eq!(state_fingerprint(&sessions, &session_id).await, before);
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn stateful_mcp_worker_timeout_preserves_last_good_state_and_coordinator() {
+        // Leave enough startup margin for saturated CI hosts while still
+        // proving that the 60-second fixture hang is coordinator-bounded.
+        let options = stateful_worker_options(Duration::from_millis(750));
+        let (sessions, session_id) = seeded_stateful_session(options).await;
+        let before = state_fingerprint(&sessions, &session_id).await;
+        let started = Instant::now();
+
+        let failed = handle_evaluate(
+            &json!({"session_id": session_id, "expression": "'__fixture_hang__'"}),
+            &sessions,
+        )
+        .await;
+        assert!(started.elapsed() < Duration::from_secs(3));
+        assert_eq!(failed["isError"], true);
+        let failure = tool_payload(&failed);
+        assert_eq!(failure["containment_failure"]["kind"], "timeout");
+        assert_eq!(failure["containment_failure"]["code"], "js_worker_timeout");
+        assert_eq!(failure["state_preserved"], true);
+        assert_eq!(state_fingerprint(&sessions, &session_id).await, before);
+
+        let survived = handle_evaluate(
+            &json!({"session_id": session_id, "expression": "1 + 1"}),
+            &sessions,
+        )
+        .await;
+        assert!(survived.get("isError").is_none(), "{survived}");
+        assert_eq!(tool_payload(&survived)["result"], "ok");
+        assert_eq!(state_fingerprint(&sessions, &session_id).await, before);
+    }
 
     #[test]
     fn ard_discover_schema_and_runtime_reject_unknown_arguments() {

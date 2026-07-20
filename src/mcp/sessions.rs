@@ -14,6 +14,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::cdp::session::CdpTarget;
+use crate::js::worker::JsWorkerOptions;
 use crate::mcp::trace::{
     self, PendingTraceEvent, ReplayRequest, TraceAttempt, TraceExport, TraceLog, TraceStatus,
 };
@@ -84,6 +85,7 @@ impl SessionState {
 /// Thread-safe with interior mutability via RwLock.
 pub struct SessionManager {
     sessions: Arc<RwLock<HashMap<String, SessionState>>>,
+    js_worker_options: Arc<JsWorkerOptions>,
 }
 
 impl Default for SessionManager {
@@ -95,9 +97,23 @@ impl Default for SessionManager {
 impl SessionManager {
     /// Create a new session manager.
     pub fn new() -> Self {
+        Self::with_worker_options(JsWorkerOptions::default())
+    }
+
+    /// Construct a manager with an explicit stateful-evaluation worker policy.
+    ///
+    /// Production callers use [`Self::new`]. The explicit constructor keeps
+    /// crash, timeout, and output-limit behavior directly testable without
+    /// process-global environment overrides.
+    pub fn with_worker_options(js_worker_options: JsWorkerOptions) -> Self {
         SessionManager {
             sessions: Arc::new(RwLock::new(HashMap::new())),
+            js_worker_options: Arc::new(js_worker_options),
         }
+    }
+
+    pub(crate) fn js_worker_options(&self) -> JsWorkerOptions {
+        self.js_worker_options.as_ref().clone()
     }
 
     /// Generate a new unique session ID.
