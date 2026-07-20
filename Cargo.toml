@@ -43,6 +43,9 @@ clap = { version = "4", features = ["derive"] }
 
 # V8 JavaScript engine (Chrome's JS runtime, Rust bindings)
 v8 = "=139.0.0"
+# ICU 74 common data matching the ICU ABI embedded by v8 139.0.0. Keep this
+# exact pin in lockstep with the V8 compatibility contract.
+deno_core_icudata = "=0.74.0"
 
 # Wasm plugin runtime (optional — enable with `--features plugins`)
 wasmtime = { version = "36.0.7", optional = true, default-features = false, features = ["cranelift", "runtime", "std"] }

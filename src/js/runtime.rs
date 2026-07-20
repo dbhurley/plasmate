@@ -4,7 +4,7 @@
 //! Scripts share state within a page (as in a real browser).
 //! A minimal DOM shim lets common JS patterns work without a full DOM.
 
-use std::alloc::{alloc, Layout};
+use std::alloc::{alloc, dealloc, Layout};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -50,16 +50,12 @@ fn icu_data_path() -> Option<PathBuf> {
     None
 }
 
-/// Load ICU data into memory and register it with the ICU library.
-/// Must be called BEFORE `v8::V8::initialize()` so V8 uses our data
-/// instead of its built-in minimal ICU data.
-fn load_icu_data() {
-    let Some(path) = icu_data_path() else {
-        warn!("ICU data file not found; Intl APIs may misbehave. Set PLASMATE_ICU_DATA=/path/to/icudt74l.dat");
-        return;
-    };
-
-    let bytes = match std::fs::read(&path) {
+/// Load optional operator-supplied ICU data into aligned memory and register it.
+///
+/// The allocation intentionally lives for the process lifetime: ICU retains the
+/// supplied pointer after registration.
+fn load_external_icu_data(path: &std::path::Path) {
+    let bytes = match std::fs::read(path) {
         Ok(b) => b,
         Err(err) => {
             warn!(path = %path.display(), %err, "Failed to read ICU data file");
@@ -71,25 +67,52 @@ fn load_icu_data() {
     let layout = match Layout::from_size_align(bytes.len(), 16) {
         Ok(l) => l,
         Err(_) => {
-            warn!("Invalid ICU data size: {}", bytes.len());
+            warn!(path = %path.display(), bytes = bytes.len(), "Invalid ICU data size");
             return;
         }
     };
     let ptr = unsafe { alloc(layout) };
     if ptr.is_null() {
-        warn!("Out of memory allocating ICU data");
+        warn!(path = %path.display(), "Out of memory allocating ICU data");
         return;
     }
     unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, bytes.len()) };
     let data = unsafe { std::slice::from_raw_parts(ptr, bytes.len()) };
 
-    // Register the data with ICU before V8 initializes.
     match v8::icu::set_common_data_74(data) {
         Ok(()) => {
-            info!(path = %path.display(), bytes = data.len(), "ICU data loaded ({} MB)", data.len() / 1_048_576)
+            info!(path = %path.display(), bytes = data.len(), "External ICU data loaded");
         }
-        Err(code) => warn!(path = %path.display(), code, "ICU data load returned error code"),
+        Err(code) => {
+            // ICU only retains the caller-owned buffer after successful
+            // registration. Reclaim rejected data instead of leaking a
+            // potentially large operator-supplied file.
+            unsafe { dealloc(ptr, layout) };
+            warn!(path = %path.display(), code, "External ICU data was rejected");
+        }
     }
+}
+
+/// Register ICU data before `v8::V8::initialize()`.
+///
+/// A version-matched data package is compiled into every Plasmate binary. An
+/// explicit `PLASMATE_ICU_DATA` file (or a legacy sidecar beside the executable)
+/// is registered first and therefore has deterministic lookup precedence. ICU
+/// searches common-data packages in registration order, so the bundled package
+/// is then registered as the complete fallback for resources absent from a
+/// valid filtered override. Missing, unreadable, or rejected external data is
+/// never registered. V8 treats some missing ICU resources as fatal
+/// out-of-memory errors.
+fn load_icu_data() {
+    if let Some(path) = icu_data_path() {
+        load_external_icu_data(&path);
+    }
+
+    let data = deno_core_icudata::ICU_DATA;
+    if let Err(code) = v8::icu::set_common_data_74(data) {
+        panic!("bundled ICU 74 data could not be registered (ICU error {code})");
+    }
+    info!(bytes = data.len(), "Bundled ICU 74 data loaded");
 }
 
 /// Initialize V8 platform (must be called once).
@@ -4791,6 +4814,18 @@ mod tests {
         let mut rt = JsRuntime::new(RuntimeConfig::default());
         let result = rt.execute_in_context("1 + 2", "test.js").unwrap();
         assert_eq!(result, "3");
+    }
+
+    #[test]
+    fn intl_date_time_format_uses_bundled_icu_data() {
+        let mut runtime = JsRuntime::new(RuntimeConfig::default());
+        let result = runtime
+            .execute_in_context(
+                "new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', year: 'numeric' }).format(new Date('2020-01-01T00:00:00Z'))",
+                "intl-date-time-format.js",
+            )
+            .unwrap();
+        assert_eq!(result, "2020");
     }
 
     #[test]
