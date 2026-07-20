@@ -36,7 +36,7 @@ Claude now has access to these tools:
 
 | Tool | What it does |
 |------|-------------|
-| `fetch_page` | Fetch a URL and return the Semantic Object Model (SOM) - 17x fewer tokens than raw HTML |
+| `fetch_page` | Fetch a URL and return the Semantic Object Model (SOM); output size is page- and selector-dependent |
 | `extract_text` | Get clean, readable text from any web page |
 | `extract_links` | Get all outbound URLs from a page (deduplicated) |
 | `cache_status` | Inspect MCP SOM cache hits, misses, selector/effective-HTML entries, and avoided HTML work |

@@ -1,5 +1,13 @@
       <h1>SOM Cost Analysis</h1>
 
+      <blockquote><strong>Historical exploratory model (March 2026), not a
+      current product claim.</strong> The calculations below use a 49-URL legacy
+      sample and then extrapolate using model prices assumed at that time. The
+      page predates the current corpus-digest and provenance requirements. It
+      must not be cited as universal token or cost savings; output size,
+      tokenization, pricing, success rate, and task utility vary. Current public
+      claims follow <a href="https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md">the benchmark policy</a>.</blockquote>
+
       <p>How much does SOM compression save on LLM input costs? We tested <strong>49 real-world websites</strong> and measured the token reduction from raw HTML to Plasmate SOM output.</p>
 
       <div class="hero-stats">

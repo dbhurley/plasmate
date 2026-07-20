@@ -2,15 +2,21 @@
 title: "60+ Integrations: The Plasmate Ecosystem"
 date: 2026-04-15
 author: Plasmate Team
-description: "Plasmate now integrates with 60+ tools across AI frameworks, visual builders, automation platforms, and more. Learn how to add AI agent web scraping to LangChain, Vercel AI, and your favorite tools with 10-800x token compression."
+description: "Plasmate integrates with tools across AI frameworks, visual builders, automation platforms, and more. Learn how to add structured SOM browsing to LangChain, Vercel AI, and other tools."
 keywords: ["AI agent web scraping", "LangChain web browser", "token compression", "MCP web browsing tool"]
 ---
 
 # 60+ Integrations: The Plasmate Ecosystem
 
-Building AI agents that browse the web? You have probably hit the same wall everyone does: raw HTML is verbose, expensive, and wastes tokens on boilerplate that adds zero value to your model's understanding.
+Building AI agents that browse the web? Raw HTML can include verbose markup,
+scripts, styles, and other material that a particular agent workflow may not need.
 
-Plasmate solves this by compiling HTML into a Semantic Object Model (SOM) - a structured, semantic representation that is **10-800x smaller** than the original markup. Instead of feeding your agent thousands of tokens of nested divs and tracking scripts, you get clean, meaningful data that your model can actually reason about.
+Plasmate compiles HTML into a Semantic Object Model (SOM), a structured
+representation of page regions, content, and supported actions. Output size is
+page-dependent. In the v0.5.1 observational snapshots, the median serialized-byte
+ratio was 9.98x across 83 successful non-JavaScript inputs out of 98 attempted
+and 9.32x across 82 successful JavaScript inputs out of 98 attempted. These are
+byte ratios, not universal token, cost, latency, or task-success guarantees.
 
 Today, we are excited to announce a major milestone: **Plasmate now integrates with 60+ tools across 7 categories**, making it easier than ever to add intelligent web browsing to your AI stack.
 
@@ -124,23 +130,18 @@ const result = await generateText({
 });
 ```
 
-Both examples show the same pattern: add Plasmate as a tool, and your agent gains efficient web browsing with automatic token compression. No changes to your existing agent logic required.
+Both examples show the same pattern: add Plasmate as a tool and pass structured
+SOM into the framework. Integration changes and output size depend on the host
+framework, page, and application.
 
-## Why Token Compression Matters
+## Why Output Size Matters
 
-Let's put the numbers in perspective. A typical product page might contain:
-
-| Format | Tokens | Cost (GPT-4) |
-|--------|--------|--------------|
-| Raw HTML | 45,000 | $1.35 |
-| SOM | 850 | $0.03 |
-
-That is a **53x reduction** in tokens and cost for a single page. For agents that browse dozens or hundreds of pages per task, the savings compound dramatically.
-
-But it is not just about cost. Smaller context means:
-- Faster response times (less to process)
-- Better accuracy (less noise for the model to filter)
-- Longer conversations (more room in the context window)
+Removing unused markup can leave more of a model's context window available for
+the task. It does not imply a fixed token or cost reduction: tokenization,
+prompts, model pricing, retries, and page composition all affect the outcome.
+Smaller serialized input also does not by itself guarantee lower end-to-end
+latency or better task accuracy. Measure the full workflow on a representative
+page corpus before making capacity or cost projections.
 
 ## Join the Ecosystem
 
@@ -155,4 +156,4 @@ The future of AI agents is efficient, semantic web understanding. We are excited
 
 ---
 
-*Plasmate is open-source and MIT licensed. Try it today with `curl -fsSL https://plasmate.app/install.sh | bash`*
+*Plasmate is open source under Apache-2.0. Try it today with `curl -fsSL https://plasmate.app/install.sh | bash`*

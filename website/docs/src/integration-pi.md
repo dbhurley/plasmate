@@ -66,7 +66,7 @@ args = ["mcp"]
 
 ## Why Plasmate with Pi?
 
-Pi and oh-my-pi both have built-in web browsing via their `web/` module, which typically uses headless Chrome or simple HTTP fetch + readability extraction. Plasmate replaces this with structured SOM output that uses 4x fewer tokens.
+Pi and oh-my-pi both have built-in web browsing via their `web/` module, which can use headless Chrome or HTTP fetch plus readability extraction. Plasmate offers structured SOM output as another representation; its size depends on the page and tokenizer.
 
 ### Default Pi web browsing
 
@@ -74,8 +74,7 @@ Pi and oh-my-pi both have built-in web browsing via their `web/` module, which t
 User: What are the pricing tiers on stripe.com?
 
 Pi uses web_search + fetch → raw HTML or markdown
-→ ~30,000 tokens of page content in context
-→ Model reasons over noisy input
+→ Context size depends on the fetched page and extractor
 ```
 
 ### With Plasmate
@@ -84,11 +83,12 @@ Pi uses web_search + fetch → raw HTML or markdown
 User: What are the pricing tiers on stripe.com?
 
 Pi calls fetch_page via MCP → SOM JSON
-→ ~8,000 tokens of structured content
 → Model receives typed regions, elements, and affordances
 ```
 
-The token savings compound across multi-page research sessions. A 10-page research task that consumes 300,000 tokens with raw HTML uses approximately 80,000 tokens with SOM.
+SOM removes non-semantic markup, but the effect on a multi-page research session
+depends on the pages, prompts, repeated state, and model tokenizer. Byte-size
+observations should not be extrapolated directly into token budgets or cost.
 
 ## Multi-step Interaction Example
 
@@ -146,12 +146,14 @@ pi "What are the trending topics on my Twitter timeline?"
 
 See the [Authenticated Browsing guide](/guide-authenticated-browsing) for setup details.
 
-## Performance
+## Evaluation notes
 
-| Metric | Pi + raw fetch | Pi + Plasmate |
-|---|---|---|
-| Tokens per page | ~33,000 | ~8,300 |
-| Latency (warm) | 200-500ms | 200-400ms |
-| Multi-page (10 pages) | ~330K tokens | ~83K tokens |
-| Memory | Depends on browser | ~30MB / 100 pages |
-| Form filling | Requires Playwright/CDP | Native (type_text, select_option, toggle) |
+In the v0.5.1 observational benchmark snapshots, the median serialized-byte
+ratio was 9.98x across 83 successful non-JavaScript inputs out of 98 attempted
+and 9.32x across 82 successful JavaScript inputs out of 98 attempted. Those
+ratios vary by page and are not universal token, cost, latency, memory, or
+task-success guarantees. Benchmark the end-to-end Pi workflow on your corpus.
+
+For capability comparisons, Pi's raw-fetch path may require Playwright or CDP
+for form filling; Plasmate exposes `type_text`, `select_option`, and `toggle`
+through MCP.

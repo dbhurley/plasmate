@@ -187,9 +187,8 @@ with open("research-summary.md", "w") as f:
     f.write(summary)
 
 print(f"\nSaved to research-summary.md")
-print(f"\nToken savings vs Chrome: {16}x fewer tokens")
-print(f"That's the difference between $0.01 and $0.16 per research run at GPT-4 rates.")
-print(f"At 1000 research runs/day: $10 vs $160.")
+print("\nMeasure HTML bytes, SOM bytes, tokenizer output, and task quality")
+print("on this exact corpus before estimating cost or performance impact.")
 ```
 
 ## What's Next

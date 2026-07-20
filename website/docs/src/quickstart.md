@@ -96,7 +96,9 @@ plasmate throughput-bench --base-url http://localhost:8765 --pages 100
 
 ## AWP Protocol (Quick Reference)
 
-AWP v0.1 has 7 methods:
+AWP's foundational v0.1 core has seven methods. The current native handler also
+exposes session-listing, network-interception, plugin, cookie, and proxy-pool
+extensions:
 
 | Method | Description |
 |--------|-------------|
@@ -107,6 +109,9 @@ AWP v0.1 has 7 methods:
 | `page.observe` | Get the current SOM snapshot |
 | `page.act` | Perform an action (click, type) |
 | `page.extract` | Extract structured data, interactive elements, or specific fields |
+
+Click, type, select, scroll, toggle, and clear are actions carried by
+`page.act`, not separate AWP wire methods.
 
 ### Example AWP session (Python pseudocode)
 

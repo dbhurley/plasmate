@@ -456,7 +456,12 @@
       </div>
     </nav>
     <main class="content">
-      <h1 id="robotstxt-for-the-agentic-web">Robots.txt for the Agentic Web</h1><p>The robots.txt standard was designed in 1994 for a simple question: should this crawler index my page?</p>
+      <h1 id="robotstxt-for-the-agentic-web">Robots.txt for the Agentic Web</h1><blockquote>
+<p>Proposal document. Numeric examples below are illustrative, not measured
+Plasmate performance or universal token/cost claims. Actual representation
+size depends on the page, endpoint, selector, budget, and tokenizer.</p>
+</blockquote>
+<p>The robots.txt standard was designed in 1994 for a simple question: should this crawler index my page?</p>
 <p>Thirty-two years later, we&#39;re using the same binary mechanism to manage a fundamentally different relationship. AI agents don&#39;t just index pages - they read, reason, extract, and act on web content. The conversation is stuck on a single axis: <strong>block or allow</strong>.</p>
 <h2 id="the-current-state">The Current State</h2><pre><code>User-agent: GPTBot
 Disallow: /
@@ -476,7 +481,9 @@ SOM-Format: SOM/1.0
 SOM-Scope: main-content
 SOM-Freshness: 3600
 </code></pre>
-<p>When an AI agent sees these directives, instead of fetching the full HTML page (50,000+ tokens), it can request the SOM endpoint and get a clean, structured representation (~3,000 tokens).</p>
+<p>When an AI agent sees these directives, it can request a publisher-provided
+semantic representation instead of fetching the full HTML page. The size and
+fidelity of either representation must be measured for the actual endpoint.</p>
 <h2 id="new-directives">New Directives</h2><table>
 <thead>
 <tr>
@@ -506,7 +513,9 @@ SOM-Freshness: 3600
 </tr>
 </tbody></table>
 <h2 id="why-this-matters">Why This Matters</h2><p><strong>For website owners:</strong> Control without blocking. Direct agents to a representation you control - exclude ads, paywalls, and noise. Include what you want highlighted.</p>
-<p><strong>For agent developers:</strong> 10-16x fewer tokens, better extraction quality, no headless browser needed. A single HTTP request instead of Chrome + JS execution + DOM parsing.</p>
+<p><strong>For agent developers:</strong> a publisher-provided structured representation can
+avoid browser execution and omit irrelevant markup. Token and extraction impact
+is page- and implementation-dependent.</p>
 <p><strong>For the web ecosystem:</strong> A cooperative alternative to the current adversarial dynamic where publishers block and agents circumvent.</p>
 <h2 id="relationship-to-existing-standards">Relationship to Existing Standards</h2><p>SOM directives are purely additive to RFC 9309 (Robots Exclusion Protocol). Existing <code>User-agent</code>, <code>Allow</code>, <code>Disallow</code>, and <code>Crawl-delay</code> rules continue to work unchanged. Agents that don&#39;t understand SOM directives simply ignore them.</p>
 <p>This complements our <a href="https://github.com/schemaorg/schemaorg/issues/4786">Schema.org proposal</a> for <code>WebPageSemanticRepresentation</code> (per-page signaling) and the <a href="/som-spec">SOM specification</a> being incubated at the W3C.</p>

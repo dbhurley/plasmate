@@ -193,16 +193,11 @@ SOM respects CSS visibility rules from inline `<style>` blocks:
 
 This prevents hidden elements (dropdowns, modals, off-screen content) from polluting the agent's view.
 
-## Benchmarks
+## Output-size evidence
 
-| Site | HTML | SOM | Compression |
-|------|------|-----|-------------|
-| Wikipedia | 589 KB | 56 KB | 10.4x |
-| BBC News | ~180 KB | ~12 KB | 15x |
-| GitHub | ~120 KB | ~12 KB | 10.1x |
-| Hacker News | 34 KB | ~26 KB | 1.3x |
-| x.com | ~15 KB | ~0.1 KB | 159x |
-
-Median across 38 URLs: **9.4x compression**.
-
-Note: Link-dense pages like HN compress less because links are interactive and cannot be dropped.
+Retained v0.5.1 observational snapshots attempted 98 URLs per run. The
+non-JavaScript report recorded a 9.98x median serialized-byte ratio over 83
+successful inputs; the JavaScript report recorded 9.32x over 82 successful
+inputs. Blocked and failed inputs remain in the denominator. These historical
+byte ratios are page- and corpus-dependent and do not establish universal token,
+cost, latency, or task-success savings. See [Benchmarking](https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md).

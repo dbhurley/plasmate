@@ -731,28 +731,105 @@ fn pypi_artifact_has_executable(repository_root: &Path, artifact: &ReleaseArtifa
 }
 
 fn validate_tracked_generated_artifacts(repository_root: &Path, errors: &mut Vec<ValidationIssue>) {
-    let Ok(output) = Command::new("git")
+    let output = match Command::new("git")
         .arg("-C")
         .arg(repository_root)
         .args(["ls-files", "-z", "--", "integrations/browser-use/dist"])
         .output()
-    else {
-        return;
+    {
+        Ok(output) => output,
+        Err(error) => {
+            errors.push(ValidationIssue {
+                artifact: "release-manifest".to_string(),
+                path: "integrations/browser-use/dist".to_string(),
+                expected: "a successful git ls-files inventory".to_string(),
+                actual: Some(error.to_string()),
+                message: "cannot verify tracked generated artifacts".to_string(),
+            });
+            return;
+        }
     };
-    if !output.status.success() {
+    validate_tracked_artifact_output(
+        repository_root,
+        output.status.success(),
+        output.status.code(),
+        &output.stdout,
+        &output.stderr,
+        errors,
+    );
+}
+
+fn validate_tracked_artifact_output(
+    repository_root: &Path,
+    success: bool,
+    status_code: Option<i32>,
+    stdout: &[u8],
+    stderr: &[u8],
+    errors: &mut Vec<ValidationIssue>,
+) {
+    if !success {
+        let diagnostic = String::from_utf8_lossy(stderr)
+            .chars()
+            .take(512)
+            .collect::<String>();
+        errors.push(ValidationIssue {
+            artifact: "release-manifest".to_string(),
+            path: "integrations/browser-use/dist".to_string(),
+            expected: "git ls-files to exit successfully".to_string(),
+            actual: Some(format!(
+                "status={}; stderr={diagnostic}",
+                status_code
+                    .map(|code| code.to_string())
+                    .unwrap_or_else(|| "signal".to_string())
+            )),
+            message: "cannot verify tracked generated artifacts".to_string(),
+        });
         return;
     }
-    for path in output.stdout.split(|byte| *byte == 0) {
-        if path.is_empty() {
+    for raw_path in stdout.split(|byte| *byte == 0) {
+        if raw_path.is_empty() {
             continue;
         }
-        let path = String::from_utf8_lossy(path).to_string();
-        if !repository_root.join(&path).exists() {
+        let path = match std::str::from_utf8(raw_path) {
+            Ok(path) => path,
+            Err(error) => {
+                errors.push(ValidationIssue {
+                    artifact: "release-manifest".to_string(),
+                    path: "integrations/browser-use/dist".to_string(),
+                    expected: "UTF-8 repository-relative tracked paths".to_string(),
+                    actual: Some(format!("invalid UTF-8 at byte {}", error.valid_up_to())),
+                    message: "git returned an invalid tracked-artifact path".to_string(),
+                });
+                continue;
+            }
+        };
+        let relative = Path::new(path);
+        let has_invalid_component = relative.is_absolute()
+            || relative.components().any(|component| {
+                matches!(
+                    component,
+                    Component::ParentDir | Component::RootDir | Component::Prefix(_)
+                )
+            });
+        if has_invalid_component
+            || !relative.starts_with(Path::new("integrations/browser-use/dist"))
+        {
+            errors.push(ValidationIssue {
+                artifact: "release-manifest".to_string(),
+                path: "integrations/browser-use/dist".to_string(),
+                expected: "repository-relative paths under integrations/browser-use/dist"
+                    .to_string(),
+                actual: Some(path.chars().take(512).collect()),
+                message: "git returned an invalid tracked-artifact path".to_string(),
+            });
+            continue;
+        }
+        if !repository_root.join(relative).exists() {
             continue;
         }
         errors.push(ValidationIssue {
             artifact: "browser-use-adapter".to_string(),
-            path,
+            path: path.to_string(),
             expected: "generated wheels and sdists to be untracked".to_string(),
             actual: Some("tracked generated artifact".to_string()),
             message: "tracked Browser Use build artifact can drift from source metadata"
@@ -953,8 +1030,89 @@ mod tests {
     }
 
     #[test]
+    fn active_public_truth_surfaces_reject_obsolete_links_and_universal_claims() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut paths = [
+            "README.md",
+            "server.json",
+            "docs/claude-desktop-config.md",
+            "website/index.html",
+            "website/compare.html",
+            "website/docs/executive-guide.html",
+            "website/docs/log.html",
+            "website/docs/openclaw-guide.html",
+            "website/llms.txt",
+            "website/llms-full.txt",
+        ]
+        .into_iter()
+        .map(|path| root.join(path))
+        .collect::<Vec<_>>();
+        for directory in ["website/docs/src", "website/compare", "website/blog"] {
+            collect_truth_markdown(&root.join(directory), &mut paths)
+                .expect("collect public truth sources");
+        }
+
+        let banned = [
+            "github.com/nicepkg/plasmate",
+            "10-800x",
+            "10–800x",
+            "17x fewer tokens",
+            "17x token compression",
+            "17.5x average token compression",
+            "10x fewer tokens",
+            "10x less tokens",
+            "10x faster",
+            "compress web pages 10x",
+            "50x faster",
+            "94% reduction in token",
+            "94% token savings",
+            "13 mcp tools",
+            "26 tools are available",
+            "7 methods. that's the protocol",
+            "awp has 7 methods",
+            "awp (native, 7 methods)",
+        ];
+        for path in paths {
+            let content = fs::read_to_string(&path).unwrap_or_else(|error| {
+                panic!(
+                    "read active public truth surface {}: {error}",
+                    path.display()
+                )
+            });
+            let normalized = content.to_lowercase();
+            for phrase in banned {
+                assert!(
+                    !normalized.contains(phrase),
+                    "active public truth surface {} contains banned phrase {phrase:?}",
+                    path.display()
+                );
+            }
+        }
+    }
+
+    fn collect_truth_markdown(directory: &Path, paths: &mut Vec<PathBuf>) -> std::io::Result<()> {
+        for entry in fs::read_dir(directory)? {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            if file_type.is_symlink() {
+                continue;
+            }
+            let path = entry.path();
+            if file_type.is_dir() {
+                collect_truth_markdown(&path, paths)?;
+            } else if file_type.is_file()
+                && path.extension().and_then(|extension| extension.to_str()) == Some("md")
+            {
+                paths.push(path);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
     fn rejects_oci_registry_drift_and_missing_runtime_contract() {
         let directory = tempfile::tempdir().expect("temporary repository");
+        init_git_repository(directory.path());
         fs::write(
             directory.path().join("Dockerfile"),
             "FROM scratch\nLABEL io.modelcontextprotocol.server.name=\"io.github.example/plasmate\"\nENTRYPOINT [\"plasmate\"]\n",
@@ -1063,6 +1221,7 @@ mod tests {
     #[test]
     fn detects_version_drift_without_publishing() {
         let directory = tempfile::tempdir().expect("temporary repository");
+        init_git_repository(directory.path());
         fs::write(
             directory.path().join("package.json"),
             r#"{"name":"example","version":"1.1.0"}"#,
@@ -1276,6 +1435,58 @@ mod tests {
         }));
     }
 
+    #[test]
+    fn tracked_artifact_inventory_fails_closed_on_git_error() {
+        let directory = tempfile::tempdir().expect("temporary repository");
+        let mut errors = Vec::new();
+        validate_tracked_artifact_output(
+            directory.path(),
+            false,
+            Some(128),
+            &[],
+            b"fatal: not a git repository\nsecret suffix that must remain bounded",
+            &mut errors,
+        );
+
+        assert_eq!(errors.len(), 1);
+        assert_eq!(
+            errors[0].message,
+            "cannot verify tracked generated artifacts"
+        );
+        assert!(errors[0]
+            .actual
+            .as_deref()
+            .is_some_and(|actual| actual.contains("status=128")));
+    }
+
+    #[test]
+    fn tracked_artifact_inventory_rejects_invalid_paths_without_lossy_decoding() {
+        let directory = tempfile::tempdir().expect("temporary repository");
+        let mut errors = Vec::new();
+        validate_tracked_artifact_output(
+            directory.path(),
+            true,
+            Some(0),
+            b"\xff\xfe\0../outside.whl\0",
+            &[],
+            &mut errors,
+        );
+
+        assert_eq!(errors.len(), 2);
+        assert!(errors
+            .iter()
+            .all(|issue| { issue.message == "git returned an invalid tracked-artifact path" }));
+        assert!(errors.iter().any(|issue| {
+            issue
+                .actual
+                .as_deref()
+                .is_some_and(|actual| actual.contains("invalid UTF-8"))
+        }));
+        assert!(errors
+            .iter()
+            .any(|issue| { issue.actual.as_deref() == Some("../outside.whl") }));
+    }
+
     fn write_manifest_with_source(directory: &Path, source_path: &str) {
         let manifest = serde_json::json!({
             "schema_version": 1,
@@ -1337,5 +1548,14 @@ mod tests {
         let report = validate(directory.path(), "release-manifest.json").expect("validate");
         assert!(!report.valid);
         assert!(report.errors[0].message.contains("outside the repository"));
+    }
+
+    fn init_git_repository(directory: &Path) {
+        assert!(Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(directory)
+            .status()
+            .expect("run git init")
+            .success());
     }
 }

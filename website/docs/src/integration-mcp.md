@@ -1,122 +1,75 @@
-# MCP Server
+# Native MCP Server
 
-> **Plasmate is listed on the [official MCP Registry](https://registry.modelcontextprotocol.io/).** Claude, Cursor, and other MCP clients can discover and install it automatically.
+Plasmate's native MCP server exposes structured page fetching, inspection, and
+stateful interaction over stdio. Its source is
+[`src/mcp/`](https://github.com/plasmate-labs/plasmate/tree/master/src/mcp), and
+the authoritative tool registration is
+[`src/mcp/server.rs`](https://github.com/plasmate-labs/plasmate/blob/master/src/mcp/server.rs).
 
-Plasmate's MCP (Model Context Protocol) server lets AI coding assistants browse the web through Plasmate -  structured SOM output instead of raw HTML.
+The checked-in v0.6.0 Registry metadata is a next-release candidate. Do not
+publish or install its OCI declaration until the newly labeled v0.6.0 image is
+built and anonymously pullable. The npm and PyPI packages named `plasmate` are
+client SDKs, not native server executables.
 
-Source: [`plasmate-mcp`](https://github.com/nicepkg/plasmate/tree/master/integrations/mcp)
-
-## Supported Clients
-
-| Client | Status |
-|--------|--------|
-| Claude Code | ✅ Supported |
-| Claude Desktop | ✅ Supported |
-| Cursor | ✅ Supported |
-| Windsurf | ✅ Supported |
-| Any MCP client | ✅ Supported |
-
-## Setup
-
-### Claude Code
+## Install the native engine
 
 ```bash
-claude mcp add plasmate -- npx plasmate-mcp
+curl -fsSL https://plasmate.app/install.sh | sh
+# or
+cargo install plasmate
 ```
 
-That's it. Claude Code will now have `plasmate_fetch`, `plasmate_navigate`, `plasmate_click`, and `plasmate_type` tools available.
+## Configure an MCP client
 
-### Claude Desktop
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+Use this stdio configuration with Claude Desktop, Cursor, Windsurf, or another
+MCP-compatible client:
 
 ```json
 {
   "mcpServers": {
     "plasmate": {
-      "command": "npx",
-      "args": ["-y", "plasmate-mcp"]
+      "command": "plasmate",
+      "args": ["mcp"]
     }
   }
 }
 ```
 
-Restart Claude Desktop after editing.
-
-### Cursor
-
-Open Settings → MCP Servers → Add:
-
-```json
-{
-  "plasmate": {
-    "command": "npx",
-    "args": ["-y", "plasmate-mcp"]
-  }
-}
-```
-
-### Windsurf
-
-Add to your Windsurf MCP config:
-
-```json
-{
-  "mcpServers": {
-    "plasmate": {
-      "command": "npx",
-      "args": ["-y", "plasmate-mcp"]
-    }
-  }
-}
-```
-
-### Manual (stdio)
+For Claude Code:
 
 ```bash
-npx plasmate-mcp
+claude mcp add plasmate -- plasmate mcp
 ```
 
-The server communicates over stdin/stdout using the MCP JSON-RPC protocol.
+The server communicates over stdin/stdout using MCP JSON-RPC. Run it directly
+for protocol debugging:
 
-## Available Tools
-
-| Tool | Description |
-|------|-------------|
-| `plasmate_fetch` | Stateless page fetch -  returns SOM text |
-| `plasmate_navigate` | Open URL in persistent session |
-| `plasmate_click` | Click element by SOM index |
-| `plasmate_type` | Type into input by SOM index |
-
-### Example: Fetch a page
-
-```
-Use plasmate_fetch to get the contents of https://news.ycombinator.com
+```bash
+plasmate mcp
 ```
 
-The LLM receives structured SOM output (~1,500 tokens) instead of raw HTML (~22,000 tokens).
+## Tool surface
 
-### Example: Multi-step browsing
+The native server advertises its current tools through MCP `tools/list`; clients
+should discover them rather than depend on a hard-coded count. The surface
+includes:
 
-```
-Navigate to https://github.com, search for "plasmate", and tell me the top result.
-```
+- stateless fetch, text/link extraction, ARD discovery, crawl-policy, and page
+  inspection;
+- cache, session, trace, and validation-only replay operations;
+- screenshots and persistent page sessions;
+- navigation, evaluation, click/type/select/scroll/toggle/clear interactions;
+- cookie read, write, and clear operations.
 
-The agent uses `plasmate_navigate` → `plasmate_type` → `plasmate_click` in sequence.
+Sensitive mutations remain subject to the server's explicit policy and
+workflow authorization controls.
 
-## Configuration
+## Output-size expectations
 
-Environment variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PLASMATE_BINARY` | `plasmate` | Path to plasmate binary |
-| `PLASMATE_TIMEOUT` | `30` | Request timeout in seconds |
-| `PLASMATE_BUDGET` | -  | Optional SOM token budget |
-
-## Why MCP + Plasmate?
-
-- **10-16x fewer tokens** per page load → cheaper, faster agent loops
-- **Structured output** → LLM understands page layout, not HTML soup
-- **Interactive elements indexed** → click/type by `[N]` reference
-- **No Chrome dependency** → works on headless servers, CI, containers
+SOM removes presentation and runtime markup, but output reduction varies by
+page, selector, JavaScript mode, budget, and corpus. Retained v0.5.1
+observational snapshots recorded median serialized-byte ratios of 9.98x over 83
+successful non-JavaScript inputs and 9.32x over 82 successful JavaScript inputs,
+from 98 attempted URLs per run. These are byte ratios—not universal token,
+cost, latency, or task-success guarantees. See the
+[benchmark policy](https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md).

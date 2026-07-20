@@ -13,14 +13,15 @@ Traditional headless browsers (Chrome, Playwright, Lightpanda) output raw HTML o
 
 Plasmate solves this with the Semantic Object Model: a compact, structured representation that preserves meaning while discarding noise.
 
-## Performance
+## Benchmark evidence
 
-| Metric | Plasmate | Lightpanda | Chrome |
-|--------|----------|------------|--------|
-| Speed (pages/sec) | ~250 | ~43 | ~4 |
-| Binary size | 43 MB | 59-111 MB | 300-500 MB |
-| Memory (100 pages) | ~30 MB | ~50 MB | ~20 GB |
-| Token compression | 16.6x avg (94% savings) | 1x (raw DOM) | 1x (raw DOM) |
+Performance and output reduction depend on the page, configuration, build
+profile, runner, and corpus. Retained v0.5.1 public-web snapshots recorded a
+9.98x median serialized-byte ratio over 83 successful non-JavaScript inputs and
+a 9.32x median over 82 successful JavaScript inputs, from 98 attempted URLs in
+each run. These are observational byte ratios, not universal token, cost,
+latency, or task-success claims. See `docs/BENCHMARKING.md` and retain exact
+denominators and provenance when citing a report.
 
 ## Install
 
@@ -29,12 +30,13 @@ One-line install (macOS and Linux):
 curl -fsSL https://plasmate.app/install.sh | sh
 ```
 
-Package managers:
+Native engine through Cargo:
 ```
 cargo install plasmate
-npm install -g plasmate
-pip install plasmate
 ```
+
+The npm and PyPI `plasmate` packages are client SDKs and do not install the
+native engine.
 
 Docker (multi-arch linux/amd64 and linux/arm64):
 ```
@@ -178,17 +180,15 @@ Example SOM output for a simple page:
 
 ## AWP Protocol (Native)
 
-AWP (Agent Wire Protocol) is Plasmate's native WebSocket protocol. 7 methods:
+AWP (Agent Web Protocol) is Plasmate's native WebSocket protocol. Its seven
+foundational v0.1 wire methods are `awp.hello`, `session.create`,
+`session.close`, `page.navigate`, `page.observe`, `page.act`, and
+`page.extract`. The current handler also exposes session-listing,
+network-interception, plugin, cookie, and proxy-pool extensions. Click, type,
+select, scroll, toggle, and clear are `page.act` actions, not separate methods.
 
-1. `navigate(url)` - Load a page, returns SOM
-2. `content()` - Get current page SOM
-3. `evaluate(expression)` - Run JavaScript, return result
-4. `click(element_id)` - Click an interactive element
-5. `type(element_id, text)` - Type into an input
-6. `screenshot()` - Capture page as PNG
-7. `close()` - Close the page
-
-AWP is simpler and more token-efficient than CDP. Use it when you don't need Puppeteer compatibility.
+Use AWP for the native intent-oriented surface and CDP where Puppeteer
+compatibility is required.
 
 ## JavaScript Support
 

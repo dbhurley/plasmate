@@ -14,26 +14,27 @@ Listed on the official MCP Registry. Install in Claude or Cursor with one click.
 [Quick Start](quickstart) | Install Plasmate and run your first fetch in 60 seconds |
 | [Product Spec](spec) | Full architecture, market analysis, and technical vision |
 | [AWP Protocol](awp) | Agent Web Protocol draft specification |
-| [AWP MVP v0.1](awp-mvp) | The 7-method subset shipped in v0.1 |
+| [AWP MVP v0.1](awp-mvp) | The seven-method foundational core; the current wire handler adds extension groups |
 | [SOM Reference](som) | Semantic Object Model structure and element addressing |
 | [Roadmap (v0.2)](roadmap) | V8 integration, CDP compatibility, SOM cache, parallel sessions |
 | [Brand Guide](brand) | Colors, typography, voice, and the pixie dust system |
 
-## Key Numbers
+## Evidence policy
 
-- **4-5 ms per page** throughput (100-page local benchmark, 231KB average)
-- **10.4x compression** on Wikipedia (HTML to SOM token reduction)
-- **~30 MB RSS** memory baseline per page
-- **43 MB** single binary (macOS arm64)
-- **184 tests** passing
-- **Apache 2.0** license
+- Deterministic loopback release benchmarks retain task outcomes, cold/warm
+  cache state, latency, memory high-water mark, and build/runner provenance.
+- Observational public-web reports retain the complete attempted-input
+  denominator, including blocked and failed inputs.
+- Output reduction is page-, configuration-, corpus-, and serialization-dependent;
+  byte ratios are not universal token, cost, latency, or task-success claims.
+- Plasmate is Apache-2.0 licensed.
 
 ## Architecture at a Glance
 
 ```
 Agent (Python/JS/Rust)
   |
-  |-- AWP (native, 7 methods)
+  |-- AWP (seven foundational methods plus current extensions)
   |-- CDP (legacy compatibility)
   |
 Plasmate Engine

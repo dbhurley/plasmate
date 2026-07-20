@@ -1,10 +1,12 @@
 # Browser Use Integration
 
-Use Plasmate as the browser backend for [Browser Use](https://github.com/browser-use/browser-use), replacing Chrome + Playwright with SOM output for **~10x fewer tokens**.
+Use Plasmate as the browser backend for [Browser Use](https://github.com/browser-use/browser-use), replacing Chrome + Playwright with structured SOM output. Output size and token use depend on the page and model tokenizer.
 
-Browser Use is the most popular open-source AI browser agent framework. By default it feeds raw DOM trees to the LLM. Plasmate replaces this with the Semantic Object Model -  compact, structured page representations that preserve all interactive elements while stripping layout noise.
+Browser Use is an open-source AI browser agent framework. Plasmate's adapter
+uses the Semantic Object Model instead of a DOM-derived page representation,
+retaining supported interactive elements while stripping layout noise.
 
-Source: [`integrations/browser-use/`](https://github.com/nicepkg/plasmate/tree/master/integrations/browser-use)
+Source: [`integrations/browser-use/`](https://github.com/plasmate-labs/plasmate/tree/master/integrations/browser-use)
 
 ## Installation
 
@@ -50,10 +52,10 @@ asyncio.run(main())
 |---|---|---|
 | **Backend** | Chrome via Playwright | Plasmate MCP subprocess |
 | **Output to LLM** | Raw DOM tree | SOM (Semantic Object Model) |
-| **Typical tokens** | ~20,000 per page | ~2,000 per page |
+| **Context representation** | DOM and optional visual state | Structured SOM text |
 | **Interactive elements** | `[backend_node_id]<tag>` | `[N] role "label"` |
 | **Dependencies** | Chrome, Playwright | `plasmate` binary only |
-| **Startup time** | ~2-5s (browser launch) | ~50ms (subprocess) |
+| **Runtime** | Full browser process | Native Plasmate subprocess |
 
 SOM replaces DOM screenshots with structured text. Instead of parsing a raw DOM tree with thousands of nodes, the LLM sees a compact summary with numbered interactive elements:
 
@@ -71,7 +73,6 @@ SOM replaces DOM screenshots with structured text. Instead of parsing a raw DOM 
   142 points by someone
   [5] link "89 comments" -> /item?id=12345678
 
-[SOM] 87,234 -> 4,521 bytes (19.3x) | 156 elements, 89 interactive
 ```
 
 The lightweight extractor package also exposes `extract_action_plan()` and
@@ -101,17 +102,14 @@ clicks = extractor.find_action_targets_by_action(
 )
 ```
 
-## Token Savings
+## Output-size evidence
 
-| Site | HTML tokens | SOM tokens | Savings |
-|------|------------|------------|---------|
-| Hacker News | ~22,000 | ~1,500 | **15x** |
-| GitHub repo page | ~45,000 | ~3,500 | **13x** |
-| Wikipedia article | ~60,000 | ~5,000 | **12x** |
-| News article | ~35,000 | ~3,000 | **12x** |
-| E-commerce product | ~40,000 | ~4,000 | **10x** |
-
-Over a multi-step agent task (5-10 page loads), this translates to **50,000-150,000 fewer tokens**.
+In the v0.5.1 observational benchmark snapshots, serialized SOM was smaller than
+raw HTML by a median 9.98x across 83 successful non-JavaScript inputs out of 98
+attempted, and by a median 9.32x across 82 successful JavaScript inputs out of
+98 attempted. Results vary by page. These are serialized-byte ratios, not
+universal token, cost, latency, or task-success guarantees; measure the complete
+Browser Use workflow with your target pages and model.
 
 ## API Reference
 

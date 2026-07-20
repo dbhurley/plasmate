@@ -457,7 +457,7 @@
     </nav>
     <main class="content">
       <h1 id="pi-oh-my-pi-integration">Pi / oh-my-pi Integration</h1><p>Plasmate integrates with both <a href="https://github.com/badlogic/pi-mono">Pi</a> (the original coding agent by @mariozechner) and <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a> (the extended fork with MCP, LSP, browser, and subagent support) via MCP.</p>
-<p>Both agents discover Plasmate&#39;s 13 tools automatically through their MCP configuration.</p>
+<p>Both agents discover Plasmate&#39;s 19 tools automatically through their MCP configuration.</p>
 <h2 id="quick-setup">Quick Setup</h2><h3 id="oh-my-pi-recommended">oh-my-pi (recommended)</h3><p>oh-my-pi has native MCP support via its <code>mcp/</code> discovery layer. Add Plasmate to your MCP configuration:</p>
 <pre><code class="language-json">{
   &quot;servers&quot;: {
@@ -470,7 +470,7 @@
 }
 </code></pre>
 <p>Place this in your oh-my-pi MCP config file (typically <code>~/.config/oh-my-pi/mcp.json</code> or passed via <code>--mcp-config</code>).</p>
-<p>Once configured, oh-my-pi automatically discovers all 13 Plasmate tools:</p>
+<p>Once configured, oh-my-pi automatically discovers all 19 Plasmate tools:</p>
 <table>
 <thead>
 <tr>
@@ -485,6 +485,18 @@
 <tr>
 <td><code>extract_text</code></td>
 <td>Fetch a URL, return plain text only. Stateless.</td>
+</tr>
+<tr>
+<td><code>extract_links</code></td>
+<td>Fetch a URL, return deduplicated links. Stateless.</td>
+</tr>
+<tr>
+<td><code>cache_status</code></td>
+<td>Inspect cache hits, misses, and restorable page state.</td>
+</tr>
+<tr>
+<td><code>session_status</code></td>
+<td>Inspect active session capacity and page-state inventory.</td>
 </tr>
 <tr>
 <td><code>screenshot_page</code></td>
@@ -530,6 +542,18 @@
 <td><code>close_page</code></td>
 <td>Close a session and free resources.</td>
 </tr>
+<tr>
+<td><code>get_cookies</code></td>
+<td>Read cookies from a session.</td>
+</tr>
+<tr>
+<td><code>set_cookies</code></td>
+<td>Add or update cookies in a session.</td>
+</tr>
+<tr>
+<td><code>clear_cookies</code></td>
+<td>Remove cookies from a session.</td>
+</tr>
 </tbody></table>
 <h3 id="pi-original">Pi (original)</h3><p>Pi supports MCP tools through its <code>--mcp</code> flag or configuration:</p>
 <pre><code class="language-bash">pi --mcp plasmate=&quot;plasmate mcp&quot; &quot;Research the pricing on stripe.com/pricing&quot;
@@ -539,20 +563,20 @@
 command = &quot;plasmate&quot;
 args = [&quot;mcp&quot;]
 </code></pre>
-<h2 id="why-plasmate-with-pi">Why Plasmate with Pi?</h2><p>Pi and oh-my-pi both have built-in web browsing via their <code>web/</code> module, which typically uses headless Chrome or simple HTTP fetch + readability extraction. Plasmate replaces this with structured SOM output that uses 4x fewer tokens.</p>
+<h2 id="why-plasmate-with-pi">Why Plasmate with Pi?</h2><p>Pi and oh-my-pi both have built-in web browsing via their <code>web/</code> module, which can use headless Chrome or HTTP fetch plus readability extraction. Plasmate offers structured SOM output as another representation; its size depends on the page and tokenizer.</p>
 <h3 id="default-pi-web-browsing">Default Pi web browsing</h3><pre><code>User: What are the pricing tiers on stripe.com?
 
 Pi uses web_search + fetch → raw HTML or markdown
-→ ~30,000 tokens of page content in context
-→ Model reasons over noisy input
+→ Context size depends on the fetched page and extractor
 </code></pre>
 <h3 id="with-plasmate">With Plasmate</h3><pre><code>User: What are the pricing tiers on stripe.com?
 
 Pi calls fetch_page via MCP → SOM JSON
-→ ~8,000 tokens of structured content
 → Model receives typed regions, elements, and affordances
 </code></pre>
-<p>The token savings compound across multi-page research sessions. A 10-page research task that consumes 300,000 tokens with raw HTML uses approximately 80,000 tokens with SOM.</p>
+<p>SOM removes non-semantic markup, but the effect on a multi-page research session
+depends on the pages, prompts, repeated state, and model tokenizer. Byte-size
+observations should not be extrapolated directly into token budgets or cost.</p>
 <h2 id="multi-step-interaction-example">Multi-step Interaction Example</h2><p>oh-my-pi&#39;s subagent and task orchestration layer works well with Plasmate&#39;s stateful session tools. A multi-step workflow:</p>
 <pre><code>1. open_page(&quot;https://example.com/login&quot;)
    → Returns SOM with form fields: email input (e3), password input (e5), submit button (e7)
@@ -588,40 +612,14 @@ pi &quot;What are the trending topics on my Twitter timeline?&quot;
 # → Plasmate serves authenticated SOM via the stored cookie profile
 </code></pre>
 <p>See the <a href="/guide-authenticated-browsing">Authenticated Browsing guide</a> for setup details.</p>
-<h2 id="performance">Performance</h2><table>
-<thead>
-<tr>
-<th>Metric</th>
-<th>Pi + raw fetch</th>
-<th>Pi + Plasmate</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Tokens per page</td>
-<td>~33,000</td>
-<td>~8,300</td>
-</tr>
-<tr>
-<td>Latency (warm)</td>
-<td>200-500ms</td>
-<td>200-400ms</td>
-</tr>
-<tr>
-<td>Multi-page (10 pages)</td>
-<td>~330K tokens</td>
-<td>~83K tokens</td>
-</tr>
-<tr>
-<td>Memory</td>
-<td>Depends on browser</td>
-<td>~30MB / 100 pages</td>
-</tr>
-<tr>
-<td>Form filling</td>
-<td>Requires Playwright/CDP</td>
-<td>Native (type_text, select_option, toggle)</td>
-</tr>
-</tbody></table>
+<h2 id="evaluation-notes">Evaluation notes</h2><p>In the v0.5.1 observational benchmark snapshots, the median serialized-byte
+ratio was 9.98x across 83 successful non-JavaScript inputs out of 98 attempted
+and 9.32x across 82 successful JavaScript inputs out of 98 attempted. Those
+ratios vary by page and are not universal token, cost, latency, memory, or
+task-success guarantees. Benchmark the end-to-end Pi workflow on your corpus.</p>
+<p>For capability comparisons, Pi&#39;s raw-fetch path may require Playwright or CDP
+for form filling; Plasmate exposes <code>type_text</code>, <code>select_option</code>, and <code>toggle</code>
+through MCP.</p>
 
     </main>
   </div>

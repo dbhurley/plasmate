@@ -2,7 +2,7 @@
 
 The Semantic Object Model (SOM) is a formal, open specification for representing web pages as structured JSON documents optimized for LLM and agent consumption. SOM compiles raw HTML into compact, semantically meaningful output that preserves interactive elements and content hierarchy while stripping presentational noise.
 
-The full specification is at [`specs/SOM-SPEC-v1.0.md`](https://github.com/nicepkg/plasmate/blob/master/specs/SOM-SPEC-v1.0.md) in the repository.
+The full specification is at [`specs/SOM-SPEC-v1.0.md`](https://github.com/plasmate-labs/plasmate/blob/master/specs/SOM-SPEC-v1.0.md) in the repository.
 
 ## Document Structure
 
@@ -91,7 +91,7 @@ Non-interactive elements omit the `actions` field entirely.
 
 ## JSON Schema
 
-The formal JSON Schema is at [`specs/som-schema.json`](https://github.com/nicepkg/plasmate/blob/master/specs/som-schema.json). Use it to validate SOM output from any producer:
+The formal JSON Schema is at [`specs/som-schema.json`](https://github.com/plasmate-labs/plasmate/blob/master/specs/som-schema.json). Use it to validate SOM output from any producer:
 
 ```bash
 # Using ajv-cli
@@ -111,7 +111,7 @@ print('Valid SOM document')
 
 ## Conformance Tests
 
-The conformance test suite at [`specs/conformance/`](https://github.com/nicepkg/plasmate/tree/master/specs/conformance) contains HTML inputs paired with expected SOM outputs. Use these to verify a SOM producer handles all element types, region detection, ID generation, and budget enforcement correctly.
+The conformance test suite at [`specs/conformance/`](https://github.com/plasmate-labs/plasmate/tree/master/specs/conformance) contains HTML inputs paired with expected SOM outputs. Use these to verify a SOM producer handles all element types, region detection, ID generation, and budget enforcement correctly.
 
 ## What's Next
 

@@ -1,8 +1,8 @@
 # CrewAI Integration
 
-Give your CrewAI agents web browsing superpowers -  Plasmate provides structured SOM pages at **~10x fewer tokens** than raw HTML scraping.
+Give your CrewAI agents structured SOM pages instead of raw HTML scraping. The resulting context size depends on the page and model tokenizer.
 
-Source: [`integrations/crewai/`](https://github.com/nicepkg/plasmate/tree/master/integrations/crewai)
+Source: [`integrations/crewai/`](https://github.com/plasmate-labs/plasmate/tree/master/integrations/crewai)
 
 ## Installation
 
@@ -44,7 +44,7 @@ print(result)
 
 ### `PlasmateWebTool`
 
-Fetches a URL and returns SOM text. Drop-in replacement for `ScrapeWebsiteTool` with dramatically fewer tokens.
+Fetches a URL and returns SOM text. Use it in place of `ScrapeWebsiteTool` when your workflow benefits from semantic regions and indexed actions.
 
 ```python
 from plasmate.integrations.crewai import PlasmateWebTool
@@ -69,12 +69,14 @@ tool = PlasmateBrowseTool()
 | | ScrapeWebsiteTool | PlasmateWebTool |
 |---|---|---|
 | **Output** | Raw HTML/text | Structured SOM |
-| **Tokens per page** | ~20,000-40,000 | ~2,000-4,000 |
+| **Context representation** | Raw HTML/text | Structured SOM |
 | **Interactive elements** | Lost | Indexed `[N]` |
 | **Multi-step browsing** | ❌ | ✅ |
 | **Dependencies** | requests + beautifulsoup | `plasmate` binary |
 
-Over a typical crew run with 5-10 page loads, you save **50,000-150,000 tokens** -  significant cost reduction at scale.
+SOM removes non-semantic markup, but token and cost differences vary with the
+pages, prompts, and model tokenizer. Benchmark the full crew workflow before
+planning context or spend.
 
 ## Links
 

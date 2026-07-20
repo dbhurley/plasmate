@@ -4,17 +4,17 @@
 **Web Content for AI Agents Community Group**
 
 ## Mission Statement
-Develop and maintain the Semantic Object Model (SOM) specification - a standardized JSON format for representing web page content in a form optimized for consumption by AI agents and language models, reducing token costs by 90%+ while preserving semantic meaning and interactivity.
+Develop and maintain the Semantic Object Model (SOM) specification - a standardized JSON format for representing web page content in a form optimized for consumption by AI agents and language models while preserving semantic meaning and interactivity. Output-size and token impact are page-, configuration-, corpus-, and tokenizer-dependent.
 
 ## Background
 AI agents increasingly need to read and interact with web pages. The current approach - sending raw HTML or DOM snapshots to language models - is wasteful and lossy:
 
-- A typical web page contains 300-500KB of HTML, of which 80-95% is presentation markup (CSS classes, layout divs, script tags, tracking pixels)
-- This noise costs real money at $2.50-$10 per million input tokens
+- Web pages can contain substantial presentation and runtime markup (CSS classes, layout divs, script tags, tracking elements)
+- Sending irrelevant markup through a model can add avoidable input cost
 - The DOM is a rendering tree optimized for visual browsers, not a meaning tree optimized for machine understanding
 - No standard exists for representing web content to AI agents
 
-SOM addresses this by compiling HTML into a structured JSON representation that preserves content, structure, and interactivity while discarding presentation markup. Benchmarks across 49 real-world websites show a median 10.5x compression ratio and 94% token cost savings.
+SOM addresses this by compiling HTML into a structured JSON representation that preserves content, structure, and interactivity while discarding presentation markup. A March 2026 exploratory 49-URL model reported output-size and token-cost estimates, but it predates the current retained-artifact, corpus-digest, and provenance policy and is not a current or universal performance claim.
 
 ## Scope of Work
 1. **SOM Specification** - Define and iterate on the SOM JSON schema, including:

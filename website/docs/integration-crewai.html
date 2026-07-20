@@ -456,8 +456,8 @@
       </div>
     </nav>
     <main class="content">
-      <h1 id="crewai-integration">CrewAI Integration</h1><p>Give your CrewAI agents web browsing superpowers -  Plasmate provides structured SOM pages at <strong>~10x fewer tokens</strong> than raw HTML scraping.</p>
-<p>Source: <a href="https://github.com/nicepkg/plasmate/tree/master/integrations/crewai"><code>integrations/crewai/</code></a></p>
+      <h1 id="crewai-integration">CrewAI Integration</h1><p>Give your CrewAI agents structured SOM pages instead of raw HTML scraping. The resulting context size depends on the page and model tokenizer.</p>
+<p>Source: <a href="https://github.com/plasmate-labs/plasmate/tree/master/integrations/crewai"><code>integrations/crewai/</code></a></p>
 <h2 id="installation">Installation</h2><pre><code class="language-bash">pip install plasmate crewai crewai-tools
 </code></pre>
 <h2 id="quick-start">Quick Start</h2><pre><code class="language-python">from crewai import Agent, Task, Crew
@@ -486,7 +486,7 @@ crew = Crew(agents=[researcher], tasks=[task])
 result = crew.kickoff()
 print(result)
 </code></pre>
-<h2 id="available-tools">Available Tools</h2><h3 id="plasmatewebtool">`PlasmateWebTool`</h3><p>Fetches a URL and returns SOM text. Drop-in replacement for <code>ScrapeWebsiteTool</code> with dramatically fewer tokens.</p>
+<h2 id="available-tools">Available Tools</h2><h3 id="plasmatewebtool">`PlasmateWebTool`</h3><p>Fetches a URL and returns SOM text. Use it in place of <code>ScrapeWebsiteTool</code> when your workflow benefits from semantic regions and indexed actions.</p>
 <pre><code class="language-python">from plasmate.integrations.crewai import PlasmateWebTool
 
 tool = PlasmateWebTool()
@@ -512,9 +512,9 @@ tool = PlasmateBrowseTool()
 <td>Structured SOM</td>
 </tr>
 <tr>
-<td><strong>Tokens per page</strong></td>
-<td>~20,000-40,000</td>
-<td>~2,000-4,000</td>
+<td><strong>Context representation</strong></td>
+<td>Raw HTML/text</td>
+<td>Structured SOM</td>
 </tr>
 <tr>
 <td><strong>Interactive elements</strong></td>
@@ -532,7 +532,9 @@ tool = PlasmateBrowseTool()
 <td><code>plasmate</code> binary</td>
 </tr>
 </tbody></table>
-<p>Over a typical crew run with 5-10 page loads, you save <strong>50,000-150,000 tokens</strong> -  significant cost reduction at scale.</p>
+<p>SOM removes non-semantic markup, but token and cost differences vary with the
+pages, prompts, and model tokenizer. Benchmark the full crew workflow before
+planning context or spend.</p>
 <h2 id="links">Links</h2><ul>
 <li><a href="https://docs.crewai.com">CrewAI Docs</a></li>
 <li><a href="sdk-python">Plasmate Python SDK</a></li>

@@ -1,6 +1,6 @@
 ---
 title: "Plasmate vs Crawl4AI: LLM-Ready Web Extraction Compared"
-description: "Compare Plasmate and Crawl4AI for extracting web content for AI agents and LLMs. See how Plasmate's SOM engine compares to Crawl4AI's Python-based async crawler for speed, token efficiency, and integration options."
+description: "Compare Plasmate's SOM engine with Crawl4AI's Python-based crawler across output structure, browser capabilities, integration options, and page-dependent output size."
 ---
 
 # Plasmate vs Crawl4AI
@@ -19,10 +19,10 @@ Both are Apache-2.0 open source. Both solve the "web pages are too noisy for LLM
 
 | Feature | Plasmate | Crawl4AI |
 |---------|----------|----------|
-| **Architecture** | Custom Rust engine (~43MB binary) | Python library wrapping Playwright |
+| **Architecture** | Native Rust engine | Python library wrapping Playwright |
 | **Output format** | SOM (structured JSON) | Markdown, JSON, or structured data |
-| **Page processing speed** | 4-5ms | ~200-500ms (browser-bound) |
-| **Memory footprint** | ~30MB for 100 pages | Browser instance per session |
+| **Runtime profile** | Avoids a Chromium process | Uses Playwright and Chromium |
+| **Memory footprint** | Depends on page, concurrency, and JavaScript | Depends on browser sessions, pages, and concurrency |
 | **JavaScript execution** | Yes (V8 engine) | Yes (full Chromium via Playwright) |
 | **Async support** | Concurrent requests | Native Python async/await |
 | **Built-in chunking** | No | Yes (multiple strategies) |
@@ -45,7 +45,9 @@ The fundamental difference is architectural.
 plasmate fetch https://example.com
 ```
 
-**Crawl4AI** wraps Playwright, which in turn controls Chromium. This means full browser fidelity - perfect JavaScript execution, screenshots, and exact rendering. But it also means browser startup time, memory overhead, and Chromium installation.
+**Crawl4AI** wraps Playwright, which in turn controls Chromium. This provides
+Chromium rendering, JavaScript execution, and screenshots, while also requiring
+a browser installation and process.
 
 ```python
 from crawl4ai import AsyncWebCrawler
@@ -55,7 +57,9 @@ async with AsyncWebCrawler() as crawler:
     print(result.markdown)
 ```
 
-The tradeoff: Plasmate is faster and lighter. Crawl4AI has full browser capabilities.
+The tradeoff is architectural: Plasmate avoids a full visual-browser process,
+while Crawl4AI provides Chromium's rendering and browser capabilities. The
+performance impact depends on the workload and should be measured directly.
 
 ---
 
@@ -93,41 +97,25 @@ For agents that need to *act* on pages (clicking links, filling forms), SOM prov
 
 ---
 
-## Speed: 4-5ms vs Browser Time
+## Runtime model
 
-Processing speed differs by an order of magnitude.
-
-**Plasmate** processes pages in 4-5ms after network fetch. No browser startup, no rendering pipeline, no screenshot encoding.
-
-**Crawl4AI** runs at browser speed - typically 200-500ms per page including JavaScript execution, rendering, and content extraction. For sites requiring full JS rendering, this is unavoidable.
-
-| Metric | Plasmate | Crawl4AI |
-|--------|----------|----------|
-| Startup time | ~50ms | 2-5s (browser launch) |
-| Per-page processing | 4-5ms | 200-500ms |
-| Pages per second | ~200 | ~2-4 |
-| Memory (100 pages) | ~30MB | ~2-20GB |
-
-For high-volume extraction, this difference compounds significantly.
+**Plasmate** uses its own parser, SOM compiler, and V8 integration without a
+Chromium rendering pipeline. **Crawl4AI** uses Playwright and Chromium, enabling
+full rendering and screenshots. Startup, per-page latency, throughput, and
+memory depend on the sites, rendering needs, concurrency, hardware, and cache
+state. Benchmark both tools with the same corpus and settings.
 
 ---
 
-## Token Efficiency
+## Output Representation and Size
 
-Both tools compress web content, but to different degrees.
-
-**Crawl4AI's markdown** typically achieves 5-15x compression versus raw HTML. Removes scripts, styles, and boilerplate.
-
-**Plasmate's SOM** achieves 10-800x compression:
-
-| Site | Raw HTML | SOM | Compression |
-|------|----------|-----|-------------|
-| cloud.google.com | 1.9 MB | 16 KB | 117x |
-| linear.app | 2.2 MB | 21 KB | 105x |
-| reddit.com | 484 KB | 4.7 KB | 104x |
-| Median (49 sites) | - | - | 10.5x |
-
-At scale, better compression means lower token costs and faster LLM responses.
+Both tools remove parts of raw markup, but their different output schemas make a
+universal compression comparison misleading. In the v0.5.1 Plasmate
+observational snapshots, the median serialized-byte ratio was 9.98x across 83
+successful non-JavaScript inputs out of 98 attempted and 9.32x across 82
+successful JavaScript inputs out of 98 attempted. Crawl4AI was not measured in
+those runs. The observations vary by page and are not universal token, cost,
+latency, or task-success guarantees.
 
 ---
 
@@ -198,11 +186,11 @@ async with AsyncWebCrawler() as crawler:
 
 ## When to Use Plasmate
 
-- **Speed-critical agents**: 4-5ms vs 200-500ms per page
-- **Token-sensitive workflows**: 10-800x compression reduces LLM costs
+- **Native-engine workflows**: Avoid a full Chromium process when its capabilities are unnecessary
+- **Structured-context workflows**: Use semantic regions and indexed actions, measuring size with your corpus and tokenizer
 - **MCP integration**: Native support for Claude Code, Cursor, and other MCP clients
-- **High-volume extraction**: Process hundreds of pages per second
-- **Resource-constrained environments**: No browser required, minimal memory
+- **High-volume extraction**: When local benchmark results favor the native runtime for your workload
+- **Deployments without Chromium**: No browser installation required
 - **Structured actions**: When agents need to click, type, or navigate
 
 ## When to Use Crawl4AI
@@ -220,10 +208,11 @@ async with AsyncWebCrawler() as crawler:
 
 Both tools are open source. You can use them for different parts of a pipeline:
 
-1. **Plasmate for speed-critical reads** - Quick page understanding, low token usage
+1. **Plasmate for structured reads** - Semantic regions and indexed actions
 2. **Crawl4AI for complex extraction** - When you need chunking, LLM extraction, or screenshots
 
-Plasmate handles the 90% of pages that are straightforward. Crawl4AI handles the 10% that need more sophisticated extraction.
+Route pages according to the capabilities they require, and validate the split
+against real success and failure cases from your workload.
 
 ---
 
@@ -231,18 +220,20 @@ Plasmate handles the 90% of pages that are straightforward. Crawl4AI handles the
 
 | If you need... | Use |
 |----------------|-----|
-| Maximum speed | Plasmate |
-| Lowest token usage | Plasmate |
+| Native engine without Chromium | Plasmate |
+| Built-in visual-browser rendering | Crawl4AI |
 | MCP/CDP integration | Plasmate |
 | Python-native workflow | Crawl4AI |
 | Built-in chunking strategies | Crawl4AI |
 | Markdown output | Crawl4AI |
 | LLM extraction with schemas | Crawl4AI |
 | Screenshots | Crawl4AI |
-| High-volume scraping | Plasmate |
+| Corpus-specific throughput choice | Benchmark both |
 | Session/cookie management | Crawl4AI |
 
-Both are solid open-source tools. Plasmate optimizes for speed and token efficiency. Crawl4AI optimizes for Python ergonomics and extraction flexibility. Choose based on your workflow.
+Both are open-source tools. Plasmate emphasizes structured SOM and a native
+runtime; Crawl4AI emphasizes Python ergonomics and extraction flexibility.
+Choose using capability requirements and measurements from your workflow.
 
 ---
 
@@ -260,7 +251,7 @@ pip install crawl4ai
 crawl4ai-setup  # Install browser
 ```
 
-[Plasmate Docs](https://plasmate.app/docs/overview) | [Plasmate GitHub](https://github.com/nicholasoxford/plasmate) | [Crawl4AI GitHub](https://github.com/unclecode/crawl4ai)
+[Plasmate Docs](https://plasmate.app/docs/overview) | [Plasmate GitHub](https://github.com/plasmate-labs/plasmate) | [Crawl4AI GitHub](https://github.com/unclecode/crawl4ai)
 
 ---
 

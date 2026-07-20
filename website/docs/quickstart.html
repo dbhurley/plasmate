@@ -503,7 +503,9 @@ console.log(await page.title());
 <h3 id="benchmark-mode">Benchmark mode</h3><p>Run the built-in throughput benchmark against a set of local pages:</p>
 <pre><code class="language-sh">plasmate throughput-bench --base-url http://localhost:8765 --pages 100
 </code></pre>
-<h2 id="awp-protocol-quick-reference">AWP Protocol (Quick Reference)</h2><p>AWP v0.1 has 7 methods:</p>
+<h2 id="awp-protocol-quick-reference">AWP Protocol (Quick Reference)</h2><p>AWP&#39;s foundational v0.1 core has seven methods. The current native handler also
+exposes session-listing, network-interception, plugin, cookie, and proxy-pool
+extensions:</p>
 <table>
 <thead>
 <tr>
@@ -540,6 +542,8 @@ console.log(await page.title());
 <td>Extract structured data, interactive elements, or specific fields</td>
 </tr>
 </tbody></table>
+<p>Click, type, select, scroll, toggle, and clear are actions carried by
+<code>page.act</code>, not separate AWP wire methods.</p>
 <h3 id="example-awp-session-python-pseudocode">Example AWP session (Python pseudocode)</h3><pre><code class="language-python">import asyncio, websockets, json
 
 async def main():

@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>MCP Server - Plasmate Docs | The Better Browser for AI Agents</title>
-  <meta name="description" content="MCP Server - Plasmate documentation. The better browser for AI agents, built on the Semantic Object Model (SOM). W3C Community Group member." />
-  <meta name="keywords" content="Plasmate, browser for AI agents, SOM, semantic object model, agent web protocol, AWP, W3C, mcp server" />
+  <title>Native MCP Server - Plasmate Docs | The Better Browser for AI Agents</title>
+  <meta name="description" content="Native MCP Server - Plasmate documentation. The better browser for AI agents, built on the Semantic Object Model (SOM). W3C Community Group member." />
+  <meta name="keywords" content="Plasmate, browser for AI agents, SOM, semantic object model, agent web protocol, AWP, W3C, native mcp server" />
   <link rel="canonical" href="https://docs.plasmate.app/integration-mcp" />
   <link rel="alternate" type="application/som+json" href="/.well-known/som.json" title="SOM (Plasmate)" />
 
@@ -456,135 +456,57 @@
       </div>
     </nav>
     <main class="content">
-      <h1 id="mcp-server">MCP Server</h1><blockquote>
-<p><strong>Plasmate is listed on the <a href="https://registry.modelcontextprotocol.io/">official MCP Registry</a>.</strong> Claude, Cursor, and other MCP clients can discover and install it automatically.</p>
-</blockquote>
-<p>Plasmate&#39;s MCP (Model Context Protocol) server lets AI coding assistants browse the web through Plasmate -  structured SOM output instead of raw HTML.</p>
-<p>Source: <a href="https://github.com/nicepkg/plasmate/tree/master/integrations/mcp"><code>plasmate-mcp</code></a></p>
-<h2 id="supported-clients">Supported Clients</h2><table>
-<thead>
-<tr>
-<th>Client</th>
-<th>Status</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Claude Code</td>
-<td>✅ Supported</td>
-</tr>
-<tr>
-<td>Claude Desktop</td>
-<td>✅ Supported</td>
-</tr>
-<tr>
-<td>Cursor</td>
-<td>✅ Supported</td>
-</tr>
-<tr>
-<td>Windsurf</td>
-<td>✅ Supported</td>
-</tr>
-<tr>
-<td>Any MCP client</td>
-<td>✅ Supported</td>
-</tr>
-</tbody></table>
-<h2 id="setup">Setup</h2><h3 id="claude-code">Claude Code</h3><pre><code class="language-bash">claude mcp add plasmate -- npx plasmate-mcp
+      <h1 id="native-mcp-server">Native MCP Server</h1><p>Plasmate&#39;s native MCP server exposes structured page fetching, inspection, and
+stateful interaction over stdio. Its source is
+<a href="https://github.com/plasmate-labs/plasmate/tree/master/src/mcp"><code>src/mcp/</code></a>, and
+the authoritative tool registration is
+<a href="https://github.com/plasmate-labs/plasmate/blob/master/src/mcp/server.rs"><code>src/mcp/server.rs</code></a>.</p>
+<p>The checked-in v0.6.0 Registry metadata is a next-release candidate. Do not
+publish or install its OCI declaration until the newly labeled v0.6.0 image is
+built and anonymously pullable. The npm and PyPI packages named <code>plasmate</code> are
+client SDKs, not native server executables.</p>
+<h2 id="install-the-native-engine">Install the native engine</h2><pre><code class="language-bash">curl -fsSL https://plasmate.app/install.sh | sh
+# or
+cargo install plasmate
 </code></pre>
-<p>That&#39;s it. Claude Code will now have <code>plasmate_fetch</code>, <code>plasmate_navigate</code>, <code>plasmate_click</code>, and <code>plasmate_type</code> tools available.</p>
-<h3 id="claude-desktop">Claude Desktop</h3><p>Add to <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS) or <code>%APPDATA%\Claude\claude_desktop_config.json</code> (Windows):</p>
+<h2 id="configure-an-mcp-client">Configure an MCP client</h2><p>Use this stdio configuration with Claude Desktop, Cursor, Windsurf, or another
+MCP-compatible client:</p>
 <pre><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;plasmate&quot;: {
-      &quot;command&quot;: &quot;npx&quot;,
-      &quot;args&quot;: [&quot;-y&quot;, &quot;plasmate-mcp&quot;]
+      &quot;command&quot;: &quot;plasmate&quot;,
+      &quot;args&quot;: [&quot;mcp&quot;]
     }
   }
 }
 </code></pre>
-<p>Restart Claude Desktop after editing.</p>
-<h3 id="cursor">Cursor</h3><p>Open Settings → MCP Servers → Add:</p>
-<pre><code class="language-json">{
-  &quot;plasmate&quot;: {
-    &quot;command&quot;: &quot;npx&quot;,
-    &quot;args&quot;: [&quot;-y&quot;, &quot;plasmate-mcp&quot;]
-  }
-}
+<p>For Claude Code:</p>
+<pre><code class="language-bash">claude mcp add plasmate -- plasmate mcp
 </code></pre>
-<h3 id="windsurf">Windsurf</h3><p>Add to your Windsurf MCP config:</p>
-<pre><code class="language-json">{
-  &quot;mcpServers&quot;: {
-    &quot;plasmate&quot;: {
-      &quot;command&quot;: &quot;npx&quot;,
-      &quot;args&quot;: [&quot;-y&quot;, &quot;plasmate-mcp&quot;]
-    }
-  }
-}
+<p>The server communicates over stdin/stdout using MCP JSON-RPC. Run it directly
+for protocol debugging:</p>
+<pre><code class="language-bash">plasmate mcp
 </code></pre>
-<h3 id="manual-stdio">Manual (stdio)</h3><pre><code class="language-bash">npx plasmate-mcp
-</code></pre>
-<p>The server communicates over stdin/stdout using the MCP JSON-RPC protocol.</p>
-<h2 id="available-tools">Available Tools</h2><table>
-<thead>
-<tr>
-<th>Tool</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>plasmate_fetch</code></td>
-<td>Stateless page fetch -  returns SOM text</td>
-</tr>
-<tr>
-<td><code>plasmate_navigate</code></td>
-<td>Open URL in persistent session</td>
-</tr>
-<tr>
-<td><code>plasmate_click</code></td>
-<td>Click element by SOM index</td>
-</tr>
-<tr>
-<td><code>plasmate_type</code></td>
-<td>Type into input by SOM index</td>
-</tr>
-</tbody></table>
-<h3 id="example-fetch-a-page">Example: Fetch a page</h3><pre><code>Use plasmate_fetch to get the contents of https://news.ycombinator.com
-</code></pre>
-<p>The LLM receives structured SOM output (~1,500 tokens) instead of raw HTML (~22,000 tokens).</p>
-<h3 id="example-multi-step-browsing">Example: Multi-step browsing</h3><pre><code>Navigate to https://github.com, search for &quot;plasmate&quot;, and tell me the top result.
-</code></pre>
-<p>The agent uses <code>plasmate_navigate</code> → <code>plasmate_type</code> → <code>plasmate_click</code> in sequence.</p>
-<h2 id="configuration">Configuration</h2><p>Environment variables:</p>
-<table>
-<thead>
-<tr>
-<th>Variable</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>PLASMATE_BINARY</code></td>
-<td><code>plasmate</code></td>
-<td>Path to plasmate binary</td>
-</tr>
-<tr>
-<td><code>PLASMATE_TIMEOUT</code></td>
-<td><code>30</code></td>
-<td>Request timeout in seconds</td>
-</tr>
-<tr>
-<td><code>PLASMATE_BUDGET</code></td>
-<td>-</td>
-<td>Optional SOM token budget</td>
-</tr>
-</tbody></table>
-<h2 id="why-mcp-plasmate">Why MCP + Plasmate?</h2><ul>
-<li><strong>10-16x fewer tokens</strong> per page load → cheaper, faster agent loops</li>
-<li><strong>Structured output</strong> → LLM understands page layout, not HTML soup</li>
-<li><strong>Interactive elements indexed</strong> → click/type by <code>[N]</code> reference</li>
-<li><strong>No Chrome dependency</strong> → works on headless servers, CI, containers</li>
+<h2 id="tool-surface">Tool surface</h2><p>The native server advertises its current tools through MCP <code>tools/list</code>; clients
+should discover them rather than depend on a hard-coded count. The surface
+includes:</p>
+<ul>
+<li>stateless fetch, text/link extraction, ARD discovery, crawl-policy, and page
+inspection;</li>
+<li>cache, session, trace, and validation-only replay operations;</li>
+<li>screenshots and persistent page sessions;</li>
+<li>navigation, evaluation, click/type/select/scroll/toggle/clear interactions;</li>
+<li>cookie read, write, and clear operations.</li>
 </ul>
+<p>Sensitive mutations remain subject to the server&#39;s explicit policy and
+workflow authorization controls.</p>
+<h2 id="output-size-expectations">Output-size expectations</h2><p>SOM removes presentation and runtime markup, but output reduction varies by
+page, selector, JavaScript mode, budget, and corpus. Retained v0.5.1
+observational snapshots recorded median serialized-byte ratios of 9.98x over 83
+successful non-JavaScript inputs and 9.32x over 82 successful JavaScript inputs,
+from 98 attempted URLs per run. These are byte ratios—not universal token,
+cost, latency, or task-success guarantees. See the
+<a href="https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md">benchmark policy</a>.</p>
 
     </main>
   </div>

@@ -456,9 +456,11 @@
       </div>
     </nav>
     <main class="content">
-      <h1 id="browser-use-integration">Browser Use Integration</h1><p>Use Plasmate as the browser backend for <a href="https://github.com/browser-use/browser-use">Browser Use</a>, replacing Chrome + Playwright with SOM output for <strong>~10x fewer tokens</strong>.</p>
-<p>Browser Use is the most popular open-source AI browser agent framework. By default it feeds raw DOM trees to the LLM. Plasmate replaces this with the Semantic Object Model -  compact, structured page representations that preserve all interactive elements while stripping layout noise.</p>
-<p>Source: <a href="https://github.com/nicepkg/plasmate/tree/master/integrations/browser-use"><code>integrations/browser-use/</code></a></p>
+      <h1 id="browser-use-integration">Browser Use Integration</h1><p>Use Plasmate as the browser backend for <a href="https://github.com/browser-use/browser-use">Browser Use</a>, replacing Chrome + Playwright with structured SOM output. Output size and token use depend on the page and model tokenizer.</p>
+<p>Browser Use is an open-source AI browser agent framework. Plasmate&#39;s adapter
+uses the Semantic Object Model instead of a DOM-derived page representation,
+retaining supported interactive elements while stripping layout noise.</p>
+<p>Source: <a href="https://github.com/plasmate-labs/plasmate/tree/master/integrations/browser-use"><code>integrations/browser-use/</code></a></p>
 <h2 id="installation">Installation</h2><pre><code class="language-bash">pip install plasmate-browser-use
 </code></pre>
 <p>Requires the <code>plasmate</code> binary on your PATH:</p>
@@ -504,9 +506,9 @@ asyncio.run(main())
 <td>SOM (Semantic Object Model)</td>
 </tr>
 <tr>
-<td><strong>Typical tokens</strong></td>
-<td>~20,000 per page</td>
-<td>~2,000 per page</td>
+<td><strong>Context representation</strong></td>
+<td>DOM and optional visual state</td>
+<td>Structured SOM text</td>
 </tr>
 <tr>
 <td><strong>Interactive elements</strong></td>
@@ -519,9 +521,9 @@ asyncio.run(main())
 <td><code>plasmate</code> binary only</td>
 </tr>
 <tr>
-<td><strong>Startup time</strong></td>
-<td>~2-5s (browser launch)</td>
-<td>~50ms (subprocess)</td>
+<td><strong>Runtime</strong></td>
+<td>Full browser process</td>
+<td>Native Plasmate subprocess</td>
 </tr>
 </tbody></table>
 <p>SOM replaces DOM screenshots with structured text. Instead of parsing a raw DOM tree with thousands of nodes, the LLM sees a compact summary with numbered interactive elements:</p>
@@ -537,8 +539,6 @@ asyncio.run(main())
   [4] link &quot;Show HN: Something Cool&quot; -&gt; https://example.com
   142 points by someone
   [5] link &quot;89 comments&quot; -&gt; /item?id=12345678
-
-[SOM] 87,234 -&gt; 4,521 bytes (19.3x) | 156 elements, 89 interactive
 </code></pre>
 <p>The lightweight extractor package also exposes <code>extract_action_plan()</code> and
 <code>extract_action_plan_async()</code> for agents that want only reusable action
@@ -563,47 +563,12 @@ clicks = extractor.find_action_targets_by_action(
     enabled_only=True,
 )
 </code></pre>
-<h2 id="token-savings">Token Savings</h2><table>
-<thead>
-<tr>
-<th>Site</th>
-<th>HTML tokens</th>
-<th>SOM tokens</th>
-<th>Savings</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Hacker News</td>
-<td>~22,000</td>
-<td>~1,500</td>
-<td><strong>15x</strong></td>
-</tr>
-<tr>
-<td>GitHub repo page</td>
-<td>~45,000</td>
-<td>~3,500</td>
-<td><strong>13x</strong></td>
-</tr>
-<tr>
-<td>Wikipedia article</td>
-<td>~60,000</td>
-<td>~5,000</td>
-<td><strong>12x</strong></td>
-</tr>
-<tr>
-<td>News article</td>
-<td>~35,000</td>
-<td>~3,000</td>
-<td><strong>12x</strong></td>
-</tr>
-<tr>
-<td>E-commerce product</td>
-<td>~40,000</td>
-<td>~4,000</td>
-<td><strong>10x</strong></td>
-</tr>
-</tbody></table>
-<p>Over a multi-step agent task (5-10 page loads), this translates to <strong>50,000-150,000 fewer tokens</strong>.</p>
+<h2 id="output-size-evidence">Output-size evidence</h2><p>In the v0.5.1 observational benchmark snapshots, serialized SOM was smaller than
+raw HTML by a median 9.98x across 83 successful non-JavaScript inputs out of 98
+attempted, and by a median 9.32x across 82 successful JavaScript inputs out of
+98 attempted. Results vary by page. These are serialized-byte ratios, not
+universal token, cost, latency, or task-success guarantees; measure the complete
+Browser Use workflow with your target pages and model.</p>
 <h2 id="api-reference">API Reference</h2><h3 id="plasmatebrowser">`PlasmateBrowser`</h3><pre><code class="language-python">PlasmateBrowser(
     binary=&quot;plasmate&quot;,   # Path to plasmate binary
     timeout=30,          # Response timeout in seconds

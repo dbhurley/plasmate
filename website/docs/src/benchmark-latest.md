@@ -1,5 +1,12 @@
 # Plasmate Benchmark Results (March 2026)
 
+> **Historical evidence only.** This page records an exploratory Plasmate
+> v0.1.0 run from March 2026. The public-web section attempted 38 URLs and
+> succeeded on 36; its latency and byte-ratio results are specific to the stated
+> Apple Silicon runner and uncached network run. It predates the current
+> denominator/provenance schema and is not a v0.6 performance claim. See the
+> current [benchmark policy](https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md).
+
 ## CDP Parity Benchmark (Lightpanda campfire-commerce)
 
 **Test:** Puppeteer script navigates to a local product page, waits for JS-rendered content (product price, reviews from XHR), extracts structured data.

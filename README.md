@@ -31,14 +31,14 @@
 Dependency and CI trust policy, local audit commands, and scorecard promotion
 rules are documented in [Supply-chain policy](docs/SUPPLY-CHAIN.md).
 
-Plasmate compiles HTML into a **Semantic Object Model (SOM)**, a structured representation that LLMs can reason about directly. It runs JavaScript via V8, supports Puppeteer via CDP, and produces output that is 10-800x smaller than raw HTML.
+Plasmate compiles HTML into a **Semantic Object Model (SOM)**, a structured representation that LLMs can reason about directly. It runs JavaScript via V8 and supports Puppeteer through its CDP compatibility layer. SOM output removes presentation and runtime markup, but the byte and token reduction is page-, configuration-, and corpus-dependent.
 
 | | Plasmate | Lightpanda | Chrome |
 |---|---|---|---|
-| **Per page** | **4-5 ms** | 23 ms | 252 ms |
-| **Memory (100 pages)** | **~30 MB** | ~2.4 GB | ~20 GB |
-| **Binary** | **43 MB** | 59-111 MB | 300-500 MB |
-| **Output** | **SOM (10-800x smaller)** | Raw HTML | Raw HTML |
+| **Primary output** | **Structured SOM JSON** | Raw HTML / DOM | Raw HTML / DOM |
+| **JavaScript** | **Embedded V8 pipeline** | Browser runtime | Browser runtime |
+| **Agent protocol** | **Native MCP and AWP** | CDP | CDP |
+| **Benchmark policy** | **Retained, denominator-complete reports** | Project-specific | Project-specific |
 | **License** | **Apache-2.0** | AGPL-3.0 | Chromium |
 
 ## Install
@@ -66,7 +66,7 @@ need the corresponding SDK.
 plasmate fetch https://news.ycombinator.com
 ```
 
-Returns SOM JSON: structured regions, interactive elements with stable IDs, and content, typically 10x smaller than the raw HTML.
+Returns SOM JSON: structured regions, interactive elements with stable IDs, and content. Measure output size on the pages and configuration used by your application.
 
 ### Start a CDP server (Puppeteer compatible)
 
@@ -99,7 +99,12 @@ await browser.close();
 plasmate serve --protocol awp --host 127.0.0.1 --port 9222
 ```
 
-AWP has 7 methods: `navigate`, `snapshot`, `click`, `type`, `scroll`, `select`, `extract`. That's the entire protocol.
+AWP's foundational v0.1 core has seven wire methods: `awp.hello`,
+`session.create`, `session.close`, `page.navigate`, `page.observe`, `page.act`,
+and `page.extract`. The current native handler also exposes session-listing,
+network-interception, plugin, cookie, and proxy-pool extensions. Click, type,
+select, scroll, toggle, and clear are `page.act` actions, not separate wire
+methods.
 
 ### Run a supervised stateful workflow
 
@@ -201,7 +206,12 @@ Config file locations:
 - **VS Code Copilot** — `.vscode/mcp.json` (workspace) or user settings
 - **Windsurf** — `~/.codeium/windsurf/mcp_config.json`
 
-Once connected, 26 tools are available: `fetch_page`, `extract_text`, `extract_links`, `ard_discover`, `crawl_policy`, `inspect_page`, `cache_status`, `session_status`, `trace_status`, `trace_export`, `trace_clear`, `replay_validate`, `screenshot_page`, `open_page`, `navigate_to`, `click`, `type_text`, `select_option`, `scroll`, `toggle`, `clear`, `evaluate`, `close_page`, `get_cookies`, `set_cookies`, `clear_cookies`.
+Once connected, the native server advertises its current tool surface through
+MCP `tools/list`. It includes stateless fetch/extraction/discovery tools,
+cache/session/trace inspection, screenshot and stateful page interaction,
+cookie operations, and validation-only replay. Query `tools/list` instead of
+depending on a hard-coded count; the authoritative registration is
+[`src/mcp/server.rs`](./src/mcp/server.rs).
 
 **Tip:** use `selector="main"` to strip nav/footer, `selector="interactive"`
 to return only actionable elements, or `selector="action:click"` to build a
@@ -319,32 +329,19 @@ This wires the full Plasmate MCP tool set directly into any Vercel AI SDK agent.
 
 The DOM was built for rendering. SOM was built for reasoning.
 
-```
-Wikipedia homepage:
-  DOM  → 47,000 tokens
-  SOM  → 4,500 tokens (10.4x compression)
-
-accounts.google.com:
-  DOM  → ~300,000 tokens
-  SOM  → ~350 tokens (864x compression)
-```
-
 SOM strips layout, styling, scripts, SVGs, and boilerplate. It keeps structure, content, and interactive elements with stable IDs that agents can reference in actions.
 
-## Token Compression (38-site benchmark)
+## Output-size evidence
 
-| Site | HTML | SOM | Compression |
-|---|---|---|---|
-| accounts.google.com | 1.2 MB | 1.4 KB | **864x** |
-| x.com | 239 KB | 1.5 KB | **159x** |
-| linear.app | 2.2 MB | 21 KB | **105x** |
-| bing.com | 157 KB | 1.7 KB | **93x** |
-| google.com | 194 KB | 2.6 KB | **74x** |
-| vercel.com | 941 KB | 22 KB | **43x** |
-| ebay.com | 831 KB | 33 KB | **25x** |
-| Wikipedia | 1.7 MB | 70 KB | **25x** |
-
-Median compression: **10.2x** across 38 sites. [Full results](https://plasmate.app/compare).
+The retained v0.5.1 public-web snapshots in
+[`website/docs/coverage.json`](./website/docs/coverage.json) and
+[`website/docs/coverage-js.json`](./website/docs/coverage-js.json) recorded
+median serialized-byte ratios of 9.98x over 83 successful non-JavaScript inputs
+and 9.32x over 82 successful JavaScript inputs, respectively, from 98 attempted
+URLs in each run. These are historical, observational byte ratios—not universal
+token savings, cost savings, latency, or task-success claims. Blocked and failed
+inputs remain in the denominator. See [the benchmarking policy](docs/BENCHMARKING.md)
+before comparing or citing results.
 
 ## JavaScript Support
 
@@ -406,7 +403,8 @@ HTML → Network (reqwest) → HTML Parser (html5ever)
 - **Network**: reqwest with TLS, HTTP/2, redirects, compression; cookie jar supported, cookie APIs and proxy configuration are still limited
 - **JS Runtime**: V8 with DOM shim (80+ methods), blocking fetch bridge
 - **SOM Compiler**: semantic region detection, element ID generation, interactive element preservation, smart truncation, deduplication
-- **Protocols**: AWP (native, 7 methods) and CDP (Puppeteer compatibility)
+- **Protocols**: AWP (seven foundational core methods plus current extensions)
+  and CDP (Puppeteer compatibility)
 
 ## Build from Source
 

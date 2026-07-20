@@ -79,7 +79,7 @@ strong { color: var(--white); font-weight: 600; }
 
 <!-- COVER -->
 <div class="cover">
-  <div class="mark">Faster browsing.<br>Real logins.<br><span>Zero hassle.</span></div>
+  <div class="mark">Structured browsing.<br>Authenticated sessions.<br><span>Explicit controls.</span></div>
   <div class="subtitle">How to give your OpenClaw agent a real browser with authenticated access to X, GitHub, LinkedIn, and more.</div>
   <div class="meta">Guide for OpenClaw Users - March 2026</div>
 </div>
@@ -88,17 +88,17 @@ strong { color: var(--white); font-weight: 600; }
 <div class="page">
   <div class="section-label">The Problem</div>
   <h1>Your agent browses the web like it's 2004</h1>
-  <p>Right now, when your OpenClaw agent visits a website, it's using a full Chrome browser under the hood. That works, but it's <strong>slow</strong>, uses a ton of memory, and can't log into anything without you manually setting up sessions.</p>
+  <p>OpenClaw browser behavior depends on its configured integration. Full-browser workflows and structured-engine workflows expose different capabilities and resource profiles; neither has a universal speed or memory result.</p>
   <p>Want your agent to check your X mentions? Read your GitHub notifications? Monitor a LinkedIn thread? It can't, because it's not logged in, and logging in with a headless browser triggers bot detection on every major platform.</p>
 
-  <h2>What if your agent had its own fast browser that could log in as itself?</h2>
+  <h2>What if your agent had a structured browser surface with explicit session controls?</h2>
   <p>That's Plasmate.</p>
 
   <div class="card-grid">
     <div class="card">
       <div class="card-icon">⚡</div>
-      <h4>10x faster page loads</h4>
-      <p>Plasmate compiles HTML into structured data without rendering pixels. No GPU, no layout engine, no wasted work.</p>
+      <h4>Structured page loads</h4>
+      <p>Plasmate compiles HTML into structured data without a layout engine. Performance depends on page, JavaScript mode, cache state, build, and runner.</p>
     </div>
     <div class="card">
       <div class="card-icon">🔐</div>
@@ -113,7 +113,7 @@ strong { color: var(--white); font-weight: 600; }
     <div class="card">
       <div class="card-icon">💾</div>
       <h4>Tiny footprint</h4>
-      <p>~15MB binary. No Chrome download. Runs on a Raspberry Pi. Uses a fraction of the memory.</p>
+      <p>The native engine is distributed separately from Chrome. Verify platform support, binary size, and memory on the intended release and workload.</p>
     </div>
   </div>
 </div>
@@ -285,7 +285,7 @@ strong { color: var(--white); font-weight: 600; }
     </div>
     <div class="card">
       <h4>Plasmate</h4>
-      <p>Compiles HTML directly into structured data. Understands forms, buttons, links, and content natively. Fast, light, authenticated.</p>
+      <p>Compiles HTML into structured data and exposes forms, buttons, links, content, and authenticated session state.</p>
     </div>
   </div>
 

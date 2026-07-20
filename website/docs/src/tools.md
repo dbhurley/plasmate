@@ -4,7 +4,9 @@ Tools built on Plasmate for site auditing, accessibility testing, and CI/CD inte
 
 ## Site Auditor
 
-Crawl and audit websites for SEO and content quality issues. 10x faster than Chrome-based tools like Screaming Frog.
+Crawl and audit websites for SEO and content quality issues. Throughput and
+resource use depend on the corpus, JavaScript mode, concurrency, runner, and the
+compared tool's configuration; benchmark the intended audit workload directly.
 
 ```bash
 pip install plasmate plasmate-audit

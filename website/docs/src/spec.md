@@ -76,19 +76,18 @@ A native engine can solve this differently: by controlling the entire network st
 
 LLMs process web pages as text. The more tokens a page representation consumes, the more expensive and slow the agent becomes. Current approaches:
 
-| Method | Tokens for a typical e-commerce page | Notes |
+| Method | Primary representation | Measurement considerations |
 |---|---|---|
-| Raw HTML | 15,000-50,000 | Includes scripts, styles, metadata |
-| Cleaned HTML | 5,000-15,000 | Strip scripts/styles, still verbose |
-| Accessibility tree | 2,000-8,000 | Better, but inconsistent across sites |
-| Screenshot + vision | 1,000-3,000 (image tokens) | Expensive, can't interact with elements |
-| **SOM (proposed)** | **500-2,000** | Semantic elements with affordances only |
+| Raw HTML | Rendering and runtime markup | Page, response state, and tokenizer dependent |
+| Cleaned HTML | Filtered markup | Cleaner policy and retained structure vary |
+| Accessibility tree | Assistive semantic tree | Browser and page-state dependent |
+| Screenshot + vision | Pixels/image tokens | Model, resolution, and visual task dependent |
+| **SOM** | **Semantic regions, elements, and actions** | Selector, budget, JavaScript mode, serialization, and tokenizer dependent |
 
-A 10x reduction in tokens per page interaction means:
-- 10x cheaper per agent action
-- 10x more context available for reasoning
-- 10x faster response times
-- 10x more pages processable within context windows
+Serialized-byte reduction does not translate mechanically into token cost,
+latency, context capacity, or task success. Measure those outcomes independently
+on the exact corpus and runner, retain all attempted inputs, and follow the
+[benchmark policy](https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md).
 
 ### 2.4 What Exists Today
 

@@ -7,7 +7,7 @@
   <meta name="description" content="Honest, measured comparison of Plasmate, Lightpanda, and Chrome for agent automation. CDP parity benchmarks, feature matrix, and performance data." />
 
   <meta property="og:title" content="Plasmate vs Lightpanda vs Chrome" />
-  <meta property="og:description" content="Browser engine comparison for AI agents. Benchmarks, features, and real numbers." />
+  <meta property="og:description" content="Browser-engine capability comparison for AI agents, with explicit benchmark methodology and evidence limits." />
   <meta property="og:type" content="website" />
 
   <link rel="icon" href="/favicon.ico" sizes="any" />
@@ -378,131 +378,41 @@
 
     <main>
       <h1>Plasmate vs Lightpanda vs <span class="accent">Chrome</span></h1>
-      <p class="subhead">An honest, measured comparison of three browser engines for agent automation. All numbers are reproducible; methodology is linked below.</p>
+      <p class="subhead">A capability comparison for agent automation. Performance and output size depend on corpus, configuration, build profile, runner, and measurement method; measure the exact workload you plan to deploy.</p>
 
       <!-- Hero stats -->
       <div class="perf-grid">
         <div class="card plasmate-card">
-          <div class="card-engine">Speed advantage</div>
-          <div class="value">50x faster</div>
-          <div class="unit">than Chrome (4ms vs 252ms/page)</div>
+          <div class="card-engine">Plasmate output</div>
+          <div class="value">Structured SOM</div>
+          <div class="unit">semantic regions, elements, actions, and content</div>
         </div>
         <div class="card plasmate-card">
-          <div class="card-engine">Token savings</div>
-          <div class="value">94%</div>
-          <div class="unit">across 98 sites. Up to 1,544x on SPAs</div>
+          <div class="card-engine">Native protocols</div>
+          <div class="value">MCP + AWP</div>
+          <div class="unit">with a supported CDP compatibility layer</div>
         </div>
         <div class="card plasmate-card">
-          <div class="card-engine">Memory</div>
-          <div class="value">660x less</div>
-          <div class="unit">than Chrome (30MB vs 20GB for 100 pages)</div>
+          <div class="card-engine">Evidence policy</div>
+          <div class="value">Complete denominators</div>
+          <div class="unit">successful, blocked, failed, crash, and timeout inputs retained</div>
         </div>
       </div>
 
       <!-- ===== RAW ENGINE SPEED ===== -->
       <div class="panel">
-        <div class="section-label">Engine Performance</div>
-        <h2 class="section-title">HTML to structured output</h2>
-        <p class="para">Time to fetch HTML, parse it, execute JavaScript, and produce structured output. This is the core pipeline - what agents actually wait on.</p>
-
-        <div class="bar-group">
-          <div style="font-family:var(--font-mono);font-size:11px;color:rgba(240,237,232,0.5);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Per-page processing time</div>
-          <div class="bar-row">
-            <div class="bar-label">Plasmate</div>
-            <div class="bar-track">
-              <div class="bar-fill plasmate" style="width: 2%;">4-5 ms</div>
-            </div>
-          </div>
-          <div class="bar-row">
-            <div class="bar-label">Lightpanda</div>
-            <div class="bar-track">
-              <div class="bar-fill lightpanda" style="width: 9%;">23 ms</div>
-            </div>
-          </div>
-          <div class="bar-row">
-            <div class="bar-label">Chrome</div>
-            <div class="bar-track">
-              <div class="bar-fill chrome" style="width: 100%;">252 ms</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="bar-group">
-          <div style="font-family:var(--font-mono);font-size:11px;color:rgba(240,237,232,0.5);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Memory (100 concurrent pages)</div>
-          <div class="bar-row">
-            <div class="bar-label">Plasmate</div>
-            <div class="bar-track">
-              <div class="bar-fill plasmate" style="width: 1.5%;">~30 MB</div>
-            </div>
-          </div>
-          <div class="bar-row">
-            <div class="bar-label">Lightpanda</div>
-            <div class="bar-track">
-              <div class="bar-fill lightpanda" style="width: 12%;">~2.4 GB</div>
-            </div>
-          </div>
-          <div class="bar-row">
-            <div class="bar-label">Chrome</div>
-            <div class="bar-track">
-              <div class="bar-fill chrome" style="width: 100%;">~20 GB</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="bar-group">
-          <div style="font-family:var(--font-mono);font-size:11px;color:rgba(240,237,232,0.5);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Binary size</div>
-          <div class="bar-row">
-            <div class="bar-label">Plasmate</div>
-            <div class="bar-track">
-              <div class="bar-fill plasmate" style="width: 9%;">43 MB</div>
-            </div>
-          </div>
-          <div class="bar-row">
-            <div class="bar-label">Lightpanda</div>
-            <div class="bar-track">
-              <div class="bar-fill lightpanda" style="width: 22%;">59-111 MB</div>
-            </div>
-          </div>
-          <div class="bar-row">
-            <div class="bar-label">Chrome</div>
-            <div class="bar-track">
-              <div class="bar-fill chrome" style="width: 100%;">300-500 MB</div>
-            </div>
-          </div>
-        </div>
+        <div class="section-label">Performance</div>
+        <h2 class="section-title">Benchmark the deployed workload</h2>
+        <p class="para">A useful comparison must hold corpus, JavaScript mode, cache state, build profile, runner class, and success denominator constant. Plasmate's deterministic release suite records those fields and keeps all outcomes. Public-web snapshots are observational and cannot be compared to controlled local cold/warm samples.</p>
+        <p class="para">This page therefore does not publish a universal speed, memory, binary-size, token, or cost advantage over another engine. Use each project's current benchmark artifact and rerun the workload under the same conditions.</p>
       </div>
 
       <!-- ===== TOKEN COMPRESSION ===== -->
       <div class="panel">
-        <div class="section-label">Token Efficiency</div>
-        <h2 class="section-title">What the agent actually sees</h2>
-        <p class="para">Chrome and Lightpanda return raw HTML. Plasmate returns SOM, a semantic representation that strips layout, styling, and boilerplate. This is the difference that compounds at scale.</p>
-
-        <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Site</th>
-              <th>Raw HTML</th>
-              <th>SOM Output</th>
-              <th>Compression</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td><strong>accounts.google.com</strong></td><td>1.2 MB</td><td>1.4 KB</td><td class="cell-best">864x</td></tr>
-            <tr><td><strong>x.com (Twitter)</strong></td><td>239 KB</td><td>1.5 KB</td><td class="cell-best">159x</td></tr>
-            <tr><td><strong>linear.app</strong></td><td>2.2 MB</td><td>21 KB</td><td class="cell-best">105x</td></tr>
-            <tr><td><strong>bing.com</strong></td><td>157 KB</td><td>1.7 KB</td><td class="cell-best">93x</td></tr>
-            <tr><td><strong>google.com</strong></td><td>194 KB</td><td>2.6 KB</td><td class="cell-best">74x</td></tr>
-            <tr><td><strong>vercel.com</strong></td><td>941 KB</td><td>22 KB</td><td class="cell-best">43x</td></tr>
-            <tr><td><strong>steampowered.com</strong></td><td>842 KB</td><td>23 KB</td><td class="cell-best">36x</td></tr>
-            <tr><td><strong>ebay.com</strong></td><td>831 KB</td><td>33 KB</td><td class="cell-best">25x</td></tr>
-            <tr><td><strong>Wikipedia (USA)</strong></td><td>1.7 MB</td><td>70 KB</td><td class="cell-best">25x</td></tr>
-            <tr><td><strong>duckduckgo.com</strong></td><td>391 KB</td><td>12 KB</td><td class="cell-best">33x</td></tr>
-          </tbody>
-        </table>
-        </div>
-        <p class="note">Median compression across 98 sites: 9x (94 parsed, 98.9% success rate). Up to 1,544x on heavy SPAs. Lightpanda and Chrome return raw HTML (compression ratio: 1x). <a href="https://docs.plasmate.app/benchmark-cost" style="color: var(--ember);">Full cost analysis</a>.</p>
+        <div class="section-label">Output Representation</div>
+        <h2 class="section-title">What the agent receives</h2>
+        <p class="para">Plasmate returns structured SOM JSON; Chrome and Lightpanda workflows commonly expose HTML, DOM, accessibility, screenshot, or application-selected representations. Those outputs preserve different information and are not interchangeable compression codecs.</p>
+        <p class="note">Retained v0.5.1 observational snapshots recorded median serialized-byte ratios of 9.98x over 83 successful non-JavaScript inputs and 9.32x over 82 successful JavaScript inputs, from 98 attempted URLs per run. These are historical byte ratios—not universal token, cost, latency, or task-success claims. <a href="https://docs.plasmate.app/coverage" style="color: var(--ember);">Inspect all outcomes</a>.</p>
       </div>
 
       <!-- ===== FEATURE MATRIX ===== -->
@@ -649,10 +559,10 @@
               <td class="cell-no">No</td>
             </tr>
             <tr>
-              <td>Token compression</td>
-              <td class="cell-best">10-800x</td>
-              <td class="cell-na">N/A (raw HTML)</td>
-              <td class="cell-na">N/A (raw HTML)</td>
+              <td>Primary agent representation</td>
+              <td class="cell-best">Structured SOM</td>
+              <td class="cell-na">Workflow-selected</td>
+              <td class="cell-na">Workflow-selected</td>
             </tr>
             <tr>
               <td>Structured data extraction</td>
@@ -713,14 +623,14 @@
         <div class="panel">
           <div class="section-label">When to Use</div>
           <h2 class="section-title">Plasmate</h2>
-          <p class="para">Best for: high-volume page understanding, data extraction, LLM-driven agents that need to reason about web content. You care about tokens, speed, and memory more than pixel-perfect rendering.</p>
+          <p class="para">Best for: page understanding, structured extraction, and agents that benefit from explicit semantic regions and actions more than pixel-perfect rendering.</p>
           <p class="para">Not for: screenshot testing, visual regression, or workflows that require full browser rendering fidelity.</p>
         </div>
         <div class="panel">
           <div class="section-label">When to Use</div>
           <h2 class="section-title">Lightpanda / Chrome</h2>
           <p class="para">Best for: testing web applications, full JavaScript SPA support, cookie management, and any workflow that needs a complete browser environment with pixel-perfect rendering.</p>
-          <p class="para">Lightpanda is a faster, lighter Chrome alternative with the same paradigm. Chrome is the reference implementation.</p>
+          <p class="para">Lightpanda targets a browser-compatible automation model; Chrome is the reference implementation for Chromium behavior. Consult current upstream capability and benchmark documentation.</p>
         </div>
       </div>
 
@@ -728,10 +638,8 @@
       <div class="panel">
         <div class="section-label">Methodology</div>
         <h2 class="section-title">How we measured</h2>
-        <p class="para"><strong>Engine speed:</strong> Local benchmark harness with cached HTML pages. Measures parse + JS + SOM compilation time, excluding network latency. Lightpanda's published per-page number (23ms) is from their BENCHMARKS.md. Plasmate's number (4-5ms) is measured locally on macOS ARM with the same methodology.</p>
-        <p class="para"><strong>Token compression:</strong> 100 real websites fetched live across 13 categories (e-commerce, news, social, SaaS, developer tools, etc.). HTML byte count vs SOM byte count. Token estimates at ~4 chars/token. 98% success rate.</p>
-        <p class="para"><strong>Memory:</strong> Peak RSS measured during 100 concurrent page loads.</p>
-        <p class="para">All benchmarks are reproducible. Source code and benchmark scripts are in the <a href="https://github.com/plasmate-labs/plasmate" target="_blank" rel="noreferrer">Plasmate repo</a>.</p>
+        <p class="para">Plasmate's current policy separates deterministic loopback release gates from observational public-web coverage. Reports retain exact input and successful-sample denominators, cache/JS/build/runner metadata, and failure classifications. Byte reduction is supporting evidence and is never treated as task success.</p>
+        <p class="para">Read <a href="https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md" target="_blank" rel="noreferrer">the benchmark policy</a> and inspect the retained artifacts before making a comparison.</p>
       </div>
 
       <div class="foot">
