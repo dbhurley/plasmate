@@ -11,6 +11,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Compile the checkout identity into the binary so a restored Cargo cache
+  # cannot make the scorecard claim a different source revision.
+  PLASMATE_BUILD_GIT_SHA: ${{ github.sha }}
 
 jobs:
   coverage:
@@ -50,6 +53,12 @@ jobs:
             --no-js \
             --no-external \
             --max 100
+
+      - name: Validate coverage evidence schema
+        if: ${{ always() }}
+        run: |
+          test -s artifacts/coverage.json
+          ./target/release/plasmate coverage-validate --input artifacts/coverage.json
 
       - name: Upload coverage evidence
         if: ${{ always() }}

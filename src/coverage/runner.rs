@@ -1,10 +1,12 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use reqwest::cookie::Jar;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tokio::sync::Semaphore;
 use tracing::{debug, info, warn};
 
@@ -12,6 +14,12 @@ use crate::js::pipeline::{self, PipelineConfig};
 use crate::network::fetch;
 use crate::process_supervisor::{self, ProcessOutcome, ProcessOutput, ProcessSpec};
 use crate::som::compiler;
+
+pub const COVERAGE_SCHEMA_VERSION: &str = "plasmate.coverage.v2";
+const CORPUS_DIGEST_DOMAIN: &[u8] = b"plasmate.coverage.corpus.v1\0";
+const CORPUS_DIGEST_SCOPE: &str = "selected_ordered_input_urls";
+const CORPUS_CANONICALIZATION: &str =
+    "plasmate.coverage.corpus.v1: domain separator, then u64be byte length + UTF-8 bytes per URL";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoverageOptions {
@@ -153,16 +161,94 @@ pub struct CoverageSummary {
     pub median_ratio: f64,
     pub mean_ratio: f64,
     pub p95_ratio: f64,
+    /// Number of successful results contributing to compression statistics.
+    pub compression_samples: usize,
+    /// Non-overlapping outcome buckets for the complete input denominator.
+    /// The legacy `failed` field above includes crash and timeout results.
+    pub outcomes: CoverageOutcomes,
     pub breakdown: Vec<CoverageBreakdownItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct CoverageOutcomes {
+    pub inputs_total: usize,
+    pub success: usize,
+    pub blocked: usize,
+    pub failed: usize,
+    pub crash: usize,
+    pub timeout: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoverageReport {
+    pub schema_version: String,
     pub generated_at_utc: String,
     pub plasmate_version: String,
+    pub corpus: CoverageCorpus,
+    pub environment: CoverageEnvironment,
+    pub measurement: CoverageMeasurement,
     pub options: CoverageReportOptions,
     pub summary: CoverageSummary,
     pub results: Vec<CoverageResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoverageCorpus {
+    /// SHA-256 of the exact ordered URL sequence selected after parsing and `max_urls`.
+    pub sha256: String,
+    pub digest_scope: String,
+    pub canonicalization: String,
+    pub inputs_total: usize,
+    pub ordered_input_urls: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoverageEnvironment {
+    pub git_commit: Option<String>,
+    pub git_dirty: Option<bool>,
+    pub rustc_version: Option<String>,
+    pub build_profile: String,
+    pub operating_system: String,
+    pub architecture: String,
+    pub runner: CoverageRunner,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoverageRunner {
+    pub provider: String,
+    pub name: Option<String>,
+    pub operating_system: Option<String>,
+    pub architecture: Option<String>,
+    pub environment: Option<String>,
+    pub repository: Option<String>,
+    pub workflow: Option<String>,
+    pub run_id: Option<String>,
+    pub run_attempt: Option<String>,
+    pub event_name: Option<String>,
+    pub head_sha: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoverageMeasurement {
+    pub cache: CoverageCacheEvidence,
+    pub latency: CoverageLatencyEvidence,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoverageCacheEvidence {
+    pub collected: bool,
+    pub repetitions_per_input: usize,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoverageLatencyEvidence {
+    pub collected: bool,
+    pub method: String,
+    pub cache_state: String,
+    pub per_input_fields: Vec<String>,
+    pub fetch_samples: usize,
+    pub pipeline_samples: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -256,12 +342,245 @@ pub fn parse_urls_file(content: &str) -> Vec<String> {
         .collect()
 }
 
+/// Hash the exact ordered input sequence independently of line endings, comments,
+/// or ambiguous URL separators. Length framing means two different URL sequences
+/// cannot produce the same canonical byte stream through concatenation alone.
+pub fn corpus_sha256(urls: &[String]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(CORPUS_DIGEST_DOMAIN);
+    for url in urls {
+        hasher.update((url.len() as u64).to_be_bytes());
+        hasher.update(url.as_bytes());
+    }
+    hex::encode(hasher.finalize())
+}
+
+fn command_output(program: &str, arguments: &[&str]) -> Option<String> {
+    Command::new(program)
+        .args(arguments)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|output| output.trim().to_string())
+        .filter(|output| !output.is_empty())
+}
+
+fn optional_env(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn coverage_environment() -> CoverageEnvironment {
+    let github_actions = optional_env("GITHUB_ACTIONS").as_deref() == Some("true");
+    let generic_ci = optional_env("CI").as_deref() == Some("true");
+    let compile_time_git_commit = option_env!("PLASMATE_BUILD_GIT_SHA")
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(String::from);
+
+    CoverageEnvironment {
+        // CI sets PLASMATE_BUILD_GIT_SHA while compiling. Outside CI, runtime
+        // repository metadata is explicitly best-effort and therefore optional.
+        git_commit: compile_time_git_commit
+            .or_else(|| command_output("git", &["rev-parse", "HEAD"])),
+        git_dirty: Command::new("git")
+            .args(["status", "--porcelain"])
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| !output.stdout.is_empty()),
+        rustc_version: command_output("rustc", &["--version"]),
+        build_profile: if cfg!(debug_assertions) {
+            "debug".to_string()
+        } else {
+            "release".to_string()
+        },
+        operating_system: std::env::consts::OS.to_string(),
+        architecture: std::env::consts::ARCH.to_string(),
+        runner: CoverageRunner {
+            provider: if github_actions {
+                "github_actions"
+            } else if generic_ci {
+                "generic_ci"
+            } else {
+                "local"
+            }
+            .to_string(),
+            name: optional_env("RUNNER_NAME"),
+            operating_system: optional_env("RUNNER_OS"),
+            architecture: optional_env("RUNNER_ARCH"),
+            environment: optional_env("RUNNER_ENVIRONMENT"),
+            repository: optional_env("GITHUB_REPOSITORY"),
+            workflow: optional_env("GITHUB_WORKFLOW"),
+            run_id: optional_env("GITHUB_RUN_ID"),
+            run_attempt: optional_env("GITHUB_RUN_ATTEMPT"),
+            event_name: optional_env("GITHUB_EVENT_NAME"),
+            head_sha: optional_env("GITHUB_SHA"),
+        },
+    }
+}
+
+fn classify_outcomes(results: &[CoverageResult]) -> CoverageOutcomes {
+    let mut outcomes = CoverageOutcomes {
+        inputs_total: results.len(),
+        ..CoverageOutcomes::default()
+    };
+    for result in results {
+        match (&result.status, &result.failure_kind) {
+            (CoverageStatus::Ok, _) => outcomes.success += 1,
+            (CoverageStatus::Blocked, _) => outcomes.blocked += 1,
+            (CoverageStatus::Failed, Some(FailureKind::WorkerCrash)) => outcomes.crash += 1,
+            (CoverageStatus::Failed, Some(FailureKind::Timeout)) => outcomes.timeout += 1,
+            (CoverageStatus::Failed, _) => outcomes.failed += 1,
+        }
+    }
+    outcomes
+}
+
+fn is_lowercase_hex(value: &str, allowed_lengths: &[usize]) -> bool {
+    allowed_lengths.contains(&value.len())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+/// Validate structural evidence without treating observed public-site failures as
+/// report corruption. A valid report may contain any mix of outcome buckets.
+pub fn validate_evidence(report: &CoverageReport) -> Result<(), String> {
+    if report.schema_version != COVERAGE_SCHEMA_VERSION {
+        return Err(format!(
+            "unsupported coverage schema {}; expected {COVERAGE_SCHEMA_VERSION}",
+            report.schema_version
+        ));
+    }
+    if !is_lowercase_hex(&report.corpus.sha256, &[64]) {
+        return Err("corpus.sha256 must be 64 lowercase hexadecimal characters".to_string());
+    }
+    if report.corpus.digest_scope != CORPUS_DIGEST_SCOPE
+        || report.corpus.canonicalization != CORPUS_CANONICALIZATION
+    {
+        return Err("coverage corpus digest contract is not recognized".to_string());
+    }
+    if corpus_sha256(&report.corpus.ordered_input_urls) != report.corpus.sha256 {
+        return Err("corpus.sha256 does not match ordered_input_urls".to_string());
+    }
+    if let Some(commit) = report.environment.git_commit.as_deref() {
+        if !is_lowercase_hex(commit, &[40, 64]) {
+            return Err(
+                "environment.git_commit must be a complete lowercase Git object id".to_string(),
+            );
+        }
+    }
+    if report.environment.runner.provider == "github_actions" {
+        let commit = report
+            .environment
+            .git_commit
+            .as_deref()
+            .ok_or_else(|| "GitHub Actions evidence is missing git_commit".to_string())?;
+        let head_sha = report
+            .environment
+            .runner
+            .head_sha
+            .as_deref()
+            .ok_or_else(|| "GitHub Actions evidence is missing head_sha".to_string())?;
+        if commit != head_sha {
+            return Err(
+                "compiled git_commit does not match the GitHub Actions head_sha".to_string(),
+            );
+        }
+        if report.environment.git_dirty.is_none() || report.environment.rustc_version.is_none() {
+            return Err(
+                "GitHub Actions evidence is missing dirty-state or compiler metadata".to_string(),
+            );
+        }
+    }
+    if report.corpus.inputs_total != report.corpus.ordered_input_urls.len()
+        || report.corpus.inputs_total != report.results.len()
+        || report.summary.urls_total != report.results.len()
+        || report.summary.outcomes.inputs_total != report.results.len()
+    {
+        return Err("coverage input denominators do not match results length".to_string());
+    }
+    let mut corpus_urls = report.corpus.ordered_input_urls.clone();
+    let mut result_urls: Vec<String> = report
+        .results
+        .iter()
+        .map(|result| result.input_url.clone())
+        .collect();
+    corpus_urls.sort();
+    result_urls.sort();
+    if corpus_urls != result_urls {
+        return Err("coverage corpus URLs do not match per-input results".to_string());
+    }
+    let classified = report.summary.outcomes.success
+        + report.summary.outcomes.blocked
+        + report.summary.outcomes.failed
+        + report.summary.outcomes.crash
+        + report.summary.outcomes.timeout;
+    if classified != report.summary.outcomes.inputs_total {
+        return Err("coverage outcome buckets do not partition inputs_total".to_string());
+    }
+    let observed = classify_outcomes(&report.results);
+    if observed != report.summary.outcomes {
+        return Err("coverage outcome buckets do not match per-input results".to_string());
+    }
+    if report.summary.ok != report.summary.outcomes.success
+        || report.summary.blocked != report.summary.outcomes.blocked
+        || report.summary.failed
+            != report.summary.outcomes.failed
+                + report.summary.outcomes.crash
+                + report.summary.outcomes.timeout
+    {
+        return Err("legacy coverage aggregates disagree with outcome buckets".to_string());
+    }
+    if report.measurement.cache.collected
+        || report.measurement.cache.repetitions_per_input != 1
+        || report.measurement.latency.cache_state != "not_measured"
+    {
+        return Err(
+            "public coverage must not claim cache evidence without controlled repeats".to_string(),
+        );
+    }
+    let fetch_samples = report
+        .results
+        .iter()
+        .filter(|result| result.fetch_ms.is_some())
+        .count();
+    let pipeline_samples = report
+        .results
+        .iter()
+        .filter(|result| result.pipeline_ms.is_some())
+        .count();
+    if report.measurement.latency.fetch_samples != fetch_samples
+        || report.measurement.latency.pipeline_samples != pipeline_samples
+        || report.measurement.latency.collected != (fetch_samples + pipeline_samples > 0)
+    {
+        return Err("latency evidence denominators do not match per-input results".to_string());
+    }
+    let compression_samples = report
+        .results
+        .iter()
+        .filter(|result| result.compression_ratio.is_some())
+        .count();
+    if report.summary.compression_samples != compression_samples {
+        return Err(
+            "compression evidence denominator does not match per-input results".to_string(),
+        );
+    }
+    Ok(())
+}
+
 pub async fn run(urls: &[String], opts: &CoverageOptions) -> CoverageReport {
     let jar = Arc::new(Jar::default());
     let client = fetch::build_client(None, jar, None).expect("Failed to build HTTP client");
 
     let max = opts.max_urls.unwrap_or(urls.len());
     let urls: Vec<String> = urls.iter().take(max).cloned().collect();
+    let corpus_sha256 = corpus_sha256(&urls);
+    let ordered_input_urls = urls.clone();
 
     info!(count = urls.len(), "Running coverage suite");
 
@@ -389,15 +708,50 @@ pub async fn run(urls: &[String], opts: &CoverageOptions) -> CoverageReport {
     };
 
     let (median_ratio, mean_ratio, p95_ratio) = compute_ratio_stats(&mut ratios);
+    let compression_samples = ratios.len();
+    let fetch_samples = results
+        .iter()
+        .filter(|result| result.fetch_ms.is_some())
+        .count();
+    let pipeline_samples = results
+        .iter()
+        .filter(|result| result.pipeline_ms.is_some())
+        .count();
 
     let breakdown = breakdown
         .into_iter()
         .map(|(key, count)| CoverageBreakdownItem { key, count })
         .collect();
+    let outcomes = classify_outcomes(&results);
 
     CoverageReport {
+        schema_version: COVERAGE_SCHEMA_VERSION.to_string(),
         generated_at_utc: now_utc_rfc3339ish(),
         plasmate_version: env!("CARGO_PKG_VERSION").to_string(),
+        corpus: CoverageCorpus {
+            sha256: corpus_sha256,
+            digest_scope: CORPUS_DIGEST_SCOPE.to_string(),
+            canonicalization: CORPUS_CANONICALIZATION.to_string(),
+            inputs_total: total,
+            ordered_input_urls,
+        },
+        environment: coverage_environment(),
+        measurement: CoverageMeasurement {
+            cache: CoverageCacheEvidence {
+                collected: false,
+                repetitions_per_input: 1,
+                reason: "each public URL is fetched once; cold/warm cache state is not measured"
+                    .to_string(),
+            },
+            latency: CoverageLatencyEvidence {
+                collected: fetch_samples + pipeline_samples > 0,
+                method: "single_pass_monotonic_wall_clock".to_string(),
+                cache_state: "not_measured".to_string(),
+                per_input_fields: vec!["fetch_ms".to_string(), "pipeline_ms".to_string()],
+                fetch_samples,
+                pipeline_samples,
+            },
+        },
         options: CoverageReportOptions {
             timeout_ms: opts.timeout_ms,
             concurrency: opts.concurrency,
@@ -433,6 +787,8 @@ pub async fn run(urls: &[String], opts: &CoverageOptions) -> CoverageReport {
             median_ratio,
             mean_ratio,
             p95_ratio,
+            compression_samples,
+            outcomes,
             breakdown,
         },
         results,
@@ -867,6 +1223,81 @@ mod tests {
             result.failure_kind,
             Some(FailureKind::WorkerProtocolError)
         ));
+    }
+
+    #[test]
+    fn corpus_digest_is_stable_and_order_sensitive() {
+        let urls = vec![
+            "https://example.test/a".to_string(),
+            "https://example.test/b".to_string(),
+        ];
+        assert_eq!(
+            corpus_sha256(&urls),
+            "7dcf9d5573c32b6e35956f4ef782e9918357a4cc2461470d75ccdcb29c0cfb2f"
+        );
+
+        let mut reversed = urls;
+        reversed.reverse();
+        assert_ne!(corpus_sha256(&reversed), corpus_sha256(&[]));
+        assert_ne!(
+            corpus_sha256(&reversed),
+            "7dcf9d5573c32b6e35956f4ef782e9918357a4cc2461470d75ccdcb29c0cfb2f"
+        );
+    }
+
+    #[test]
+    fn outcome_buckets_are_mutually_exclusive() {
+        let results = vec![
+            CoverageResult {
+                status: CoverageStatus::Ok,
+                failure_kind: None,
+                error: None,
+                ..failed_result("ok".to_string(), FailureKind::Unknown, String::new())
+            },
+            CoverageResult {
+                status: CoverageStatus::Blocked,
+                failure_kind: None,
+                error: Some("blocked".to_string()),
+                ..failed_result("blocked".to_string(), FailureKind::Unknown, String::new())
+            },
+            failed_result("failed".to_string(), FailureKind::HttpError, String::new()),
+            failed_result("crash".to_string(), FailureKind::WorkerCrash, String::new()),
+            failed_result("timeout".to_string(), FailureKind::Timeout, String::new()),
+        ];
+        assert_eq!(
+            classify_outcomes(&results),
+            CoverageOutcomes {
+                inputs_total: 5,
+                success: 1,
+                blocked: 1,
+                failed: 1,
+                crash: 1,
+                timeout: 1,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn evidence_validation_accepts_observed_site_failures() {
+        let mut report = run(&[], &CoverageOptions::default()).await;
+        report.results = vec![failed_result(
+            "https://unavailable.example.test".to_string(),
+            FailureKind::NavigationFailed,
+            "observed site failure".to_string(),
+        )];
+        report.corpus.inputs_total = 1;
+        report.corpus.ordered_input_urls = vec!["https://unavailable.example.test".to_string()];
+        report.corpus.sha256 = corpus_sha256(&report.corpus.ordered_input_urls);
+        report.summary.urls_total = 1;
+        report.summary.failed = 1;
+        report.summary.outcomes = classify_outcomes(&report.results);
+
+        validate_evidence(&report).expect("site failures are valid observational evidence");
+
+        report.summary.outcomes.timeout = 1;
+        assert!(validate_evidence(&report)
+            .expect_err("overlapping outcome buckets must fail validation")
+            .contains("partition"));
     }
 
     #[tokio::test]

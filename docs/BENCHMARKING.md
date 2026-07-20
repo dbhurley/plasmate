@@ -55,20 +55,46 @@ Public-web runs answer a different question: how Plasmate behaved against a name
 
 Every published public-web report must include:
 
-- the immutable input list or its cryptographic digest;
+- `schema_version: plasmate.coverage.v2`;
+- `corpus.sha256`, computed over the exact ordered URL sequence selected after
+  comment/blank-line removal and `max_urls` truncation using the canonicalization
+  named in the report, plus `corpus.ordered_input_urls` so the digest can be
+  independently recomputed from the artifact;
 - the complete input denominator;
-- mutually exclusive success, blocked, failed, crash, and timeout counts;
+- mutually exclusive `summary.outcomes` success, blocked, failed, crash, and
+  timeout counts whose sum equals the complete denominator;
 - both the overall success rate and any explicitly labeled filtered rate;
-- cold and warm wall latency, with cache state;
+- per-input single-pass fetch and pipeline wall latency, explicitly labeled with
+  `cache_state: not_measured` and separate observed-sample counts;
 - JS and external-script settings;
 - response HTML and SOM bytes for successful inputs;
 - peak RSS and worker termination evidence where available;
-- Plasmate, Git, compiler, OS, architecture, and machine metadata;
+- Plasmate, Git commit/dirty state, compiler, build profile, OS, architecture,
+  and runner metadata where available;
 - per-input results sufficient to audit every aggregate.
+
+The public scorecard currently executes each selected URL once and does not use
+the SOM cache, so it must not label samples `cold` or `warm` or claim cache-hit
+evidence. Its `measurement.cache.collected` value is therefore `false` and its
+latencies are observational single-pass wall times. Controlled cold/warm cache
+evidence belongs to `benchmark-v1`, which performs and verifies both samples.
+`summary.compression_samples` is the exact successful-input denominator for the
+reported compression distribution.
+
+For compatibility, v2 retains the original top-level `plasmate_version`, legacy
+`summary.ok`, `summary.blocked`, and overlapping `summary.failed` aggregates.
+New analysis must use `summary.outcomes`: its `failed` bucket excludes the
+separate crash and timeout buckets. Consumers must reject unknown coverage schema
+majors instead of guessing their denominator semantics. `coverage-validate`
+checks these structural invariants; observed site failures remain valid evidence
+and do not make validation fail.
 
 A site blocked by authentication, robots policy, anti-automation measures, geography, or network policy remains `blocked` in the all-input denominator. It must not be removed, reclassified as absent, or implied to have succeeded. Compression statistics may be computed over successful inputs, but the report must state that denominator next to the statistic.
 
-For trend comparisons, use reports with the same schema, input-list digest, JS mode, cache policy, build profile, and runner class. A change to any of those properties begins a new comparison series.
+For trend comparisons, use reports with the same schema, corpus digest, JS mode,
+cache measurement policy, build profile, and runner class. A change to any of
+those properties begins a new comparison series. Do not compare the public
+single-pass latencies with `benchmark-v1` cold/warm measurements.
 
 ## Benchmark claims
 
