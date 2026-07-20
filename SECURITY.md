@@ -54,6 +54,16 @@ Browser access is disabled unless `PLASMATE_AUTH_BRIDGE_ORIGIN` is the exact
 CORS responses; wildcard CORS is never enabled. Restarting without a configured
 token rotates the capability.
 
+Auth profiles and their master key are serialized through a process-shared
+lock. New values are written to owner-only same-directory temporary files,
+synced, atomically renamed, and followed by a directory sync. On Unix,
+`~/.plasmate` and its profile directory are enforced as mode `0700`; the key,
+profiles, temporary files, and lock are enforced as mode `0600`, and sensitive
+reads use no-follow opens. If encrypted profiles exist but `master.key` is
+missing, Plasmate fails closed instead of generating a key that cannot decrypt
+them. Plaintext, legacy encrypted, and envelope-v1 profiles remain readable and
+are migrated under the same lock.
+
 ## MCP Streamable HTTP
 
 The HTTP MCP endpoint always requires a bearer capability token of at least 32
