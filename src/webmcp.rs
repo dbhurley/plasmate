@@ -187,7 +187,7 @@ impl Default for WebMcpCatalog {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeCapture {
     pub domain_was_set_by_page: bool,
@@ -195,7 +195,7 @@ pub struct RuntimeCapture {
     pub registrations: Vec<ImperativeRegistration>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImperativeRegistration {
     pub name: String,

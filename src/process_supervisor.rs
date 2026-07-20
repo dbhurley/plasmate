@@ -607,8 +607,12 @@ impl Drop for CancellationGuard {
 fn supervise_blocking(
     spec: ProcessSpec,
     cancellation: Arc<CancellationState>,
+    clear_env: bool,
 ) -> Result<ProcessOutput, SupervisorError> {
     let mut command = std::process::Command::new(&spec.program);
+    if clear_env {
+        command.env_clear();
+    }
     command
         .args(&spec.args)
         .envs(spec.env)
@@ -691,18 +695,47 @@ fn supervise_blocking(
     })
 }
 
+/// Synchronous counterpart to [`supervise`]. Long-lived protocol handlers that
+/// are already synchronous (for example CDP Runtime.evaluate) use this rather
+/// than duplicating process-group and bounded-pipe handling.
+pub fn supervise_sync(spec: ProcessSpec) -> Result<ProcessOutput, SupervisorError> {
+    let cancellation = Arc::new(CancellationState::default());
+    supervise_blocking(spec, cancellation, false)
+}
+
+/// Synchronously supervise a child that starts from an empty environment.
+/// Only the variables explicitly listed in [`ProcessSpec::env`] are inherited.
+pub fn supervise_sync_clean_env(spec: ProcessSpec) -> Result<ProcessOutput, SupervisorError> {
+    let cancellation = Arc::new(CancellationState::default());
+    supervise_blocking(spec, cancellation, true)
+}
+
 /// Run a child process with a hard wall timeout and bounded output capture.
 ///
 /// Output beyond each configured limit is drained and discarded so a noisy
 /// worker cannot deadlock on a full pipe or exhaust the parent's memory.
 pub async fn supervise(spec: ProcessSpec) -> Result<ProcessOutput, SupervisorError> {
+    supervise_with_env_policy(spec, false).await
+}
+
+/// Supervise a child that starts from an empty environment. Only the variables
+/// explicitly listed in [`ProcessSpec::env`] are inherited.
+pub async fn supervise_clean_env(spec: ProcessSpec) -> Result<ProcessOutput, SupervisorError> {
+    supervise_with_env_policy(spec, true).await
+}
+
+async fn supervise_with_env_policy(
+    spec: ProcessSpec,
+    clear_env: bool,
+) -> Result<ProcessOutput, SupervisorError> {
     let wall_timeout = spec.timeout;
     let cancellation = Arc::new(CancellationState::default());
     let mut guard = CancellationGuard {
         state: cancellation.clone(),
         armed: true,
     };
-    let task = tokio::task::spawn_blocking(move || supervise_blocking(spec, cancellation));
+    let task =
+        tokio::task::spawn_blocking(move || supervise_blocking(spec, cancellation, clear_env));
     match tokio::time::timeout(wall_timeout, task).await {
         Ok(joined) => {
             let result = joined.map_err(|error| SupervisorError::Task(error.to_string()))?;

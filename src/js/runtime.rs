@@ -128,7 +128,7 @@ pub fn init_platform() {
 }
 
 /// Configuration for a JS runtime instance.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RuntimeConfig {
     /// Max JS execution time per classic script or native module graph in
     /// milliseconds.
@@ -3342,6 +3342,7 @@ impl JsRuntime {
             failed: 0,
             errors: Vec::new(),
             module_diagnostics: None,
+            containment_failure: None,
         };
 
         for (source, filename) in scripts {
@@ -3767,11 +3768,15 @@ impl JsRuntime {
     /// Inject the fetch bridge into the V8 context.
     ///
     /// This registers a native `__plasmate_do_fetch(url, opts_json)` function
-    /// that performs real HTTP requests using reqwest. The JS fetch() and
-    /// XMLHttpRequest in the DOM shim will call this if it exists.
+    /// that performs real HTTP requests using a restricted reqwest blocking
+    /// client. The JS fetch() and XMLHttpRequest in the DOM shim will call
+    /// this if it exists.
     ///
     /// # Arguments
-    /// * `client` - The reqwest Client to use for HTTP requests
+    /// * `client` - Enables the bridge for this runtime. Its cookie store,
+    ///   proxy, custom TLS, and default headers are intentionally not copied
+    ///   into page-originated requests; this preserves the bridge's existing
+    ///   public-network security policy.
     pub fn inject_fetch_bridge(&mut self, client: reqwest::Client) {
         // Store the client in thread-local storage
         FETCH_CLIENT.with(|c| {
@@ -4449,7 +4454,9 @@ fn fetch_bridge_callback(
 
     debug!(url = %url, method = %method, "Fetch bridge performing request");
 
-    // Perform the fetch using the thread-local client.
+    // Perform the fetch when a bridge was explicitly installed. The stored
+    // client is an availability token only: do_fetch_on_thread constructs the
+    // restricted blocking transport used by the bridge.
     //
     // SAFETY: catch_unwind is mandatory here. V8 callbacks run on a C++ call
     // stack that cannot unwind through Rust panics. Any panic that escapes into
@@ -4527,7 +4534,7 @@ fn fetch_bridge_callback(
 /// result back via an `mpsc` channel and block the V8 callback thread on
 /// `recv_timeout`.
 fn perform_blocking_fetch(
-    _client: &reqwest::Client,
+    _bridge_token: &reqwest::Client,
     url: &str,
     method: &str,
     body: Option<&str>,
@@ -4762,6 +4769,11 @@ pub struct JsExecutionReport {
     /// preserving the legacy serialized shape.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub module_diagnostics: Option<ModuleExecutionDiagnostics>,
+    /// A process-containment failure. When present, page JavaScript did not
+    /// complete, but the caller may still return a SOM compiled from the
+    /// original HTML instead of discarding all structured output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub containment_failure: Option<crate::js::worker::JsContainmentFailure>,
 }
 
 /// Heap memory statistics.

@@ -322,6 +322,9 @@ enum Commands {
     /// Internal single-page coverage worker. Input/output are JSON over stdio.
     #[command(name = "__coverage-worker", hide = true)]
     CoverageWorker,
+    /// Internal process-isolated JavaScript worker. JSON protocol over stdio.
+    #[command(name = "__js-worker", hide = true)]
+    JsWorker,
     /// Throughput benchmark: fetch+compile N pages from a local server.
     /// Matches Lightpanda's benchmark methodology (local server, no external latency).
     ThroughputBench {
@@ -838,6 +841,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let request: coverage::runner::CoverageWorkerRequest = serde_json::from_slice(&input)?;
             let result = coverage::runner::run_worker(request).await;
             println!("{}", serde_json::to_string(&result)?);
+        }
+        Commands::JsWorker => {
+            use std::io::Read;
+            let mut input = Vec::new();
+            std::io::stdin()
+                .take((plasmate::js::worker::MAX_WORKER_INPUT_BYTES as u64).saturating_add(1))
+                .read_to_end(&mut input)?;
+            let response = if input.len() > plasmate::js::worker::MAX_WORKER_INPUT_BYTES {
+                plasmate::js::worker::JsWorkerResponse::Error {
+                    code: "request_too_large".to_string(),
+                    message: "JavaScript worker request exceeded its input bound".to_string(),
+                }
+            } else {
+                match serde_json::from_slice::<plasmate::js::worker::JsWorkerRequest>(&input) {
+                    Ok(request) => plasmate::js::worker::run_worker_request(request),
+                    Err(error) => plasmate::js::worker::JsWorkerResponse::Error {
+                        code: "invalid_request".to_string(),
+                        message: error.to_string(),
+                    },
+                }
+            };
+            println!("{}", serde_json::to_string(&response)?);
         }
         Commands::ThroughputBench {
             base_url,

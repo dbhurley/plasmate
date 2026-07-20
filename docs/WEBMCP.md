@@ -23,6 +23,9 @@ the existing SOM `regions` member is unchanged.
   and duplicate removal, excess tools are omitted from the end with an explicit
   warning. The same ceiling is enforced before a catalog enters page-state
   cache storage.
+- Imperative registration metadata crosses the JavaScript process boundary as
+  bounded JSON only. V8 handles and page callbacks never leave the supervised
+  worker; a worker failure falls back to declarative discovery over source HTML.
 - Secure HTTPS top-level origins. Cross-origin iframe documents are not fetched
   or exposed, even when their iframe declares `allow="tools"`.
 - Disabling both API shapes when page code assigns `document.domain`.

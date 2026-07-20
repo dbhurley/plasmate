@@ -4,6 +4,12 @@
 
 - Post-v0.5.1 work remains unreleased and is being brought back behind required formatting, all-feature lint, test, conformance, and smoke gates.
 - Current development includes expanded SOM action metadata, cache/session observability, proxy and cookie surfaces, iframe and Shadow DOM extraction, and broader SDK/adapter conformance.
+- Moved ordinary page JavaScript plus MCP/CDP stateful evaluation and mutation
+  into a shared process-group-supervised worker with hard wall, request, heap,
+  and output bounds. Fatal V8 exits and infinite scripts can no longer terminate
+  or hang the owning process. Page-worker failures return a typed containment
+  record while preserving a source-HTML SOM; session failures preserve the last
+  good structured state.
 - Added opt-in, bounded, memory-only `plasmate.trace.v1` session action traces plus four MCP tools for status, privacy-safe export, clearing, and exact validation-before-replay. Replay is validation-only and never executes an action in this release.
 - Added the reproducible `plasmate.agent-task-benchmark.v1` release gate. Six compiled, loopback-only scenarios exercise real supervised MCP navigation, approved actions, trace export, validation-only replay refusal, and expected/unexpected failure containment with complete outcome and step denominators, fixture/executable provenance, an independent validator, and no model judgment or public-network dependency.
 - Added bounded, static Agentic Resource Discovery v0.9 draft inspection through `plasmate ard-discover` and the read-only `ard_discover` MCP tool. The implementation checks the well-known, HTML link, and robots.txt signals; rejects unsafe or cross-origin catalog fetches; validates catalog envelopes; and labels all discovered data and trust claims as untrusted and unverified. Registry search, DNS discovery, nested crawling, endpoint fetching, invocation, and trust/signature verification are not included.
@@ -28,7 +34,7 @@
   installing Plasmate no longer pulls an upstream graph pinned to vulnerable
   `pypdf` releases.
 - Added the versioned `plasmate.crawl-policy.v1` RFC 9309 evaluator through `plasmate crawl-policy` and the read-only `crawl_policy` MCP tool. It uses a public-only, same-origin robots request; combines exact product-token groups with wildcard fallback; implements longest-rule selection, wildcard/end anchoring, percent-encoding semantics, and conservative unavailable/unreachable handling; and leaves ordinary fetch behavior unchanged.
-- Added the read-only `inspect_page` MCP tool. It returns a bounded compact SOM first and uses deterministic `never`/`auto`/`always` visual fallback. Page JavaScript is off by default; explicit opt-in retains the documented in-process V8 risk before screenshot isolation. Screenshots render only already-fetched HTML in a JavaScript-disabled, sandboxed/CSP-constrained Chrome document with restrictive file defaults, a dead network proxy, process-tree cleanup, and hard dimensions/time/image/envelope bounds. Typed visual failure never discards structure, and Plasmate does not perform vision-model interpretation.
+- Added the read-only `inspect_page` MCP tool. It returns a bounded compact SOM first and uses deterministic `never`/`auto`/`always` visual fallback. Page JavaScript is off by default; explicit opt-in uses the supervised V8 worker. Screenshots render only already-fetched HTML in a JavaScript-disabled, sandboxed/CSP-constrained Chrome document with restrictive file defaults, a dead network proxy, process-tree cleanup, and hard dimensions/time/image/envelope bounds. Typed visual failure never discards structure, and Plasmate does not perform vision-model interpretation.
 
 ## v0.5.1 (2026-04-05)
 

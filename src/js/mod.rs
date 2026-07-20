@@ -14,3 +14,4 @@ pub mod modules;
 pub mod pipeline;
 pub mod runtime;
 pub mod script_fetch;
+pub mod worker;

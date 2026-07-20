@@ -27,6 +27,13 @@ runtime/module and supervisor containment suites pass, and its embedded-V8
 security delta is reviewed. Do not relax the exact version requirement to a
 broad major range.
 
+Public synchronous and asynchronous page pipelines plus CLI, daemon, MCP, AWP,
+and CDP paths execute V8 through the process-isolated
+`plasmate.js-worker.v1` boundary described in
+[`runtime-containment.md`](runtime-containment.md). Direct `JsRuntime`
+construction and the explicit `isolate_js: false` worker escape hatch remain
+in-process and are not an untrusted-code surface.
+
 ## Build and target assumptions
 
 Default builds download a prebuilt static archive from rusty_v8's GitHub

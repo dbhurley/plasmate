@@ -21,7 +21,8 @@ use super::trace::ReplayRequest;
 use crate::cache::store::{CacheLookup, SomCache};
 use crate::cdp::cookies::{cookie_from_cdp_params, Cookie};
 use crate::js::pipeline::{self, PipelineConfig};
-use crate::js::runtime::{JsRuntime, RuntimeConfig};
+use crate::js::runtime::RuntimeConfig;
+use crate::js::worker::{self, EvaluationRequest, EvaluationResponse, JsWorkerOptions};
 use crate::network::fetch;
 use crate::som::types::Som;
 
@@ -254,6 +255,41 @@ fn store_page_state_in_session(
     session.target.rebuild_node_map();
 
     serde_json::to_value(&page_result.som).ok()
+}
+
+async fn run_session_javascript(
+    effective_html: String,
+    url: String,
+    expression: String,
+    return_effective_html: bool,
+) -> Result<EvaluationResponse, String> {
+    worker::evaluate(
+        EvaluationRequest {
+            protocol_version: worker::WORKER_PROTOCOL_VERSION.to_string(),
+            html: effective_html,
+            url,
+            expression,
+            return_effective_html,
+            runtime_config: RuntimeConfig {
+                inject_dom_shim: true,
+                execute_inline_scripts: false,
+                ..Default::default()
+            },
+        },
+        JsWorkerOptions::default(),
+    )
+    .await
+    .map_err(|error| format!("JavaScript containment error [{}]: {error}", error.code()))
+}
+
+fn mutation_output(response: EvaluationResponse) -> Result<(String, String), String> {
+    response
+        .effective_html
+        .map(|html| (response.result, html))
+        .ok_or_else(|| {
+            "JavaScript containment error [js_worker_protocol]: mutating worker response omitted effective HTML"
+                .to_string()
+        })
 }
 
 async fn load_session_page_for_mcp(
@@ -1659,8 +1695,8 @@ pub async fn handle_open_page(
 
 /// Handle the evaluate tool call.
 ///
-/// Runs JavaScript in the session's page context using V8.
-/// V8's OwnedIsolate is !Send, so we use spawn_blocking.
+/// Runs JavaScript in a supervised child and leaves the session's last good SOM
+/// untouched when the child crashes, times out, or violates an output bound.
 pub async fn handle_evaluate(arguments: &Value, sessions: &Arc<SessionManager>) -> Value {
     // Parse arguments
     let params: EvaluateParams = match serde_json::from_value(arguments.clone()) {
@@ -1691,30 +1727,16 @@ pub async fn handle_evaluate(arguments: &Value, sessions: &Arc<SessionManager>) 
         }
     };
 
-    // Run JS evaluation in a blocking task (V8 is !Send)
     let expression = params.expression.clone();
-    let eval_result = tokio::task::spawn_blocking(move || {
-        let mut runtime = JsRuntime::new(RuntimeConfig {
-            inject_dom_shim: true,
-            execute_inline_scripts: false, // Don't re-execute page scripts
-            ..Default::default()
-        });
-
-        // Bootstrap DOM from effective HTML
-        runtime.bootstrap_dom(&effective_html, &url);
-
-        // Wrap expression to properly serialize objects/arrays
-        let wrapped_expr = format!(
-            "(function() {{ var __r = ({}); return typeof __r === 'object' && __r !== null ? JSON.stringify(__r) : __r; }})()",
-            expression
-        );
-
-        runtime.eval(&wrapped_expr)
-    })
-    .await;
+    let wrapped_expr = format!(
+        "(function() {{ var __r = ({}); return typeof __r === 'object' && __r !== null ? JSON.stringify(__r) : __r; }})()",
+        expression
+    );
+    let eval_result = run_session_javascript(effective_html, url, wrapped_expr, false).await;
 
     match eval_result {
-        Ok(Ok(result)) => {
+        Ok(response) => {
+            let result = response.result;
             // Parse result - try JSON first, then string
             let value = if result == "undefined" || result.is_empty() {
                 Value::Null
@@ -1735,8 +1757,7 @@ pub async fn handle_evaluate(arguments: &Value, sessions: &Arc<SessionManager>) 
                 ]
             })
         }
-        Ok(Err(e)) => error_response(&format!("JavaScript error: {}", e)),
-        Err(e) => error_response(&format!("Execution error: {}", e)),
+        Err(error) => error_response(&error),
     }
 }
 
@@ -1844,36 +1865,14 @@ pub async fn handle_click(
             .replace('\n', " ")
     );
 
-    // Execute the click JS
-    let url_clone = url.clone();
-    let effective_html_clone = effective_html.clone();
-    let click_result = tokio::task::spawn_blocking(move || {
-        let mut runtime = JsRuntime::new(RuntimeConfig {
-            inject_dom_shim: true,
-            execute_inline_scripts: false,
-            ..Default::default()
-        });
-
-        runtime.bootstrap_dom(&effective_html_clone, &url_clone);
-
-        let result = runtime.eval(&click_js).map_err(|e| e.to_string())?;
-
-        // Get the updated HTML after click handlers ran
-        let updated_html = runtime
-            .eval("document.documentElement.outerHTML")
-            .map_err(|e| e.to_string())?;
-
-        Ok::<(String, String), String>((result, updated_html))
-    })
-    .await;
-
+    let click_result = run_session_javascript(effective_html, url.clone(), click_js, true).await;
     let (click_result_json, updated_html) = match click_result {
-        Ok(Ok((result, html))) => (result, html),
-        Ok(Err(e)) => {
-            return error_response(&format!("Click failed: {}", e));
-        }
-        Err(e) => {
-            return error_response(&format!("Execution error: {}", e));
+        Ok(response) => match mutation_output(response) {
+            Ok(output) => output,
+            Err(error) => return error_response(&error),
+        },
+        Err(error) => {
+            return error_response(&format!("Click failed: {error}"));
         }
     };
 
@@ -2295,22 +2294,11 @@ pub async fn handle_type_text(
     let element_id = params.element_id.clone();
     let text = params.text.clone();
     let append = params.append;
-    let url_clone = url.clone();
-    let type_result = tokio::task::spawn_blocking(move || {
-        let mut runtime = JsRuntime::new(RuntimeConfig {
-            inject_dom_shim: true,
-            execute_inline_scripts: false,
-            ..Default::default()
-        });
-
-        runtime.bootstrap_dom(&effective_html, &url_clone);
-
-        let element_id = serde_json::to_string(&element_id).unwrap_or_else(|_| "null".to_string());
-        let html_id = serde_json::to_string(&html_id).unwrap_or_else(|_| "null".to_string());
-        let text = serde_json::to_string(&text).unwrap_or_else(|_| "null".to_string());
-
-        let type_js = format!(
-            r#"
+    let element_id = serde_json::to_string(&element_id).unwrap_or_else(|_| "null".to_string());
+    let html_id = serde_json::to_string(&html_id).unwrap_or_else(|_| "null".to_string());
+    let text = serde_json::to_string(&text).unwrap_or_else(|_| "null".to_string());
+    let type_js = format!(
+        r#"
             (function() {{
                 var somId = {};
                 var htmlId = {};
@@ -2341,28 +2329,19 @@ pub async fn handle_type_text(
                 return JSON.stringify({{ typed: true }});
             }})()
             "#,
-            element_id,
-            html_id,
-            text,
-            if append { "true" } else { "false" },
-        );
-
-        let result = runtime.eval(&type_js).map_err(|e| e.to_string())?;
-        let updated_html = runtime
-            .eval("document.documentElement.outerHTML")
-            .map_err(|e| e.to_string())?;
-
-        Ok::<(String, String), String>((result, updated_html))
-    })
-    .await;
-
+        element_id,
+        html_id,
+        text,
+        if append { "true" } else { "false" },
+    );
+    let type_result = run_session_javascript(effective_html, url.clone(), type_js, true).await;
     let (result_json, updated_html) = match type_result {
-        Ok(Ok((result, html))) => (result, html),
-        Ok(Err(e)) => {
-            return error_response(&format!("Type failed: {}", e));
-        }
-        Err(e) => {
-            return error_response(&format!("Execution error: {}", e));
+        Ok(response) => match mutation_output(response) {
+            Ok(output) => output,
+            Err(error) => return error_response(&error),
+        },
+        Err(error) => {
+            return error_response(&format!("Type failed: {error}"));
         }
     };
 
@@ -2453,20 +2432,9 @@ pub async fn handle_select_option(
     // Run JS to select option
     let element_id = params.element_id.clone();
     let value = params.value.clone();
-    let url_clone = url.clone();
-    let select_result = tokio::task::spawn_blocking(move || {
-        let mut runtime = JsRuntime::new(RuntimeConfig {
-            inject_dom_shim: true,
-            execute_inline_scripts: false,
-            ..Default::default()
-        });
-
-        runtime.bootstrap_dom(&effective_html, &url_clone);
-
-        let escaped_value = value.replace('\\', "\\\\").replace('\'', "\\'");
-
-        let select_js = format!(
-            r#"
+    let escaped_value = value.replace('\\', "\\\\").replace('\'', "\\'");
+    let select_js = format!(
+        r#"
             (function() {{
                 var el = document.querySelector('[data-plasmate-id="{}"]');
                 if (!el) {{
@@ -2491,25 +2459,16 @@ pub async fn handle_select_option(
                 return JSON.stringify({{ selected: true, value: el.value }});
             }})()
             "#,
-            element_id, escaped_value, escaped_value, escaped_value
-        );
-
-        let result = runtime.eval(&select_js).map_err(|e| e.to_string())?;
-        let updated_html = runtime
-            .eval("document.documentElement.outerHTML")
-            .map_err(|e| e.to_string())?;
-
-        Ok::<(String, String), String>((result, updated_html))
-    })
-    .await;
-
+        element_id, escaped_value, escaped_value, escaped_value
+    );
+    let select_result = run_session_javascript(effective_html, url.clone(), select_js, true).await;
     let (result_json, updated_html) = match select_result {
-        Ok(Ok((result, html))) => (result, html),
-        Ok(Err(e)) => {
-            return error_response(&format!("Select failed: {}", e));
-        }
-        Err(e) => {
-            return error_response(&format!("Execution error: {}", e));
+        Ok(response) => match mutation_output(response) {
+            Ok(output) => output,
+            Err(error) => return error_response(&error),
+        },
+        Err(error) => {
+            return error_response(&format!("Select failed: {error}"));
         }
     };
 
@@ -2601,19 +2560,9 @@ pub async fn handle_scroll(
     let direction = params.direction.clone();
     let pixels = params.pixels;
     let element_id = params.element_id.clone();
-    let url_clone = url.clone();
-    let scroll_result = tokio::task::spawn_blocking(move || {
-        let mut runtime = JsRuntime::new(RuntimeConfig {
-            inject_dom_shim: true,
-            execute_inline_scripts: false,
-            ..Default::default()
-        });
-
-        runtime.bootstrap_dom(&effective_html, &url_clone);
-
-        let scroll_js = if let Some(ref eid) = element_id {
-            format!(
-                r#"
+    let scroll_js = if let Some(ref eid) = element_id {
+        format!(
+            r#"
                 (function() {{
                     var el = document.querySelector('[data-plasmate-id="{}"]');
                     if (!el) {{
@@ -2623,42 +2572,33 @@ pub async fn handle_scroll(
                     return JSON.stringify({{ scrolled: true, scrollTop: document.documentElement.scrollTop || 0 }});
                 }})()
                 "#,
-                eid
-            )
-        } else {
-            let scroll_action = match direction.as_str() {
-                "up" => format!("window.scrollBy(0, -{})", pixels),
-                "top" => "window.scrollTo(0, 0)".to_string(),
-                "bottom" => "window.scrollTo(0, document.body.scrollHeight)".to_string(),
-                _ => format!("window.scrollBy(0, {})", pixels), // "down" is default
-            };
-            format!(
-                r#"
+            eid
+        )
+    } else {
+        let scroll_action = match direction.as_str() {
+            "up" => format!("window.scrollBy(0, -{})", pixels),
+            "top" => "window.scrollTo(0, 0)".to_string(),
+            "bottom" => "window.scrollTo(0, document.body.scrollHeight)".to_string(),
+            _ => format!("window.scrollBy(0, {})", pixels), // "down" is default
+        };
+        format!(
+            r#"
                 (function() {{
                     {};
                     return JSON.stringify({{ scrolled: true, scrollTop: document.documentElement.scrollTop || 0 }});
                 }})()
                 "#,
-                scroll_action
-            )
-        };
-
-        let result = runtime.eval(&scroll_js).map_err(|e| e.to_string())?;
-        let updated_html = runtime
-            .eval("document.documentElement.outerHTML")
-            .map_err(|e| e.to_string())?;
-
-        Ok::<(String, String), String>((result, updated_html))
-    })
-    .await;
-
+            scroll_action
+        )
+    };
+    let scroll_result = run_session_javascript(effective_html, url.clone(), scroll_js, true).await;
     let (result_json, updated_html) = match scroll_result {
-        Ok(Ok((result, html))) => (result, html),
-        Ok(Err(e)) => {
-            return error_response(&format!("Scroll failed: {}", e));
-        }
-        Err(e) => {
-            return error_response(&format!("Execution error: {}", e));
+        Ok(response) => match mutation_output(response) {
+            Ok(output) => output,
+            Err(error) => return error_response(&error),
+        },
+        Err(error) => {
+            return error_response(&format!("Scroll failed: {error}"));
         }
     };
 
@@ -2754,18 +2694,8 @@ pub async fn handle_toggle(
 
     // Run JS to toggle the element
     let element_id = params.element_id.clone();
-    let url_clone = url.clone();
-    let toggle_result = tokio::task::spawn_blocking(move || {
-        let mut runtime = JsRuntime::new(RuntimeConfig {
-            inject_dom_shim: true,
-            execute_inline_scripts: false,
-            ..Default::default()
-        });
-
-        runtime.bootstrap_dom(&effective_html, &url_clone);
-
-        let toggle_js = format!(
-            r#"
+    let toggle_js = format!(
+        r#"
             (function() {{
                 var el = document.querySelector('[data-plasmate-id="{}"]');
                 if (!el) {{
@@ -2787,25 +2717,16 @@ pub async fn handle_toggle(
                 }}
             }})()
             "#,
-            element_id
-        );
-
-        let result = runtime.eval(&toggle_js).map_err(|e| e.to_string())?;
-        let updated_html = runtime
-            .eval("document.documentElement.outerHTML")
-            .map_err(|e| e.to_string())?;
-
-        Ok::<(String, String), String>((result, updated_html))
-    })
-    .await;
-
+        element_id
+    );
+    let toggle_result = run_session_javascript(effective_html, url.clone(), toggle_js, true).await;
     let (result_json, updated_html) = match toggle_result {
-        Ok(Ok((result, html))) => (result, html),
-        Ok(Err(e)) => {
-            return error_response(&format!("Toggle failed: {}", e));
-        }
-        Err(e) => {
-            return error_response(&format!("Execution error: {}", e));
+        Ok(response) => match mutation_output(response) {
+            Ok(output) => output,
+            Err(error) => return error_response(&error),
+        },
+        Err(error) => {
+            return error_response(&format!("Toggle failed: {error}"));
         }
     };
 
@@ -2895,18 +2816,8 @@ pub async fn handle_clear(
 
     // Run JS to clear the element value
     let element_id = params.element_id.clone();
-    let url_clone = url.clone();
-    let clear_result = tokio::task::spawn_blocking(move || {
-        let mut runtime = JsRuntime::new(RuntimeConfig {
-            inject_dom_shim: true,
-            execute_inline_scripts: false,
-            ..Default::default()
-        });
-
-        runtime.bootstrap_dom(&effective_html, &url_clone);
-
-        let clear_js = format!(
-            r#"
+    let clear_js = format!(
+        r#"
             (function() {{
                 var el = document.querySelector('[data-plasmate-id="{}"]');
                 if (!el) {{
@@ -2920,25 +2831,16 @@ pub async fn handle_clear(
                 return JSON.stringify({{ cleared: true }});
             }})()
             "#,
-            element_id
-        );
-
-        let result = runtime.eval(&clear_js).map_err(|e| e.to_string())?;
-        let updated_html = runtime
-            .eval("document.documentElement.outerHTML")
-            .map_err(|e| e.to_string())?;
-
-        Ok::<(String, String), String>((result, updated_html))
-    })
-    .await;
-
+        element_id
+    );
+    let clear_result = run_session_javascript(effective_html, url.clone(), clear_js, true).await;
     let (result_json, updated_html) = match clear_result {
-        Ok(Ok((result, html))) => (result, html),
-        Ok(Err(e)) => {
-            return error_response(&format!("Clear failed: {}", e));
-        }
-        Err(e) => {
-            return error_response(&format!("Execution error: {}", e));
+        Ok(response) => match mutation_output(response) {
+            Ok(output) => output,
+            Err(error) => return error_response(&error),
+        },
+        Err(error) => {
+            return error_response(&format!("Clear failed: {error}"));
         }
     };
 
