@@ -7,33 +7,17 @@
     "url": "https://github.com/plasmate-labs/plasmate",
     "source": "github"
   },
-  "version": "0.5.1",
+  "version": "0.6.0",
+  "websiteUrl": "https://plasmate.app",
   "packages": [
     {
-      "registryType": "npm",
-      "identifier": "plasmate",
-      "version": "0.4.0",
-      "runtimeHint": "npx",
+      "registryType": "oci",
+      "identifier": "ghcr.io/plasmate-labs/plasmate:v0.6.0",
+      "version": "0.6.0",
       "transport": {
         "type": "stdio"
       },
-      "arguments": [
-        {
-          "type": "positional",
-          "value": "mcp",
-          "isRequired": true
-        }
-      ]
-    },
-    {
-      "registryType": "pypi",
-      "identifier": "plasmate",
-      "version": "0.4.1",
-      "runtimeHint": "uvx",
-      "transport": {
-        "type": "stdio"
-      },
-      "arguments": [
+      "packageArguments": [
         {
           "type": "positional",
           "value": "mcp",

@@ -10,6 +10,10 @@ import (
 	"sync"
 )
 
+// SDKVersion is the independently published Go module version. Go releases
+// use the submodule tag sdk/go/v<SDKVersion>.
+const SDKVersion = "0.1.0"
+
 // ClientOption configures a Client.
 type ClientOption func(*Client)
 
@@ -111,7 +115,7 @@ func (c *Client) start() error {
 		"capabilities":    map[string]interface{}{},
 		"clientInfo": map[string]interface{}{
 			"name":    "plasmate-go-sdk",
-			"version": "0.1.0",
+			"version": SDKVersion,
 		},
 	})
 	if err != nil {

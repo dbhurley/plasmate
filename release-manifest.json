@@ -4,7 +4,7 @@
     {
       "id": "plasmate-rust",
       "package": "plasmate",
-      "version": "0.5.1",
+      "version": "0.6.0",
       "publications": ["crates_io", "github_release", "ghcr", "mcp_registry"],
       "sources": [
         { "path": "Cargo.toml", "kind": "toml_key", "selector": "package.version" },
@@ -21,8 +21,7 @@
         { "path": "sdk/node/package.json", "kind": "json_pointer", "selector": "/version" },
         { "path": "sdk/node/package-lock.json", "kind": "json_pointer", "selector": "/version" },
         { "path": "sdk/node/package-lock.json", "kind": "json_pointer", "selector": "/packages//version" },
-        { "path": "sdk/node/src/index.ts", "kind": "text_regex", "selector": "const SDK_VERSION = '([^']+)'" },
-        { "path": "server.json", "kind": "json_pointer", "selector": "/packages/0/version" }
+        { "path": "sdk/node/src/index.ts", "kind": "text_regex", "selector": "const SDK_VERSION = '([^']+)'" }
       ]
     },
     {
@@ -34,7 +33,7 @@
         { "path": "sdk/python/pyproject.toml", "kind": "toml_key", "selector": "project.version" },
         { "path": "sdk/python/uv.lock", "kind": "toml_package", "selector": "plasmate" },
         { "path": "sdk/python/src/plasmate/client.py", "kind": "text_regex", "selector": "SDK_VERSION = \"([^\"]+)\"" },
-        { "path": "server.json", "kind": "json_pointer", "selector": "/packages/1/version" }
+        { "path": "sdk/python/src/plasmate/__init__.py", "kind": "text_regex", "selector": "__version__ = \"([^\"]+)\"" }
       ]
     },
     {
@@ -54,7 +53,8 @@
       "version": "0.3.0",
       "publications": ["pypi"],
       "sources": [
-        { "path": "packages/som-parser-python/pyproject.toml", "kind": "toml_key", "selector": "project.version" }
+        { "path": "packages/som-parser-python/pyproject.toml", "kind": "toml_key", "selector": "project.version" },
+        { "path": "packages/som-parser-python/som_parser/__init__.py", "kind": "text_regex", "selector": "__version__ = \"([^\"]+)\"" }
       ]
     },
     {
@@ -63,7 +63,8 @@
       "version": "0.5.0",
       "publications": ["pypi"],
       "sources": [
-        { "path": "integrations/browser-use/pyproject.toml", "kind": "toml_key", "selector": "project.version" }
+        { "path": "integrations/browser-use/pyproject.toml", "kind": "toml_key", "selector": "project.version" },
+        { "path": "integrations/browser-use/plasmate_browser_use/__init__.py", "kind": "text_regex", "selector": "__version__ = \"([^\"]+)\"" }
       ]
     },
     {
@@ -72,7 +73,8 @@
       "version": "0.5.0",
       "publications": ["pypi"],
       "sources": [
-        { "path": "integrations/langchain/pyproject.toml", "kind": "toml_key", "selector": "project.version" }
+        { "path": "integrations/langchain/pyproject.toml", "kind": "toml_key", "selector": "project.version" },
+        { "path": "integrations/langchain/langchain_plasmate/__init__.py", "kind": "text_regex", "selector": "__version__ = \"([^\"]+)\"" }
       ]
     },
     {
@@ -81,7 +83,19 @@
       "version": "0.5.1",
       "publications": ["npm"],
       "sources": [
-        { "path": "integrations/vercel-ai/package.json", "kind": "json_pointer", "selector": "/version" }
+        { "path": "integrations/vercel-ai/package.json", "kind": "json_pointer", "selector": "/version" },
+        { "path": "integrations/vercel-ai/package-lock.json", "kind": "json_pointer", "selector": "/version" },
+        { "path": "integrations/vercel-ai/package-lock.json", "kind": "json_pointer", "selector": "/packages//version" }
+      ]
+    },
+    {
+      "id": "plasmate-go-sdk",
+      "package": "github.com/plasmate-labs/plasmate/sdk/go",
+      "version": "0.1.0",
+      "publications": ["go_module"],
+      "sources": [
+        { "path": "sdk/go/VERSION", "kind": "text_regex", "selector": "^([^\\r\\n]+)" },
+        { "path": "sdk/go/client.go", "kind": "text_regex", "selector": "const SDKVersion = \"([^\"]+)\"" }
       ]
     },
     {
@@ -90,7 +104,8 @@
       "version": "0.1.0",
       "publications": ["pypi"],
       "sources": [
-        { "path": "tools/awp-cdp-proxy/pyproject.toml", "kind": "toml_key", "selector": "project.version" }
+        { "path": "tools/awp-cdp-proxy/pyproject.toml", "kind": "toml_key", "selector": "project.version" },
+        { "path": "tools/awp-cdp-proxy/awp_cdp_proxy/__init__.py", "kind": "text_regex", "selector": "__version__ = \"([^\"]+)\"" }
       ]
     }
   ]

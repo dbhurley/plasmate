@@ -10,6 +10,8 @@
 
 FROM debian:bookworm-slim
 
+LABEL io.modelcontextprotocol.server.name="io.github.plasmate-labs/plasmate"
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*

@@ -47,13 +47,16 @@ Plasmate compiles HTML into a **Semantic Object Model (SOM)**, a structured repr
 curl -fsSL https://plasmate.app/install.sh | sh
 ```
 
-Or via package managers:
+Or install the native engine with Cargo:
 
 ```bash
-cargo install plasmate       # Rust
-npm install -g plasmate      # Node.js
-pip install plasmate         # Python
+cargo install plasmate
 ```
+
+The npm and PyPI packages named `plasmate` are client SDKs; they do not bundle
+or install the native `plasmate` executable. Install the native engine first,
+then add `npm install plasmate` or `pip install plasmate` to applications that
+need the corresponding SDK.
 
 ## Quick Start
 
@@ -295,7 +298,21 @@ This wires the full Plasmate MCP tool set directly into any Vercel AI SDK agent.
 
 - Machine-readable summary: [`https://plasmate.app/llms.txt`](https://plasmate.app/llms.txt)
 - Codebase guide for AI coding agents: [`AGENTS.md`](./AGENTS.md)
-- Listed on [MCP Registry](https://registry.modelcontextprotocol.io) as the first browser/web tool
+- The checked-in [MCP Registry](https://registry.modelcontextprotocol.io)
+  metadata declares `ghcr.io/plasmate-labs/plasmate:v0.6.0` as the runnable,
+  version-pinned OCI package for the next release candidate. This image is
+  not available until the immutable v0.6.0 release workflow publishes it. Only
+  after it is anonymously pullable and the metadata is published can Registry
+  clients launch it over stdio with the `mcp` subcommand. The eventual direct
+  invocation is:
+
+  ```bash
+  docker run --rm -i ghcr.io/plasmate-labs/plasmate:v0.6.0 mcp
+  ```
+
+  The npm and PyPI packages named `plasmate` are client SDKs, not server
+  executables. For a host-native installation, install the Rust binary above
+  and configure the command as `plasmate mcp`.
 
 
 ## What is SOM?

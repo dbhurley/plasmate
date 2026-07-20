@@ -105,4 +105,4 @@ __all__ = [
     "get_enabled_action_plan",
     "get_token_estimate",
 ]
-__version__ = "0.3.0"
+__version__ = "0.4.1"

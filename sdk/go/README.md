@@ -5,7 +5,7 @@ Go SDK for the [Plasmate](https://plasmate.dev) agent-native headless browser.
 ## Install
 
 ```bash
-go get github.com/nickel-org/plasmate-go
+go get github.com/plasmate-labs/plasmate/sdk/go@v0.1.0
 ```
 
 Requires the `plasmate` binary in your PATH.
@@ -19,7 +19,7 @@ import (
     "fmt"
     "log"
 
-    plasmate "github.com/nickel-org/plasmate-go"
+    plasmate "github.com/plasmate-labs/plasmate/sdk/go"
 )
 
 func main() {
