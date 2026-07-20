@@ -5,7 +5,8 @@ on:
     branches: [master]
   pull_request:
   schedule:
-    - cron: '30 7 * * 1'
+    # Daily at 07:30 UTC while P0 operational acceptance is active.
+    - cron: '30 7 * * *'
   workflow_dispatch:
 
 permissions:
@@ -13,7 +14,9 @@ permissions:
 
 concurrency:
   group: dependency-security-${{ github.ref }}
-  cancel-in-progress: true
+  # Do not cancel a running acceptance check. GitHub serializes this group, so
+  # the expensive multi-ecosystem audit remains resource-bounded.
+  cancel-in-progress: false
 
 jobs:
   workflows:
