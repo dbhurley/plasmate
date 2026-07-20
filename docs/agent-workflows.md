@@ -54,6 +54,13 @@ Pointer in the first text result. Reports use
 `plasmate.agent-workflow-report.v1` and always account for every declared step
 as succeeded, failed, or skipped.
 
+`replay_validate` is permitted as a read-only workflow step. It validates a
+retained trace event against its owning live session and never executes the
+recorded action. A plan still cannot dynamically copy a trace handle from an
+earlier result, so general successful replay-plan composition remains future
+work; deterministic coverage currently exercises the fail-closed cross-session
+refusal contract.
+
 ## Failure containment
 
 The MCP child receives a dedicated process group, an empty inherited environment
@@ -70,3 +77,13 @@ or normal completion terminates the entire descendant group. Failure reports
 use stable classes such as `step_timeout`, `oversized_response`,
 `malformed_response`, and `tool_schema_drift`; raw child diagnostics are never
 copied into them.
+
+## Release task-success evidence
+
+`plasmate agent-task-benchmark-v1` executes six repository-owned plans against
+the real supervised MCP child and loopback-only HTML fixtures. Its gate covers
+navigation, approved action and observation, trace export, replay refusal, and
+both expected and unexpected tool-error containment without a model or public
+network dependency. See [Benchmarking Plasmate](BENCHMARKING.md) for the v1
+schema, complete-denominator rules, validator command, and the important
+distinction between task-contract success and observed workflow success.

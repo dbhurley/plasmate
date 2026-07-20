@@ -431,6 +431,17 @@ cargo test --workspace    # all workspace tests
 
 ## Benchmarks
 
+Run the deterministic supervised agent task gate and independently validate
+its fixture provenance and complete denominators:
+
+```bash
+cargo run --locked -- agent-task-benchmark-v1 --output agent-task-benchmark-v1.json
+cargo run --locked -- agent-task-benchmark-validate --input agent-task-benchmark-v1.json
+```
+
+This is a task-contract benchmark, not a latency or model-quality claim. See
+[the benchmarking methodology](docs/BENCHMARKING.md).
+
 Run the built-in benchmark against cached pages:
 
 ```bash

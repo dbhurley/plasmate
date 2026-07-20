@@ -1,0 +1,48 @@
+{
+  "schema": "plasmate.agent-task-benchmark-suite.v1",
+  "suite": "deterministic-agent-workflows",
+  "scenarios": [
+    {
+      "id": "navigate-between-pages",
+      "category": "navigation",
+      "fixture": "/start",
+      "expected_workflow_outcome": "succeeded",
+      "contract": "A supervised session navigates to a second fixture and verifies its title."
+    },
+    {
+      "id": "type-and-observe-value",
+      "category": "action",
+      "fixture": "/form",
+      "expected_workflow_outcome": "succeeded",
+      "contract": "An independently approved type action changes the intended input and a separately approved evaluation observes the value."
+    },
+    {
+      "id": "trace-action-export",
+      "category": "trace",
+      "fixture": "/form",
+      "expected_workflow_outcome": "succeeded",
+      "contract": "Tracing records the page open and approved type action, then exports two privacy-safe events."
+    },
+    {
+      "id": "replay-cross-session-refusal",
+      "category": "replay",
+      "fixture": "/start",
+      "expected_workflow_outcome": "succeeded",
+      "contract": "Validation-only replay refuses a trace handle that does not belong to the live session and performs no replay."
+    },
+    {
+      "id": "expected-tool-error-continues",
+      "category": "safe_failure",
+      "fixture": "/start",
+      "expected_workflow_outcome": "succeeded",
+      "contract": "A declared element-not-found tool error satisfies its expectation and the supervised workflow continues."
+    },
+    {
+      "id": "unexpected-tool-error-is-contained",
+      "category": "safe_failure",
+      "fixture": "/start",
+      "expected_workflow_outcome": "failed",
+      "contract": "An undeclared tool error fails its step, skips the remaining step under fail-fast, closes the session, and exits the MCP child cleanly."
+    }
+  ]
+}

@@ -44,8 +44,11 @@ preflight verifies that:
   successfully on the same SHA under the GitHub Actions app (`15368`).
 
 Authorization runs before installing Rust or executing any candidate binary.
-Only after it passes does the job run `cargo run --locked -- release-validate`
-and `cargo publish --locked --dry-run`.
+Only after it passes does the job run and validate the deterministic supervised
+agent task benchmark, run `cargo run --locked -- release-validate`, and run
+`cargo publish --locked --dry-run`. The benchmark evidence is retained as a
+workflow artifact and must report the exact compiled fixture-corpus digest and
+complete task/step denominators.
 
 The required check names are deliberately literal because GitHub branch
 protection and the Checks API use job names, not workflow step names:
@@ -154,6 +157,8 @@ git fetch upstream master
 candidate=$(git rev-parse upstream/master)
 test "$(git rev-parse HEAD)" = "$candidate"
 cargo run --locked -- release-validate
+cargo run --locked -- agent-task-benchmark-v1 --output agent-task-benchmark-v1.json
+cargo run --locked -- agent-task-benchmark-validate --input agent-task-benchmark-v1.json
 cargo publish --locked --dry-run
 cargo test --locked --workspace
 cargo test --locked --workspace --all-features

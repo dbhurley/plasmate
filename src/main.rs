@@ -222,6 +222,18 @@ enum Commands {
     /// Internal deterministic benchmark worker. Input/output are JSON over stdio.
     #[command(name = "__benchmark-worker", hide = true)]
     BenchmarkWorker,
+    /// Run deterministic task-success contracts through supervised agent workflows.
+    AgentTaskBenchmarkV1 {
+        /// Output path for the versioned machine-readable evidence report.
+        #[arg(long, default_value = "agent-task-benchmark-v1.json")]
+        output: std::path::PathBuf,
+    },
+    /// Validate an agent task benchmark report and its complete denominators.
+    AgentTaskBenchmarkValidate {
+        /// Evidence produced by `agent-task-benchmark-v1`.
+        #[arg(long, default_value = "agent-task-benchmark-v1.json")]
+        input: std::path::PathBuf,
+    },
     /// Validate all independently versioned release artifacts without publishing.
     ReleaseValidate {
         /// Repository release manifest.
@@ -686,6 +698,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 serde_json::from_slice(&input)?;
             let result = plasmate::benchmark::v1::run_worker(request).await?;
             println!("{}", serde_json::to_string(&result)?);
+        }
+        Commands::AgentTaskBenchmarkV1 { output } => {
+            let report = plasmate::benchmark::agent_v1::run_suite(
+                &plasmate::benchmark::agent_v1::BenchmarkOptions::default(),
+            )
+            .await?;
+            plasmate::benchmark::agent_v1::write_report(&output, &report)?;
+            plasmate::benchmark::agent_v1::validate_evidence(&report)
+                .map_err(std::io::Error::other)?;
+            println!(
+                "Agent task benchmark v1: {}/{} contracts passed; observed workflows: {} succeeded, {} failed, {} crashed, {} timed out; gate: {}",
+                report.summary.task_contracts_passed,
+                report.summary.tasks_total,
+                report.summary.observed_succeeded,
+                report.summary.observed_failed,
+                report.summary.observed_crash,
+                report.summary.observed_timeout,
+                if report.gate.passed { "pass" } else { "fail" }
+            );
+            if !report.gate.passed {
+                for violation in &report.gate.violations {
+                    eprintln!("agent task benchmark violation: {violation}");
+                }
+                std::process::exit(2);
+            }
+        }
+        Commands::AgentTaskBenchmarkValidate { input } => {
+            let report = plasmate::benchmark::agent_v1::read_report(&input)?;
+            plasmate::benchmark::agent_v1::validate_evidence(&report)
+                .map_err(std::io::Error::other)?;
+            println!(
+                "agent task benchmark evidence is valid and gate-passing: {}",
+                input.display()
+            );
+            if !report.gate.passed {
+                for violation in &report.gate.violations {
+                    eprintln!("agent task benchmark violation: {violation}");
+                }
+                std::process::exit(2);
+            }
         }
         Commands::ReleaseValidate { manifest, output } => {
             let repository_root = std::env::current_dir()?;

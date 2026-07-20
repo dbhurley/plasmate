@@ -476,6 +476,7 @@ fn allowed_tool(tool: &str) -> bool {
             | "trace_status"
             | "trace_export"
             | "trace_clear"
+            | "replay_validate"
     )
 }
 
@@ -632,6 +633,44 @@ pub fn execute_with_program(
     program: PathBuf,
     args: Vec<OsString>,
 ) -> WorkflowReport {
+    execute_with_child_environment(workflow, options, program, args, child_environment())
+}
+
+/// Execute one of the compiled deterministic agent-benchmark plans against the
+/// real MCP child and its ephemeral loopback fixture. This exception is not
+/// exposed by `agent-run`: benchmark plans contain no caller-controlled URL,
+/// and the private-network opt-in exists only in the supervised child's empty
+/// environment for the duration of that fixed plan.
+pub(crate) fn execute_for_local_benchmark(
+    workflow: ValidatedWorkflow,
+    options: &WorkflowOptions,
+    program: PathBuf,
+) -> WorkflowReport {
+    let mut environment = child_environment();
+    environment.push((
+        OsString::from(crate::network::security::UNSAFE_PRIVATE_NETWORK_ENV),
+        OsString::from("1"),
+    ));
+    execute_with_child_environment(
+        workflow,
+        options,
+        program,
+        vec![
+            OsString::from("mcp"),
+            OsString::from("--transport"),
+            OsString::from("stdio"),
+        ],
+        environment,
+    )
+}
+
+fn execute_with_child_environment(
+    workflow: ValidatedWorkflow,
+    options: &WorkflowOptions,
+    program: PathBuf,
+    args: Vec<OsString>,
+    environment: Vec<(OsString, OsString)>,
+) -> WorkflowReport {
     let mut report = base_report(&workflow, options);
     if options.dry_run {
         report.status = WorkflowStatus::Validated;
@@ -676,7 +715,7 @@ pub fn execute_with_program(
     let spec = InteractiveProcessSpec {
         program,
         args,
-        env: child_environment(),
+        env: environment,
         max_line_bytes: limits.response_bytes,
         max_stderr_bytes: limits.stderr_bytes,
         memory_limit_bytes: limits.memory_mb.saturating_mul(1024 * 1024),
@@ -1363,6 +1402,27 @@ mod tests {
         assert_eq!(report.status, WorkflowStatus::Validated);
         assert_eq!(report.summary.total, 1);
         assert!(report.process_outcome.is_none());
+    }
+
+    #[test]
+    fn replay_validation_is_a_read_only_allowed_workflow_step() {
+        let options = WorkflowOptions {
+            dry_run: true,
+            ..Default::default()
+        };
+        let plan = valid_plan(
+            r#",{"id":"replay","tool":"replay_validate","arguments":{"trace_id":"another-trace","sequence":1}}"#,
+        );
+        let workflow = validate_bytes(&plan, &options)
+            .expect("read-only replay validation must not require mutation approval");
+        let report = execute_with_program(
+            workflow,
+            &options,
+            PathBuf::from("not-executed"),
+            Vec::new(),
+        );
+        assert_eq!(report.status, WorkflowStatus::Validated);
+        assert_eq!(report.summary.total, 2);
     }
 
     #[test]
