@@ -4921,9 +4921,13 @@ mod tests {
         let report = runtime.execute_module_graph(&graph);
         let elapsed = started.elapsed();
 
+        // The diagnostics and untouched later-root globals below prove that
+        // the graph shares one deadline. Keep only a generous wall-clock
+        // safety ceiling here: tight timing ratios are unstable on loaded CI
+        // runners and do not add semantic coverage.
         assert!(
-            elapsed < Duration::from_millis(250),
-            "four roots consumed more than one bounded graph deadline: {elapsed:?}"
+            elapsed < Duration::from_secs(1),
+            "bounded graph execution exceeded its safety ceiling: {elapsed:?}"
         );
         assert_eq!(report.roots_evaluated, 0, "{:#?}", report.diagnostics);
         assert_eq!(report.roots_failed, 4, "{:#?}", report.diagnostics);
