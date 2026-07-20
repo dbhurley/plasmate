@@ -9,7 +9,7 @@
 //! - Minimal storage (a few hundred bytes per domain)
 //! - Transparent encryption/decryption on store/load
 
-use aes_gcm::aead::{Aead, KeyInit, OsRng};
+use aes_gcm::aead::{Aead, KeyInit, OsRng, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,10 @@ use tracing::{info, warn};
 const NONCE_SIZE: usize = 12;
 /// Master key size (256 bits = 32 bytes)
 const KEY_SIZE: usize = 32;
+/// Magic bytes identifying an encrypted profile envelope.
+const PROFILE_ENVELOPE_MAGIC: &[u8; 8] = b"PLASMATE";
+/// Version 1 envelope header. The header is authenticated as AES-GCM AAD.
+const PROFILE_ENVELOPE_V1: &[u8; 9] = b"PLASMATE\x01";
 
 /// A stored cookie profile for a domain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,29 +127,75 @@ fn get_or_create_master_key() -> Result<[u8; KEY_SIZE], Box<dyn std::error::Erro
 
 /// Encrypt data using AES-256-GCM.
 fn encrypt(plaintext: &[u8], key: &[u8; KEY_SIZE]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let cipher = Aes256Gcm::new_from_slice(key)?;
-
-    // Generate random nonce
     let mut nonce_bytes = [0u8; NONCE_SIZE];
     OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
 
-    // Encrypt
+    encrypt_with_nonce(plaintext, key, &nonce_bytes)
+}
+
+/// Encrypt data in the current authenticated, versioned envelope.
+fn encrypt_with_nonce(
+    plaintext: &[u8],
+    key: &[u8; KEY_SIZE],
+    nonce_bytes: &[u8; NONCE_SIZE],
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let cipher = Aes256Gcm::new_from_slice(key)?;
+    let nonce = Nonce::from_slice(nonce_bytes);
+
     let ciphertext = cipher
-        .encrypt(nonce, plaintext)
+        .encrypt(
+            nonce,
+            Payload {
+                msg: plaintext,
+                aad: PROFILE_ENVELOPE_V1,
+            },
+        )
         .map_err(|e| format!("Encryption failed: {}", e))?;
 
-    // Prepend nonce to ciphertext
-    let mut result = Vec::with_capacity(NONCE_SIZE + ciphertext.len());
-    result.extend_from_slice(&nonce_bytes);
+    let mut result = Vec::with_capacity(PROFILE_ENVELOPE_V1.len() + NONCE_SIZE + ciphertext.len());
+    result.extend_from_slice(PROFILE_ENVELOPE_V1);
+    result.extend_from_slice(nonce_bytes);
     result.extend_from_slice(&ciphertext);
     Ok(result)
 }
 
-/// Decrypt data using AES-256-GCM.
+/// Decrypt data from the current authenticated, versioned envelope.
 fn decrypt(data: &[u8], key: &[u8; KEY_SIZE]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    if !data.starts_with(PROFILE_ENVELOPE_MAGIC) {
+        return Err("Missing encrypted profile envelope".into());
+    }
+    if !data.starts_with(PROFILE_ENVELOPE_V1) {
+        let version = data.get(PROFILE_ENVELOPE_MAGIC.len()).copied();
+        return Err(format!("Unsupported encrypted profile version: {:?}", version).into());
+    }
+
+    let payload = &data[PROFILE_ENVELOPE_V1.len()..];
+    if payload.len() < NONCE_SIZE {
+        return Err("Encrypted profile is too short to contain a nonce".into());
+    }
+
+    let cipher = Aes256Gcm::new_from_slice(key)?;
+    let nonce = Nonce::from_slice(&payload[..NONCE_SIZE]);
+    let ciphertext = &payload[NONCE_SIZE..];
+
+    cipher
+        .decrypt(
+            nonce,
+            Payload {
+                msg: ciphertext,
+                aad: PROFILE_ENVELOPE_V1,
+            },
+        )
+        .map_err(|e| format!("Decryption failed: {}", e).into())
+}
+
+/// Decrypt the unversioned `nonce || ciphertext` format used before envelope v1.
+fn decrypt_legacy(
+    data: &[u8],
+    key: &[u8; KEY_SIZE],
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     if data.len() < NONCE_SIZE {
-        return Err("Data too short to contain nonce".into());
+        return Err("Legacy encrypted profile is too short to contain a nonce".into());
     }
 
     let cipher = Aes256Gcm::new_from_slice(key)?;
@@ -154,16 +204,19 @@ fn decrypt(data: &[u8], key: &[u8; KEY_SIZE]) -> Result<Vec<u8>, Box<dyn std::er
 
     cipher
         .decrypt(nonce, ciphertext)
-        .map_err(|e| format!("Decryption failed: {}", e).into())
+        .map_err(|e| format!("Legacy profile decryption failed: {}", e).into())
 }
 
-/// Check if data looks like valid JSON (plaintext profile).
-fn is_plaintext_json(data: &[u8]) -> bool {
-    // Valid JSON profile should start with '{' (possibly after whitespace)
-    data.iter()
-        .find(|&&b| !b.is_ascii_whitespace())
-        .map(|&b| b == b'{')
-        .unwrap_or(false)
+/// Parse either the current JSON schema or the original string-cookie schema.
+fn parse_profile_json(data: &[u8]) -> Result<CookieProfile, Box<dyn std::error::Error>> {
+    let json_str = std::str::from_utf8(data)?;
+    match serde_json::from_str(json_str) {
+        Ok(profile) => Ok(profile),
+        Err(_) => {
+            let legacy: LegacyCookieProfile = serde_json::from_str(json_str)?;
+            Ok(legacy.into())
+        }
+    }
 }
 
 /// Store a cookie profile for a domain (encrypted).
@@ -201,20 +254,10 @@ pub fn load_profile(domain: &str) -> Result<Option<CookieProfile>, Box<dyn std::
 
     let data = std::fs::read(&path)?;
 
-    // Check if this is a plaintext (legacy) profile
-    if is_plaintext_json(&data) {
-        // Try to parse as JSON directly
-        let json_str = String::from_utf8(data)?;
-        let profile: CookieProfile = match serde_json::from_str(&json_str) {
-            Ok(p) => p,
-            Err(_) => {
-                // Try legacy format (HashMap<String, String> for cookies)
-                let legacy: LegacyCookieProfile = serde_json::from_str(&json_str)?;
-                legacy.into()
-            }
-        };
-
-        // Migrate: re-encrypt the profile
+    // Only classify plaintext after fully parsing a profile. The old leading-`{`
+    // heuristic misclassified valid legacy ciphertext whenever its random nonce
+    // happened to begin with JSON-looking bytes.
+    if let Ok(profile) = parse_profile_json(&data) {
         warn!(
             domain = %domain,
             "Migrating plaintext profile to encrypted format"
@@ -229,11 +272,19 @@ pub fn load_profile(domain: &str) -> Result<Option<CookieProfile>, Box<dyn std::
         return Ok(Some(profile));
     }
 
-    // Decrypt the profile
     let key = get_or_create_master_key()?;
-    let decrypted = decrypt(&data, &key)?;
-    let json_str = String::from_utf8(decrypted)?;
-    let profile: CookieProfile = serde_json::from_str(&json_str)?;
+    let legacy_encryption = !data.starts_with(PROFILE_ENVELOPE_MAGIC);
+    let decrypted = if legacy_encryption {
+        decrypt_legacy(&data, &key)?
+    } else {
+        decrypt(&data, &key)?
+    };
+    let profile = parse_profile_json(&decrypted)?;
+
+    if legacy_encryption {
+        warn!(domain = %domain, "Migrating legacy encrypted profile to envelope v1");
+        store_profile(&profile)?;
+    }
 
     info!(domain = %domain, cookies = profile.cookies.len(), "Loaded cookie profile");
     Ok(Some(profile))
@@ -408,7 +459,20 @@ pub fn is_profile_encrypted(domain: &str) -> Result<Option<bool>, Box<dyn std::e
         return Ok(None);
     }
     let data = std::fs::read(&path)?;
-    Ok(Some(!is_plaintext_json(&data)))
+    if parse_profile_json(&data).is_ok() {
+        return Ok(Some(false));
+    }
+
+    // Authenticate the claimed encrypted representation instead of trusting
+    // magic bytes alone. This also validates unversioned encrypted profiles.
+    let key = get_or_create_master_key()?;
+    let decrypted = if data.starts_with(PROFILE_ENVELOPE_MAGIC) {
+        decrypt(&data, &key)?
+    } else {
+        decrypt_legacy(&data, &key)?
+    };
+    parse_profile_json(&decrypted)?;
+    Ok(Some(true))
 }
 
 /// Get the expiry status for a cookie.
@@ -470,8 +534,65 @@ mod tests {
         let key = [42u8; KEY_SIZE];
         let plaintext = b"Hello, World!";
         let encrypted = encrypt(plaintext, &key).unwrap();
+        assert!(encrypted.starts_with(PROFILE_ENVELOPE_V1));
         let decrypted = decrypt(&encrypted, &key).unwrap();
         assert_eq!(plaintext.as_slice(), decrypted.as_slice());
+    }
+
+    fn legacy_encrypt_with_nonce(
+        plaintext: &[u8],
+        key: &[u8; KEY_SIZE],
+        nonce_bytes: &[u8; NONCE_SIZE],
+    ) -> Vec<u8> {
+        let cipher = Aes256Gcm::new_from_slice(key).unwrap();
+        let ciphertext = cipher
+            .encrypt(Nonce::from_slice(nonce_bytes), plaintext)
+            .unwrap();
+        let mut encrypted = Vec::with_capacity(NONCE_SIZE + ciphertext.len());
+        encrypted.extend_from_slice(nonce_bytes);
+        encrypted.extend_from_slice(&ciphertext);
+        encrypted
+    }
+
+    #[test]
+    fn test_json_looking_legacy_nonces_are_decrypted_not_downgraded() {
+        let key = [42u8; KEY_SIZE];
+        let profile = CookieProfile {
+            domain: "legacy.example".to_string(),
+            cookies: HashMap::from([("session".to_string(), CookieEntry::new("secret".into()))]),
+            created_at: None,
+            notes: None,
+        };
+        let json = serde_json::to_vec(&profile).unwrap();
+
+        for nonce in [
+            [b'{', 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+            [b' ', b'\n', b'\t', b'{', 4, 5, 6, 7, 8, 9, 10, 11],
+        ] {
+            let encrypted = legacy_encrypt_with_nonce(&json, &key, &nonce);
+            assert!(parse_profile_json(&encrypted).is_err());
+            let decrypted = decrypt_legacy(&encrypted, &key).unwrap();
+            let loaded = parse_profile_json(&decrypted).unwrap();
+            assert_eq!(loaded.domain, profile.domain);
+            assert_eq!(loaded.cookies["session"].value, "secret");
+        }
+    }
+
+    #[test]
+    fn test_envelope_header_is_authenticated_and_versioned() {
+        let key = [42u8; KEY_SIZE];
+        let nonce = [7u8; NONCE_SIZE];
+        let encrypted = encrypt_with_nonce(b"sensitive", &key, &nonce).unwrap();
+
+        let mut unsupported_version = encrypted.clone();
+        unsupported_version[PROFILE_ENVELOPE_MAGIC.len()] = 2;
+        let error = decrypt(&unsupported_version, &key).unwrap_err().to_string();
+        assert!(error.contains("Unsupported encrypted profile version"));
+
+        let mut tampered_header = encrypted;
+        tampered_header[0] ^= 1;
+        assert!(parse_profile_json(&tampered_header).is_err());
+        assert!(decrypt_legacy(&tampered_header, &key).is_err());
     }
 
     #[test]
@@ -501,7 +622,8 @@ mod tests {
         // Verify the file is encrypted
         let path = profile_path("x.com").unwrap();
         let data = std::fs::read(&path).unwrap();
-        assert!(!is_plaintext_json(&data), "Profile should be encrypted");
+        assert!(data.starts_with(PROFILE_ENVELOPE_V1));
+        assert_eq!(is_profile_encrypted("x.com").unwrap(), Some(true));
 
         let loaded = load_profile("x.com").unwrap().unwrap();
         assert_eq!(loaded.domain, "x.com");
@@ -558,9 +680,50 @@ mod tests {
         // Verify it's now encrypted
         let path = profiles_dir.join("legacy.com.json");
         let data = std::fs::read(&path).unwrap();
-        assert!(!is_plaintext_json(&data), "Profile should now be encrypted");
+        assert!(data.starts_with(PROFILE_ENVELOPE_V1));
+        assert_eq!(is_profile_encrypted("legacy.com").unwrap(), Some(true));
 
         // Restore original HOME
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_legacy_encrypted_profile_with_json_looking_nonce_migrates() {
+        let dir = tempfile::tempdir().unwrap();
+        let original_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", dir.path());
+
+        let config_dir = dir.path().join(".plasmate");
+        let profiles_dir = config_dir.join("profiles");
+        std::fs::create_dir_all(&profiles_dir).unwrap();
+
+        let key = [42u8; KEY_SIZE];
+        std::fs::write(config_dir.join("master.key"), key).unwrap();
+        let profile = CookieProfile {
+            domain: "legacy-encrypted.example".to_string(),
+            cookies: HashMap::from([("session".to_string(), CookieEntry::new("secret".into()))]),
+            created_at: None,
+            notes: None,
+        };
+        let json = serde_json::to_vec(&profile).unwrap();
+        let nonce = [b'{', 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+        let encrypted = legacy_encrypt_with_nonce(&json, &key, &nonce);
+        let path = profiles_dir.join("legacy-encrypted.example.json");
+        std::fs::write(&path, encrypted).unwrap();
+
+        assert_eq!(
+            is_profile_encrypted("legacy-encrypted.example").unwrap(),
+            Some(true)
+        );
+        let loaded = load_profile("legacy-encrypted.example").unwrap().unwrap();
+        assert_eq!(loaded.cookies["session"].value, "secret");
+        assert!(std::fs::read(path)
+            .unwrap()
+            .starts_with(PROFILE_ENVELOPE_V1));
+
         if let Some(home) = original_home {
             std::env::set_var("HOME", home);
         }
