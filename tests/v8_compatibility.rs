@@ -26,6 +26,22 @@ fn v8_compatibility_manifest_cannot_drift_from_locked_build() {
         cargo["dependencies"]["v8"].as_str(),
         Some(expected_requirement.as_str())
     );
+    let icu_crate = manifest["icu_data"]["crate"]
+        .as_str()
+        .expect("ICU data crate");
+    let icu_selected = manifest["icu_data"]["selected"]
+        .as_str()
+        .expect("selected ICU data version");
+    assert_eq!(manifest["icu_data"]["icu_major"], 74);
+    assert_eq!(
+        manifest["icu_data"]["registration_api"],
+        "set_common_data_74"
+    );
+    let expected_icu_requirement = format!("={icu_selected}");
+    assert_eq!(
+        cargo["dependencies"][icu_crate].as_str(),
+        Some(expected_icu_requirement.as_str())
+    );
     let project_rust = manifest["project"]["minimum_rust"]
         .as_str()
         .expect("project MSRV")
@@ -47,6 +63,14 @@ fn v8_compatibility_manifest_cannot_drift_from_locked_build() {
         .filter_map(|package| package["version"].as_str())
         .collect();
     assert_eq!(locked, vec![selected]);
+    let locked_icu: Vec<_> = lock["package"]
+        .as_array()
+        .expect("Cargo.lock package list")
+        .iter()
+        .filter(|package| package["name"].as_str() == Some(icu_crate))
+        .filter_map(|package| package["version"].as_str())
+        .collect();
+    assert_eq!(locked_icu, vec![icu_selected]);
 }
 
 #[test]

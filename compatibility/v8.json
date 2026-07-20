@@ -17,6 +17,12 @@
     "crate_edition": "2024",
     "default_archive_source": "https://github.com/denoland/rusty_v8/releases"
   },
+  "icu_data": {
+    "crate": "deno_core_icudata",
+    "selected": "0.74.0",
+    "icu_major": 74,
+    "registration_api": "set_common_data_74"
+  },
   "supported_targets": [
     "x86_64-apple-darwin",
     "aarch64-apple-darwin",
@@ -57,6 +63,7 @@
   "sources": [
     "https://docs.rs/crate/v8/139.0.0",
     "https://docs.rs/crate/v8/150.2.0",
+    "https://github.com/denoland/deno_core_icudata",
     "https://github.com/denoland/rusty_v8",
     "https://chromium.googlesource.com/v8/v8.git/"
   ]

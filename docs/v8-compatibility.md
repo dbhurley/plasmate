@@ -35,6 +35,19 @@ curl, and a C++ toolchain; Linux also needs glib development headers, macOS need
 Xcode command-line tools, and Windows is 64-bit only. The supported archive
 matrix is macOS x86_64/aarch64, Linux x86_64/aarch64, and Windows x86_64.
 
+Every binary embeds `deno_core_icudata` `0.74.0`, the ICU 74 common-data
+package matching the ABI exposed by `v8` `139.0.0`. V8 must receive that data
+before platform initialization; starting without it can make ordinary
+`Intl.DateTimeFormat` construction terminate the process with a misleading
+fatal out-of-memory diagnostic. `PLASMATE_ICU_DATA` and `icudt74l.dat` or
+`icudtl.dat` beside the executable remain supported as operator overrides. ICU
+searches packages in registration order: a valid external package is registered
+first and the embedded package second, giving the override precedence with a
+complete fallback for missing resources. Missing, unreadable, or rejected
+external packages are skipped and their temporary allocation is reclaimed.
+Keep both exact dependency pins and the `Intl.DateTimeFormat` regression test
+in lockstep during the next V8/ICU upgrade.
+
 Run the deterministic drift check whenever Cargo or the V8 pin changes:
 
 ```bash
