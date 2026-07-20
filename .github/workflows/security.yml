@@ -26,6 +26,8 @@ jobs:
           persist-credentials: false
       - name: Validate immutable action pins
         run: python3 scripts/check-workflow-action-pins.py
+      - name: Test release authorization policy
+        run: python3 -m unittest scripts/test_verify_release_preflight.py
 
   rust:
     name: Rust advisory audit
