@@ -98,6 +98,18 @@ plasmate serve --protocol awp --host 127.0.0.1 --port 9222
 
 AWP has 7 methods: `navigate`, `snapshot`, `click`, `type`, `scroll`, `select`, `extract`. That's the entire protocol.
 
+### Run a supervised stateful workflow
+
+```bash
+plasmate agent-run --plan examples/agent-workflow.json \
+  --report agent-workflow-report.json --dry-run
+```
+
+Plans are versioned and bounded; mutating steps require separate
+`--confirm-step <id>` approvals, while JavaScript evaluation and cookie writes
+also require category opt-ins. See [the workflow contract](docs/agent-workflows.md)
+for schemas, secret references, containment, and execution examples.
+
 ### Run as an MCP tool server (Model Context Protocol)
 
 ```bash

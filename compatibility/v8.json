@@ -1,0 +1,63 @@
+{
+  "schema": "plasmate.v8-compatibility.v1",
+  "checked_at": "2026-07-19",
+  "project": {
+    "minimum_rust": "1.88.0",
+    "edition": "2021"
+  },
+  "binding": {
+    "crate": "v8",
+    "selected": "139.0.0",
+    "highest_api_compatible": "139.0.0",
+    "latest_observed": "150.2.0",
+    "selected_release_date": "2025-07-24",
+    "latest_observed_release_date": "2026-07-16",
+    "embedded_v8": "13.9.205.15",
+    "upstream_toolchain": "1.86.0",
+    "crate_edition": "2024",
+    "default_archive_source": "https://github.com/denoland/rusty_v8/releases"
+  },
+  "supported_targets": [
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc"
+  ],
+  "source_build": {
+    "opt_in_environment": "V8_FROM_SOURCE=1",
+    "requires": ["python3", "curl", "C++ toolchain"],
+    "linux_requires": ["glib-2.0 development files"],
+    "macos_requires": ["Xcode command line tools"],
+    "windows": "64-bit toolchain only"
+  },
+  "verification": {
+    "host": "x86_64-apple-darwin",
+    "commands": [
+      "cargo check --workspace --all-features",
+      "cargo test js::runtime::tests:: --lib",
+      "cargo test js::modules::tests:: --lib",
+      "cargo test --workspace --all-features",
+      "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+    ]
+  },
+  "upgrade_gap": {
+    "severity": "critical",
+    "major_versions_behind": 11,
+    "security_status": "139.0.0 is an intermediate API-compatibility ceiling, not a claim of current upstream V8 security support",
+    "first_verified_incompatible_line": "140.x",
+    "latest_tested": "150.2.0",
+    "latest_embedded_v8": "15.0.245.2",
+    "latest_minimum_rust": "1.91.0",
+    "blocking_change": "rusty_v8 migrated scope-consuming APIs from mutable HandleScope/CallbackScope references to PinScope/PinnedRef",
+    "scope": "runtime callbacks, DOM bridge callbacks, native module callbacks, value construction, and scope ownership",
+    "next_stage": "Migrate scope construction and callback signatures as one isolated runtime refactor, then run the complete native runtime/module suite before advancing beyond 139.0.0.",
+    "promotion_gate": "No newer binding may ship until all scope migrations compile on Rust 1.88+, native runtime/module tests pass, supervised crash/timeout containment passes, and the embedded V8 security delta is reviewed."
+  },
+  "sources": [
+    "https://docs.rs/crate/v8/139.0.0",
+    "https://docs.rs/crate/v8/150.2.0",
+    "https://github.com/denoland/rusty_v8",
+    "https://chromium.googlesource.com/v8/v8.git/"
+  ]
+}
