@@ -697,6 +697,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_capture_url_returns_result() {
         let opts = ScreenshotOptions::default();
         let result = capture_url("https://example.com", &opts);
@@ -718,6 +719,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_capture_html_returns_result() {
         let opts = ScreenshotOptions::default();
         let result = capture_html(
