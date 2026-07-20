@@ -764,7 +764,7 @@ pub async fn handle_crawl_policy(arguments: &Value) -> Value {
 pub fn inspect_page_definition() -> ToolDefinition {
     ToolDefinition {
         name: "inspect_page".to_string(),
-        description: "Inspect a page through a bounded compact SOM first, then optionally attach a hardened offline-rendered screenshot. JavaScript is off by default; javascript=true explicitly opts into the existing in-process V8 execution risk before screenshot isolation. visual_mode='auto' captures only for named structural insufficiency signals; 'never' only recommends; 'always' explicitly requests pixels. Plasmate does not perform vision-model interpretation, and visual failure never discards the SOM.".to_string(),
+        description: "Inspect a page through a bounded compact SOM first, then optionally attach a hardened offline-rendered screenshot. JavaScript is off by default; javascript=true executes it in a supervised worker with bounded source-HTML fallback on containment failure. visual_mode='auto' captures only for named structural insufficiency signals; 'never' only recommends; 'always' explicitly requests pixels. Plasmate does not perform vision-model interpretation, and visual failure never discards the SOM.".to_string(),
         input_schema: json!({
             "type": "object",
             "properties": {
@@ -772,7 +772,7 @@ pub fn inspect_page_definition() -> ToolDefinition {
                 "javascript": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Opt in to executing untrusted page JavaScript in Plasmate's current in-process V8 pipeline before inspection. False avoids that residual process-crash boundary."
+                    "description": "Opt in to executing untrusted page JavaScript in Plasmate's supervised worker before inspection. Worker crashes, timeouts, and protocol failures fall back to bounded source-HTML structure instead of terminating the MCP server."
                 },
                 "selector": {
                     "type": "string",
@@ -3724,10 +3724,18 @@ mod tests {
         );
         let inspect = inspect_page_definition();
         assert_eq!(inspect.input_schema["additionalProperties"], false);
+        assert!(inspect.description.contains("supervised worker"));
+        assert!(!inspect.description.contains("in-process V8"));
         assert_eq!(
             inspect.input_schema["properties"]["javascript"]["default"],
             false
         );
+        let javascript_description = inspect.input_schema["properties"]["javascript"]
+            ["description"]
+            .as_str()
+            .unwrap();
+        assert!(javascript_description.contains("supervised worker"));
+        assert!(!javascript_description.contains("in-process V8"));
         assert_eq!(
             inspect.input_schema["properties"]["visual_mode"]["enum"],
             json!(["never", "auto", "always"])

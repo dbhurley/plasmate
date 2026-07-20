@@ -231,8 +231,9 @@ Use `inspect_page` when an agent may need pixels. Its default `auto` mode
 always returns a bounded compact SOM and only attaches a screenshot for named
 signals such as near-empty structure, canvas-heavy content, or image-map/image
 controls. `never` recommends without capture; `always` is an explicit capture
-request. Page JavaScript is off by default; `javascript=true` explicitly opts
-into the existing in-process V8 crash boundary before screenshot isolation.
+request. Page JavaScript is off by default; `javascript=true` runs untrusted
+page code through the supervised JavaScript worker before the separately
+isolated screenshot process.
 Rendering uses a sandboxed/CSP-constrained document with JavaScript
 disabled, no unsafe file-access or browser-sandbox switches, a dead network
 proxy, and process-tree cleanup. Plasmate does not interpret the image with a vision model. See
