@@ -17,6 +17,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping
 
@@ -37,6 +38,9 @@ REQUIRED_CHECKS = (
     "Python dependency audit",
     "Go vulnerability audit",
 )
+RELEASE_EVIDENCE_CHECK = "coverage_js"
+RELEASE_EVIDENCE_RUNS = 2
+RELEASE_EVIDENCE_MAX_AGE = timedelta(hours=24)
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 STABLE_VERSION = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
@@ -209,6 +213,79 @@ def select_required_checks(
     return selected
 
 
+def _parse_github_time(value: Any, label: str) -> datetime:
+    if not isinstance(value, str):
+        raise PreflightError(f"{label} is missing an RFC 3339 timestamp")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise PreflightError(f"{label} is not a valid RFC 3339 timestamp") from error
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+        raise PreflightError(f"{label} must be an explicit UTC timestamp")
+    return parsed.astimezone(timezone.utc)
+
+
+def select_release_evidence(
+    check_runs: Iterable[Mapping[str, Any]],
+    release_sha: str,
+    now: datetime,
+) -> List[Mapping[str, Any]]:
+    """Require two recent, independently completed JS scorecards on one SHA."""
+
+    if now.tzinfo is None or now.utcoffset() != timedelta(0):
+        raise PreflightError("release evidence verification time must be UTC")
+    verified_at = now.astimezone(timezone.utc)
+    matches = [
+        check
+        for check in check_runs
+        if check.get("name") == RELEASE_EVIDENCE_CHECK
+        and check.get("head_sha") == release_sha
+        and isinstance(check.get("app"), Mapping)
+        and check["app"].get("id") == GITHUB_ACTIONS_APP_ID
+    ]
+    matches.sort(key=_check_rank, reverse=True)
+    selected = matches[:RELEASE_EVIDENCE_RUNS]
+    if len(selected) != RELEASE_EVIDENCE_RUNS:
+        raise PreflightError(
+            f"release requires {RELEASE_EVIDENCE_RUNS} independent successful "
+            f"{RELEASE_EVIDENCE_CHECK!r} check runs on {release_sha}; "
+            f"found {len(selected)}"
+        )
+
+    errors: List[str] = []
+    oldest_allowed = verified_at - RELEASE_EVIDENCE_MAX_AGE
+    for check in selected:
+        check_id = check.get("id")
+        if check.get("status") != "completed" or check.get("conclusion") != "success":
+            errors.append(
+                f"release evidence check-run {check_id!r} is not successful "
+                f"(status={check.get('status')!r}, "
+                f"conclusion={check.get('conclusion')!r})"
+            )
+            continue
+        try:
+            completed_at = _parse_github_time(
+                check.get("completed_at"),
+                f"release evidence check-run {check_id!r} completed_at",
+            )
+        except PreflightError as error:
+            errors.append(str(error))
+            continue
+        if completed_at > verified_at:
+            errors.append(
+                f"release evidence check-run {check_id!r} completed in the future"
+            )
+        elif completed_at < oldest_allowed:
+            errors.append(
+                f"release evidence check-run {check_id!r} is stale; completed at "
+                f"{completed_at.isoformat()}, before {oldest_allowed.isoformat()}"
+            )
+
+    if errors:
+        raise PreflightError("\n".join(errors))
+    return selected
+
+
 def _load_check_fixture(path: Path) -> List[Mapping[str, Any]]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, dict):
@@ -304,15 +381,21 @@ def main() -> None:
                 os.environ.get("GITHUB_TOKEN", ""),
             )
         selected = select_required_checks(check_runs, release_sha)
+        release_evidence = select_release_evidence(
+            check_runs, release_sha, datetime.now(timezone.utc)
+        )
     except (OSError, PreflightError, json.JSONDecodeError) as error:
         raise SystemExit(f"release preflight failed: {error}") from error
 
     print(
         f"Release preflight passed for {arguments.tag} at {release_sha}; "
-        f"validated {len(selected)} required GitHub Actions checks"
+        f"validated {len(selected)} required GitHub Actions checks and "
+        f"{len(release_evidence)} fresh isolated JS scorecards"
     )
     for name in REQUIRED_CHECKS:
         print(f"  {name}: check-run {selected[name]['id']}")
+    for check in release_evidence:
+        print(f"  {RELEASE_EVIDENCE_CHECK}: check-run {check['id']}")
 
 
 if __name__ == "__main__":

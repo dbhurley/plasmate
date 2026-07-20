@@ -124,31 +124,30 @@ new production tag is pushed:
    reviewer and leaving "Prevent self-review" disabled; this is an explicit
    confirmation gate, not independent approval. Add a second trusted reviewer
    and enable self-review prevention when independent authorization is required.
-4. Freeze the intended `master` SHA for at least 168 hours. Preserve successful
-   required-check evidence for the candidate on seven consecutive UTC days and
-   at least one successful scheduled JS coverage run on that same SHA. Download
-   the JS scorecard artifact before its retention period expires and retain the
-   workflow run IDs, attempts, logs, candidate SHA, corpus digest, and branch
-   protection snapshots.
+4. Run one exact-SHA release session. Require successful CI and dependency
+   security on the candidate, then dispatch the isolated JS coverage workflow
+   twice on that same SHA. Both newest scorecard checks must succeed within the
+   24 hours before tag preflight. Download and validate both artifacts; retain
+   their run IDs, attempts, logs, candidate SHA, corpus digest, and repository
+   protection snapshots. Any newer failed scorecard blocks release.
 
 The exact repository-side procedure is in `docs/P0-EXECUTION-PLAN.md`. It
-records the freeze and first full UTC date, dispatches the daily/manual
-workflows, exports run metadata, and produces a
-`plasmate.p0-soak-verification.v1` result. The verifier requires seven complete
-UTC dates of successful CI and dependency-security runs on exactly one SHA,
-at least one successful JS coverage run on that SHA during the window, and
-completion timestamps no later than the recorded verification cutoff.
+dispatches all evidence-producing workflows on one candidate and validates two
+independent `coverage_js` check runs. Production tag preflight queries GitHub's
+exact-SHA check runs directly, rejects stale or newer failed JS evidence, and
+requires the same 13 protected CI/security contexts used by `master`.
 
 Workflow YAML does not prove that branch, tag, or environment protections are
-active. Retain the read-only GitHub settings snapshots alongside the verifier
-result and linked Actions evidence. If `master` moves during the soak, restart
-the full window on the new SHA; never combine evidence from two commits.
+active. Retain the read-only GitHub settings snapshots alongside the preflight
+result and linked Actions evidence. If `master` moves before the tag is pushed,
+rerun the release session on the new SHA; never combine evidence from commits.
 
-Only after these controls and the soak are complete should the maintainer create
-and push an annotated release tag. The production workflow intentionally rejects
-prerelease and build-metadata versions because it always publishes a stable
-GitHub release and advances the container's `latest` tag. Because a protected
-release tag is immutable, run the local checks before creating it:
+Only after these controls and the exact-SHA release session are complete should
+the maintainer create and push an annotated release tag. The production
+workflow intentionally rejects prerelease and build-metadata versions because
+it always publishes a stable GitHub release and advances the container's
+`latest` tag. Because a protected release tag is immutable, run the local
+checks before creating it:
 
 ```bash
 git fetch upstream master
