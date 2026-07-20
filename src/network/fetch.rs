@@ -110,8 +110,18 @@ pub(crate) struct PublicOnlyClient(Client);
 pub(crate) fn build_client_public_only(
     cookie_jar: Arc<Jar>,
 ) -> Result<PublicOnlyClient, FetchError> {
+    build_client_public_only_with_user_agent(cookie_jar, None)
+}
+
+/// Build a permanently public-network-only client with an explicit product
+/// token as its HTTP User-Agent. This is used by policy discovery surfaces
+/// whose declared crawler identity must match the evaluated robots group.
+pub(crate) fn build_client_public_only_with_user_agent(
+    cookie_jar: Arc<Jar>,
+    user_agent: Option<&str>,
+) -> Result<PublicOnlyClient, FetchError> {
     build_client_with_policy(
-        None,
+        user_agent,
         cookie_jar,
         None,
         OutboundUrlPolicy::public_network_only(),
@@ -286,6 +296,27 @@ pub(crate) async fn fetch_url_public_only_with_limits(
         None,
         limits,
         OutboundUrlPolicy::public_network_only(),
+        false,
+    )
+    .await
+}
+
+/// Public-only fetch whose redirect chain is additionally pinned to the
+/// original origin. Redirect destinations are revalidated before any request.
+pub(crate) async fn fetch_url_public_only_same_origin_with_limits(
+    client: &PublicOnlyClient,
+    url: &str,
+    timeout_ms: u64,
+    limits: FetchLimits,
+) -> Result<FetchResult, FetchError> {
+    fetch_url_inner_with_policy(
+        &client.0,
+        url,
+        timeout_ms,
+        None,
+        limits,
+        OutboundUrlPolicy::public_network_only(),
+        true,
     )
     .await
 }
@@ -304,6 +335,7 @@ pub(crate) async fn fetch_url_for_local_fixture(
         None,
         FetchLimits::default(),
         OutboundUrlPolicy::for_local_fixtures(),
+        false,
     )
     .await
 }
@@ -323,6 +355,27 @@ pub(crate) async fn fetch_url_for_local_fixture_with_limits(
         None,
         limits,
         OutboundUrlPolicy::for_local_fixtures(),
+        false,
+    )
+    .await
+}
+
+/// Test-only same-origin counterpart for deterministic loopback fixtures.
+#[cfg(test)]
+pub(crate) async fn fetch_url_for_local_fixture_same_origin_with_limits(
+    client: &Client,
+    url: &str,
+    timeout_ms: u64,
+    limits: FetchLimits,
+) -> Result<FetchResult, FetchError> {
+    fetch_url_inner_with_policy(
+        client,
+        url,
+        timeout_ms,
+        None,
+        limits,
+        OutboundUrlPolicy::for_local_fixtures(),
+        true,
     )
     .await
 }
@@ -352,7 +405,16 @@ async fn fetch_url_inner(
     limits: FetchLimits,
 ) -> Result<FetchResult, FetchError> {
     let policy = OutboundUrlPolicy::from_environment();
-    fetch_url_inner_with_policy(client, url, timeout_ms, extra_headers, limits, policy).await
+    fetch_url_inner_with_policy(
+        client,
+        url,
+        timeout_ms,
+        extra_headers,
+        limits,
+        policy,
+        false,
+    )
+    .await
 }
 
 async fn fetch_url_inner_with_policy(
@@ -362,6 +424,7 @@ async fn fetch_url_inner_with_policy(
     extra_headers: Option<&std::collections::HashMap<String, String>>,
     limits: FetchLimits,
     policy: OutboundUrlPolicy,
+    same_origin_only: bool,
 ) -> Result<FetchResult, FetchError> {
     let start = Instant::now();
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
@@ -407,6 +470,11 @@ async fn fetch_url_inner_with_policy(
             let next = current.join(location).map_err(|e| {
                 FetchError::NavigationFailed(format!("invalid redirect Location: {e}"))
             })?;
+            if same_origin_only && origin_key(&next) != initial_origin {
+                return Err(FetchError::UrlBlocked(
+                    "cross-origin redirect is not allowed for this operation".to_string(),
+                ));
+            }
             current = policy
                 .validate_url(next.as_str())
                 .await
@@ -617,6 +685,18 @@ mod security_tests {
         format!("http://{address}/")
     }
 
+    async fn owned_fixture_server(response: Vec<u8>) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = [0u8; 1024];
+            let _ = stream.read(&mut request).await;
+            stream.write_all(&response).await.unwrap();
+        });
+        format!("http://{address}/")
+    }
+
     fn fixture_client() -> Client {
         Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -637,6 +717,7 @@ mod security_tests {
             None,
             FetchLimits::default(),
             OutboundUrlPolicy::deny_private_network(),
+            false,
         )
         .await;
         assert!(matches!(result, Err(FetchError::UrlBlocked(_))));
@@ -675,9 +756,35 @@ mod security_tests {
             None,
             FetchLimits::default(),
             OutboundUrlPolicy::for_test_fixtures(),
+            false,
         )
         .await;
         assert!(matches!(result, Err(FetchError::UrlBlocked(_))));
+    }
+
+    #[tokio::test]
+    async fn same_origin_mode_rejects_cross_origin_redirect_before_following() {
+        let destination = fixture_server(
+            b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok",
+        )
+        .await;
+        let response =
+            format!("HTTP/1.1 302 Found\r\nLocation: {destination}\r\nContent-Length: 0\r\n\r\n")
+                .into_bytes();
+        let source = owned_fixture_server(response).await;
+        let result = fetch_url_inner_with_policy(
+            &fixture_client(),
+            &source,
+            1_000,
+            None,
+            FetchLimits::default(),
+            OutboundUrlPolicy::for_test_fixtures(),
+            true,
+        )
+        .await;
+        assert!(
+            matches!(result, Err(FetchError::UrlBlocked(message)) if message.contains("cross-origin"))
+        );
     }
 
     #[tokio::test]
@@ -697,6 +804,7 @@ mod security_tests {
                 max_redirects: 1,
             },
             OutboundUrlPolicy::for_test_fixtures(),
+            false,
         )
         .await;
         assert!(matches!(result, Err(FetchError::BodyTooLarge { limit: 4 })));
@@ -719,6 +827,7 @@ mod security_tests {
                 max_redirects: 1,
             },
             OutboundUrlPolicy::for_test_fixtures(),
+            false,
         )
         .await;
         assert!(matches!(result, Err(FetchError::BodyTooLarge { limit: 4 })));

@@ -324,6 +324,8 @@ fn handle_tools_list(request: &JsonRpcRequest, adapter: ProtocolAdapter) -> Json
         tools::extract_text_definition(),
         tools::extract_links_definition(),
         tools::ard_discover_definition(),
+        tools::crawl_policy_definition(),
+        tools::inspect_page_definition(),
         tools::cache_status_definition(),
         tools::session_status_definition(),
         tools::trace_status_definition(),
@@ -413,6 +415,8 @@ async fn handle_tools_call(
         "extract_text" => tools::handle_extract_text(&arguments, client, cache).await,
         "extract_links" => tools::handle_extract_links(&arguments, client, cache).await,
         "ard_discover" => tools::handle_ard_discover(&arguments).await,
+        "crawl_policy" => tools::handle_crawl_policy(&arguments).await,
+        "inspect_page" => tools::handle_inspect_page(&arguments, client).await,
         "cache_status" => tools::handle_cache_status(cache),
         "session_status" => tools::handle_session_status(sessions).await,
         "trace_status" => tools::handle_trace_status(&arguments, sessions).await,
@@ -628,7 +632,7 @@ mod tests {
         .await;
         let listed = route(&request(Some(3), "tools/list", None), &mut state).await;
         let result = listed.result.unwrap();
-        assert_eq!(result["tools"].as_array().unwrap().len(), 24);
+        assert_eq!(result["tools"].as_array().unwrap().len(), 26);
         for tool in result["tools"].as_array().unwrap() {
             assert!(tool["title"].is_string());
             assert_eq!(tool["outputSchema"]["type"], "object");

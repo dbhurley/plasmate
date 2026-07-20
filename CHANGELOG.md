@@ -23,6 +23,8 @@
 - Removed the Browser Use package's unused `browser-use` convenience extra so
   installing Plasmate no longer pulls an upstream graph pinned to vulnerable
   `pypdf` releases.
+- Added the versioned `plasmate.crawl-policy.v1` RFC 9309 evaluator through `plasmate crawl-policy` and the read-only `crawl_policy` MCP tool. It uses a public-only, same-origin robots request; combines exact product-token groups with wildcard fallback; implements longest-rule selection, wildcard/end anchoring, percent-encoding semantics, and conservative unavailable/unreachable handling; and leaves ordinary fetch behavior unchanged.
+- Added the read-only `inspect_page` MCP tool. It returns a bounded compact SOM first and uses deterministic `never`/`auto`/`always` visual fallback. Page JavaScript is off by default; explicit opt-in retains the documented in-process V8 risk before screenshot isolation. Screenshots render only already-fetched HTML in a JavaScript-disabled, sandboxed/CSP-constrained Chrome document with restrictive file defaults, a dead network proxy, process-tree cleanup, and hard dimensions/time/image/envelope bounds. Typed visual failure never discards structure, and Plasmate does not perform vision-model interpretation.
 
 ## v0.5.1 (2026-04-05)
 

@@ -9,6 +9,10 @@
 
 use serde_json::json;
 
+const OFFLINE_PROXY: &str = "http://127.0.0.1:9";
+const EMBEDDED_CONTENT_POLICY: &str = "default-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data:; connect-src 'none'";
+const MAX_LEGACY_SCREENSHOT_BYTES: usize = 16 * 1024 * 1024;
+
 /// Default viewport width.
 pub const DEFAULT_WIDTH: u32 = 1280;
 /// Default viewport height.
@@ -85,6 +89,10 @@ pub enum ScreenshotError {
     CaptureFailed(String),
     #[error("Render error: {0}")]
     RenderError(String),
+    #[error("Screenshot capture timed out")]
+    Timeout,
+    #[error("Screenshot exceeds the configured {limit} byte limit")]
+    OutputTooLarge { limit: usize },
 }
 
 /// Find Chrome/Chromium binary on the system.
@@ -118,6 +126,123 @@ fn find_chrome() -> Option<String> {
         }
     }
     None
+}
+
+/// Put an external renderer in a dedicated process tree and guarantee that the
+/// root is reaped after the tree is terminated. Chrome routinely creates child
+/// processes, so killing only the returned [`std::process::Child`] is not a
+/// sufficient cleanup boundary.
+struct ContainedChild {
+    child: std::process::Child,
+    process_tree: crate::process_supervisor::ProcessTreeGuard,
+    reaped: bool,
+}
+
+impl ContainedChild {
+    fn spawn(command: &mut std::process::Command) -> std::io::Result<Self> {
+        crate::process_supervisor::configure_process_tree(command);
+        let child = command.spawn()?;
+        let process_tree = crate::process_supervisor::ProcessTreeGuard::new(child.id());
+        Ok(Self {
+            child,
+            process_tree,
+            reaped: false,
+        })
+    }
+
+    fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.child.try_wait()
+    }
+
+    fn terminate_and_wait(&mut self) {
+        self.process_tree.terminate();
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        self.reaped = true;
+    }
+}
+
+impl Drop for ContainedChild {
+    fn drop(&mut self) {
+        if !self.reaped {
+            self.terminate_and_wait();
+        } else {
+            self.process_tree.terminate();
+        }
+    }
+}
+
+fn escape_srcdoc(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '&' => escaped.push_str("&amp;"),
+            '"' => escaped.push_str("&quot;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            _ => escaped.push(character),
+        }
+    }
+    escaped
+}
+
+/// Place untrusted effective HTML in a sandboxed srcdoc document. The CSP is
+/// the first markup parsed inside that document and is defense in depth for the
+/// renderer-level JavaScript switch and Chromium's restrictive file defaults.
+fn hardened_render_document(html: &str) -> String {
+    let embedded = format!(
+        "<meta http-equiv=\"Content-Security-Policy\" content=\"{EMBEDDED_CONTENT_POLICY}\">{html}"
+    );
+    format!(
+        "<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; frame-src 'self'\"><style>html,body,iframe{{border:0;height:100%;margin:0;overflow:hidden;padding:0;width:100%}}iframe{{display:block}}</style></head><body><iframe sandbox referrerpolicy=\"no-referrer\" srcdoc=\"{}\"></iframe></body></html>",
+        escape_srcdoc(&embedded)
+    )
+}
+
+fn hardened_html_chrome_args(
+    temp_dir: &std::path::Path,
+    screenshot_path: &std::path::Path,
+    opts: &ScreenshotOptions,
+) -> Vec<String> {
+    vec![
+        "--headless=new".to_string(),
+        "--disable-gpu".to_string(),
+        "--disable-dev-shm-usage".to_string(),
+        "--disable-extensions".to_string(),
+        "--disable-background-networking".to_string(),
+        "--disable-sync".to_string(),
+        "--disable-translate".to_string(),
+        "--mute-audio".to_string(),
+        "--no-first-run".to_string(),
+        "--no-default-browser-check".to_string(),
+        "--disable-javascript".to_string(),
+        format!("--proxy-server={OFFLINE_PROXY}"),
+        "--proxy-bypass-list=<-loopback>".to_string(),
+        format!("--window-size={},{}", opts.width, opts.height),
+        format!("--user-data-dir={}", temp_dir.display()),
+        format!("--screenshot={}", screenshot_path.display()),
+    ]
+}
+
+fn complete_png_size(path: &std::path::Path) -> std::io::Result<Option<u64>> {
+    use std::io::{Read, Seek, SeekFrom};
+
+    const PNG_IEND: [u8; 12] = [
+        0x00, 0x00, 0x00, 0x00, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+    ];
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let length = file.metadata()?.len();
+    if length < PNG_IEND.len() as u64 {
+        return Ok(None);
+    }
+    file.seek(SeekFrom::End(-(PNG_IEND.len() as i64)))?;
+    let mut trailer = [0_u8; PNG_IEND.len()];
+    file.read_exact(&mut trailer)?;
+    Ok((trailer == PNG_IEND).then_some(length))
 }
 
 /// Capture a screenshot by delegating to headless Chrome.
@@ -160,46 +285,50 @@ pub fn capture_url(url: &str, opts: &ScreenshotOptions) -> Result<Vec<u8>, Scree
 
     cmd.arg(url);
 
-    let mut child = cmd
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+    cmd.stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    let mut child = ContainedChild::spawn(&mut cmd)
         .map_err(|e| ScreenshotError::CaptureFailed(format!("spawn chrome: {}", e)))?;
 
     let timeout = std::time::Duration::from_secs(15);
     let start_time = std::time::Instant::now();
-    let mut output = None;
 
     loop {
         if start_time.elapsed() > timeout {
-            child.kill().ok(); // Best effort kill
-            return Err(ScreenshotError::CaptureFailed(
-                "Chrome process timed out".to_string(),
-            ));
+            child.terminate_and_wait();
+            return Err(ScreenshotError::Timeout);
         }
 
         match child.try_wait() {
             Ok(Some(_status)) => {
-                let res = child.wait_with_output().map_err(|e| {
-                    ScreenshotError::CaptureFailed(format!("wait_with_output failed: {}", e))
-                })?;
-                // Chrome often exits with non-zero status due to GPU warnings
-                // even when the screenshot was produced. Check for the file instead.
-                output = Some(res);
+                child.reaped = true;
+                child.process_tree.terminate();
                 break;
             }
             Ok(None) => {
-                // Still running - also check if screenshot file exists already
-                if screenshot_path.exists() {
-                    // Chrome wrote the file but hasn't exited yet (cleanup)
-                    // Give it a moment then kill
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                    child.kill().ok();
-                    break;
+                match complete_png_size(&screenshot_path) {
+                    Ok(Some(length)) if length > MAX_LEGACY_SCREENSHOT_BYTES as u64 => {
+                        child.terminate_and_wait();
+                        return Err(ScreenshotError::OutputTooLarge {
+                            limit: MAX_LEGACY_SCREENSHOT_BYTES,
+                        });
+                    }
+                    Ok(Some(_)) => {
+                        child.terminate_and_wait();
+                        break;
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        child.terminate_and_wait();
+                        return Err(ScreenshotError::CaptureFailed(format!(
+                            "inspect screenshot: {error}"
+                        )));
+                    }
                 }
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
             Err(e) => {
+                child.terminate_and_wait();
                 return Err(ScreenshotError::CaptureFailed(format!(
                     "Error waiting for Chrome: {}",
                     e
@@ -209,20 +338,25 @@ pub fn capture_url(url: &str, opts: &ScreenshotOptions) -> Result<Vec<u8>, Scree
     }
 
     if !screenshot_path.exists() {
-        let msg = if let Some(ref out) = output {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            format!(
-                "Chrome did not produce screenshot. stderr: {}",
-                stderr.chars().take(500).collect::<String>()
-            )
-        } else {
-            "Chrome did not produce screenshot".to_string()
-        };
-        return Err(ScreenshotError::CaptureFailed(msg));
+        return Err(ScreenshotError::CaptureFailed(
+            "Chrome did not produce screenshot".to_string(),
+        ));
     }
 
+    let metadata = std::fs::metadata(&screenshot_path)
+        .map_err(|e| ScreenshotError::CaptureFailed(format!("metadata screenshot: {}", e)))?;
+    if metadata.len() > MAX_LEGACY_SCREENSHOT_BYTES as u64 {
+        return Err(ScreenshotError::OutputTooLarge {
+            limit: MAX_LEGACY_SCREENSHOT_BYTES,
+        });
+    }
     let data = std::fs::read(&screenshot_path)
         .map_err(|e| ScreenshotError::CaptureFailed(format!("read screenshot: {}", e)))?;
+    if data.len() > MAX_LEGACY_SCREENSHOT_BYTES {
+        return Err(ScreenshotError::OutputTooLarge {
+            limit: MAX_LEGACY_SCREENSHOT_BYTES,
+        });
+    }
 
     Ok(data)
 }
@@ -230,73 +364,101 @@ pub fn capture_url(url: &str, opts: &ScreenshotOptions) -> Result<Vec<u8>, Scree
 /// Capture a screenshot from HTML content.
 pub fn capture_html(
     html: &str,
+    base_url: &str,
+    opts: &ScreenshotOptions,
+) -> Result<Vec<u8>, ScreenshotError> {
+    capture_html_with_limits(
+        html,
+        base_url,
+        opts,
+        std::time::Duration::from_secs(15),
+        usize::MAX,
+    )
+}
+
+/// Capture already-fetched HTML with caller-owned process and output limits.
+///
+/// The renderer receives a generated wrapper containing a sandboxed `srcdoc`,
+/// JavaScript is disabled at Chromium's renderer boundary and again by the
+/// sandboxed document, cross-file access remains at Chromium's restrictive
+/// default and is narrowed by CSP, and HTTP(S) is sent to a dead proxy. Chrome
+/// never navigates to the caller's network URL. The dedicated Chrome process
+/// group is terminated and its root is waited on for every exit path.
+pub fn capture_html_with_limits(
+    html: &str,
     _base_url: &str,
     opts: &ScreenshotOptions,
+    timeout: std::time::Duration,
+    max_output_bytes: usize,
 ) -> Result<Vec<u8>, ScreenshotError> {
     let chrome_bin = find_chrome().ok_or(ScreenshotError::ChromeNotFound)?;
 
     let temp_dir = tempfile::tempdir()
         .map_err(|e| ScreenshotError::CaptureFailed(format!("temp dir: {}", e)))?;
 
-    // Write HTML to temp file
+    // Write a generated containment document only. The fetched HTML is embedded
+    // as a sandboxed srcdoc rather than receiving top-level file:// privileges.
     let html_path = temp_dir.path().join("page.html");
-    std::fs::write(&html_path, html)
+    std::fs::write(&html_path, hardened_render_document(html))
         .map_err(|e| ScreenshotError::CaptureFailed(format!("write html: {}", e)))?;
 
     let screenshot_path = temp_dir.path().join("screenshot.png");
 
-    let mut child = std::process::Command::new(&chrome_bin)
-        .args([
-            "--headless=new",
-            "--disable-gpu",
-            "--disable-dev-shm-usage",
-            "--disable-extensions",
-            "--disable-background-networking",
-            "--no-first-run",
-            "--no-default-browser-check",
-            // Render the already-fetched HTML without allowing subresources to
-            // escape the outbound URL policy, including loopback IP literals.
-            "--proxy-server=http://127.0.0.1:9",
-            "--proxy-bypass-list=<-loopback>",
-            &format!("--window-size={},{}", opts.width, opts.height),
-            &format!("--user-data-dir={}", temp_dir.path().display()),
-            &format!("--screenshot={}", screenshot_path.display()),
-        ])
+    let mut command = std::process::Command::new(&chrome_bin);
+    command
+        .args(hardened_html_chrome_args(
+            temp_dir.path(),
+            &screenshot_path,
+            opts,
+        ))
         .arg(format!("file://{}", html_path.display()))
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+        // Renderer diagnostics are intentionally discarded. They are neither
+        // needed for this typed API nor safe to return through MCP.
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    let mut child = ContainedChild::spawn(&mut command)
         .map_err(|e| ScreenshotError::CaptureFailed(format!("spawn chrome: {}", e)))?;
 
-    let timeout = std::time::Duration::from_secs(15);
     let start_time = std::time::Instant::now();
-    let mut output = None;
 
     loop {
         if start_time.elapsed() > timeout {
-            child.kill().ok();
-            return Err(ScreenshotError::CaptureFailed(
-                "Chrome process timed out".to_string(),
-            ));
+            child.terminate_and_wait();
+            return Err(ScreenshotError::Timeout);
         }
 
         match child.try_wait() {
             Ok(Some(_status)) => {
-                let res = child.wait_with_output().map_err(|e| {
-                    ScreenshotError::CaptureFailed(format!("wait_with_output failed: {}", e))
-                })?;
-                output = Some(res);
+                // `try_wait` reaps the root process. Mark the wrapper reaped and
+                // terminate any renderer descendants that retained the group.
+                child.reaped = true;
+                child.process_tree.terminate();
                 break;
             }
             Ok(None) => {
-                if screenshot_path.exists() {
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                    child.kill().ok();
-                    break;
+                match complete_png_size(&screenshot_path) {
+                    Ok(Some(length)) if length > max_output_bytes as u64 => {
+                        child.terminate_and_wait();
+                        return Err(ScreenshotError::OutputTooLarge {
+                            limit: max_output_bytes,
+                        });
+                    }
+                    Ok(Some(_)) => {
+                        child.terminate_and_wait();
+                        break;
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        child.terminate_and_wait();
+                        return Err(ScreenshotError::CaptureFailed(format!(
+                            "inspect screenshot: {error}"
+                        )));
+                    }
                 }
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
             Err(e) => {
+                child.terminate_and_wait();
                 return Err(ScreenshotError::CaptureFailed(format!(
                     "Error waiting for Chrome: {}",
                     e
@@ -306,20 +468,26 @@ pub fn capture_html(
     }
 
     if !screenshot_path.exists() {
-        let msg = if let Some(ref out) = output {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            format!(
-                "Chrome did not produce screenshot. stderr: {}",
-                stderr.chars().take(500).collect::<String>()
-            )
-        } else {
-            "Chrome did not produce screenshot".to_string()
-        };
-        return Err(ScreenshotError::CaptureFailed(msg));
+        return Err(ScreenshotError::CaptureFailed(
+            "Chrome did not produce screenshot".to_string(),
+        ));
     }
 
-    std::fs::read(&screenshot_path)
-        .map_err(|e| ScreenshotError::CaptureFailed(format!("read: {}", e)))
+    let metadata = std::fs::metadata(&screenshot_path)
+        .map_err(|e| ScreenshotError::CaptureFailed(format!("metadata: {}", e)))?;
+    if metadata.len() > max_output_bytes as u64 {
+        return Err(ScreenshotError::OutputTooLarge {
+            limit: max_output_bytes,
+        });
+    }
+    let data = std::fs::read(&screenshot_path)
+        .map_err(|e| ScreenshotError::CaptureFailed(format!("read: {}", e)))?;
+    if data.len() > max_output_bytes {
+        return Err(ScreenshotError::OutputTooLarge {
+            limit: max_output_bytes,
+        });
+    }
+    Ok(data)
 }
 
 /// Check if Chrome is available for screenshots.
@@ -344,6 +512,144 @@ pub fn som_fallback(som: &crate::som::types::Som) -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hardened_renderer_configuration_is_explicit_and_has_no_unsafe_file_switches() {
+        let directory = std::path::Path::new("/owned-render-dir");
+        let screenshot = directory.join("capture.png");
+        let args = hardened_html_chrome_args(directory, &screenshot, &ScreenshotOptions::default());
+
+        assert!(args.iter().any(|arg| arg == "--disable-javascript"));
+        assert!(args
+            .iter()
+            .any(|arg| arg == "--proxy-server=http://127.0.0.1:9"));
+        assert!(args
+            .iter()
+            .any(|arg| arg == "--proxy-bypass-list=<-loopback>"));
+        assert!(!args.iter().any(|arg| {
+            arg == "--allow-file-access-from-files"
+                || arg == "--disable-web-security"
+                || arg == "--no-sandbox"
+        }));
+    }
+
+    #[test]
+    fn hardened_document_sandboxes_and_policy_wraps_untrusted_html() {
+        let document = hardened_render_document(
+            "<script>document.body.textContent='executed'</script><img src=\"file:///etc/passwd\">",
+        );
+        assert!(document.contains("<iframe sandbox"));
+        assert!(!document.contains("scriptEnabled"));
+        assert!(document.contains("default-src 'none'"));
+        assert!(document.contains("script-src 'none'"));
+        assert!(document.contains("frame-src 'none'"));
+        assert!(document.contains("file:///etc/passwd"));
+        assert!(!document.contains("<script>document.body"));
+        assert!(document.contains("&lt;script&gt;document.body"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn contained_child_terminates_descendants_and_reaps_root() {
+        let directory = tempfile::tempdir().unwrap();
+        let pid_file = directory.path().join("descendant.pid");
+        let mut command = std::process::Command::new("/bin/sh");
+        command
+            .args(["-c", "sleep 30 & echo $! > \"$1\"; wait", "sh"])
+            .arg(&pid_file)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        let mut child = ContainedChild::spawn(&mut command).unwrap();
+        let root_pid = child.child.id() as libc::pid_t;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while !pid_file.exists() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "fixture did not publish descendant pid"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let descendant_pid: libc::pid_t = std::fs::read_to_string(&pid_file)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+
+        child.terminate_and_wait();
+        assert_eq!(
+            unsafe { libc::waitpid(root_pid, std::ptr::null_mut(), libc::WNOHANG) },
+            -1,
+            "root process should already have been waited on"
+        );
+        let cleanup_deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while unsafe { libc::kill(descendant_pid, 0) } == 0 {
+            assert!(
+                std::time::Instant::now() < cleanup_deadline,
+                "descendant {descendant_pid} survived contained cleanup"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn chromium_boundary_blocks_script_execution_and_cross_file_rendering() {
+        if !chrome_available() {
+            return;
+        }
+
+        let directory = tempfile::tempdir().unwrap();
+        let secret_svg = directory.path().join("secret.svg");
+        std::fs::write(
+            &secret_svg,
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="320" height="200" fill="red"/></svg>"#,
+        )
+        .unwrap();
+        let baseline = "<style>html,body{background:white;height:100%;margin:0}</style>";
+        let hostile = format!(
+            "<style>html,body{{background:white url('file://{}') center/cover;height:100%;margin:0}}</style><script>document.documentElement.style.background='red';document.body.style.background='red'</script>",
+            secret_svg.display()
+        );
+        let options = ScreenshotOptions {
+            width: 320,
+            height: 200,
+            ..Default::default()
+        };
+        let baseline_image = capture_html_with_limits(
+            baseline,
+            "https://example.test/",
+            &options,
+            std::time::Duration::from_secs(30),
+            1024 * 1024,
+        )
+        .expect("baseline hardened screenshot should render");
+        let visible_control = capture_html_with_limits(
+            "<style>html,body{background:blue;height:100%;margin:0}</style>",
+            "https://example.test/",
+            &options,
+            std::time::Duration::from_secs(30),
+            1024 * 1024,
+        )
+        .expect("visible control screenshot should render");
+        let hostile_image = capture_html_with_limits(
+            &hostile,
+            "https://example.test/",
+            &options,
+            std::time::Duration::from_secs(30),
+            1024 * 1024,
+        )
+        .expect("hostile hardened screenshot should render");
+
+        assert_ne!(
+            visible_control, baseline_image,
+            "sandboxed srcdoc must still render safe static content"
+        );
+        assert_eq!(
+            hostile_image, baseline_image,
+            "script execution or cross-file rendering changed the pixels"
+        );
+    }
 
     #[test]
     fn test_format_from_str() {

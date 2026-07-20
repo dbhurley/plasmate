@@ -441,6 +441,8 @@ fn metadata_for_tool(name: &str) -> ToolMetadata {
         "extract_text" => ("Extract Page Text", true, false, true, true),
         "extract_links" => ("Extract Page Links", true, false, true, true),
         "ard_discover" => ("Discover Static ARD Catalogs", true, false, true, true),
+        "crawl_policy" => ("Evaluate Crawl Policy", true, false, true, true),
+        "inspect_page" => ("Inspect Structured Page", true, false, true, true),
         "cache_status" => ("Inspect SOM Cache", true, false, true, false),
         "session_status" => ("Inspect Browser Sessions", true, false, true, false),
         "trace_status" => ("Inspect Session Trace", true, false, true, false),

@@ -241,6 +241,20 @@ enum Commands {
         #[arg(long, default_value = "10000")]
         timeout: u64,
     },
+    /// Evaluate RFC 9309 robots.txt policy for one public target URL.
+    CrawlPolicy {
+        /// Public HTTP(S) target to evaluate.
+        url: String,
+        /// Explicit crawler product token used for group matching and HTTP identity.
+        #[arg(long, default_value = "Plasmate")]
+        product_token: String,
+        /// Optional path for the versioned JSON policy report.
+        #[arg(long, short)]
+        output: Option<String>,
+        /// Whole robots.txt request deadline in milliseconds (1 to 30000).
+        #[arg(long, default_value = "10000")]
+        timeout: u64,
+    },
     /// Run the real-world coverage suite and write a public scorecard JSON
     Coverage {
         /// File containing URLs (one per line)
@@ -671,6 +685,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("{json}");
             }
             if report.summary.catalogs_accepted == 0 {
+                std::process::exit(2);
+            }
+        }
+        Commands::CrawlPolicy {
+            url,
+            product_token,
+            output,
+            timeout,
+        } => {
+            let report = plasmate::crawl_policy::evaluate(&url, &product_token, timeout).await?;
+            let json = serde_json::to_string_pretty(&report)?;
+            if json.len() > plasmate::crawl_policy::MAX_SERIALIZED_OUTPUT_BYTES {
+                return Err(std::io::Error::other(
+                    "crawl-policy CLI envelope exceeded its output safety bound",
+                )
+                .into());
+            }
+            if let Some(output) = output {
+                std::fs::write(output, &json)?;
+            } else {
+                println!("{json}");
+            }
+            if !report.decision.allowed {
                 std::process::exit(2);
             }
         }

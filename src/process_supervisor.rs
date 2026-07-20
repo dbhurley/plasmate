@@ -108,21 +108,41 @@ fn classify_status(status: ExitStatus) -> ProcessOutcome {
 }
 
 #[cfg(unix)]
-fn configure_process(_command: &mut std::process::Command, _memory_limit_bytes: u64) {}
+pub(crate) fn configure_process_tree(command: &mut std::process::Command) {
+    use std::os::unix::process::CommandExt;
+
+    // Run the child in a dedicated process group from the child side of spawn.
+    // This closes the parent/exec race in which a fast child could create
+    // descendants before the parent managed to call setpgid().
+    command.process_group(0);
+}
+
+#[cfg(windows)]
+pub(crate) fn configure_process_tree(command: &mut std::process::Command) {
+    use std::os::windows::process::CommandExt;
+
+    // CREATE_NEW_PROCESS_GROUP. Cleanup uses taskkill /T below.
+    command.creation_flags(0x0000_0200);
+}
+
+#[cfg(not(any(unix, windows)))]
+pub(crate) fn configure_process_tree(_command: &mut std::process::Command) {}
+
+#[cfg(unix)]
+fn configure_process(command: &mut std::process::Command, _memory_limit_bytes: u64) {
+    configure_process_tree(command);
+}
 
 #[cfg(windows)]
 fn configure_process(command: &mut std::process::Command, _memory_limit_bytes: u64) {
-    use std::os::windows::process::CommandExt;
-    // CREATE_NEW_PROCESS_GROUP. Windows has no stable std API for Job Objects;
-    // cleanup below uses taskkill /T to terminate the group descendants.
-    command.creation_flags(0x0000_0200);
+    configure_process_tree(command);
 }
 
 #[cfg(not(any(unix, windows)))]
 fn configure_process(_command: &mut std::process::Command, _memory_limit_bytes: u64) {}
 
 #[cfg(unix)]
-fn terminate_process_tree(pid: u32) {
+pub(crate) fn terminate_process_tree(pid: u32) {
     // Negative pid targets the worker's dedicated process group.
     unsafe {
         libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
@@ -130,7 +150,7 @@ fn terminate_process_tree(pid: u32) {
 }
 
 #[cfg(windows)]
-fn terminate_process_tree(pid: u32) {
+pub(crate) fn terminate_process_tree(pid: u32) {
     let _ = std::process::Command::new("taskkill")
         .args(["/PID", &pid.to_string(), "/T", "/F"])
         .stdin(std::process::Stdio::null())
@@ -140,7 +160,7 @@ fn terminate_process_tree(pid: u32) {
 }
 
 #[cfg(not(any(unix, windows)))]
-fn terminate_process_tree(_pid: u32) {}
+pub(crate) fn terminate_process_tree(_pid: u32) {}
 
 #[cfg(unix)]
 fn establish_process_group(pid: u32) {
@@ -205,17 +225,17 @@ pub fn prepare_current_process() -> std::io::Result<()> {
     Ok(())
 }
 
-struct ProcessTreeGuard {
+pub(crate) struct ProcessTreeGuard {
     pid: u32,
     armed: bool,
 }
 
 impl ProcessTreeGuard {
-    fn new(pid: u32) -> Self {
+    pub(crate) fn new(pid: u32) -> Self {
         Self { pid, armed: true }
     }
 
-    fn terminate(&mut self) {
+    pub(crate) fn terminate(&mut self) {
         if self.armed {
             terminate_process_tree(self.pid);
             self.armed = false;
