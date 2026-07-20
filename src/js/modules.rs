@@ -20,7 +20,7 @@ use crate::network::security::OutboundUrlPolicy;
 pub const MODULE_DIAGNOSTICS_VERSION: &str = "plasmate.js-modules.v1";
 pub(crate) const MAX_MODULE_DIAGNOSTICS: usize = 128;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleLimits {
     pub max_modules: usize,
     pub max_depth: usize,
@@ -45,7 +45,7 @@ impl Default for ModuleLimits {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleSource {
     /// Canonical cache identity. Inline roots use a synthetic fragment so
     /// multiple elements remain distinct module records.
@@ -58,7 +58,7 @@ pub struct ModuleSource {
     pub imports: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ModuleGraph {
     /// Number of module script elements encountered, including invalid roots.
     pub root_count: usize,

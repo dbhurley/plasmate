@@ -14,6 +14,7 @@ use super::extract::ScriptKind;
 use super::modules;
 use super::runtime::{JsExecutionReport, JsRuntime, RuntimeConfig};
 use super::script_fetch;
+use super::worker::{self, JsWorkerOptions, PreparedPageRequest, PreparedPageResponse};
 use crate::plugin::PluginManager;
 use crate::som::compiler;
 use crate::som::types::Som;
@@ -65,6 +66,19 @@ pub struct PipelineConfig {
     pub js_config: RuntimeConfig,
     /// Max timer drain threshold in ms (execute short setTimeout callbacks).
     pub timer_drain_ms: u64,
+    /// Put V8 in a supervised child process. Public async CLI/server paths must
+    /// leave this enabled; isolated workers set it false to avoid nesting.
+    pub isolate_js: bool,
+    /// Hard wall deadline for the complete V8 child operation.
+    pub js_worker_timeout_ms: u64,
+    /// Maximum worker stdout bytes. The serialized DOM and runtime discovery
+    /// catalog must fit inside this bound.
+    pub js_worker_output_bytes: usize,
+    /// Optional Linux address-space ceiling. Zero disables it because V8
+    /// reserves substantial virtual address space.
+    pub js_worker_memory_bytes: u64,
+    /// Test/operator override for the worker executable.
+    pub js_worker_executable: Option<std::path::PathBuf>,
 }
 
 impl Default for PipelineConfig {
@@ -76,7 +90,46 @@ impl Default for PipelineConfig {
             module_limits: modules::ModuleLimits::default(),
             js_config: RuntimeConfig::default(),
             timer_drain_ms: 100,
+            isolate_js: true,
+            js_worker_timeout_ms: worker::DEFAULT_WORKER_TIMEOUT_MS,
+            js_worker_output_bytes: worker::DEFAULT_WORKER_OUTPUT_BYTES,
+            js_worker_memory_bytes: 0,
+            js_worker_executable: None,
         }
+    }
+}
+
+fn worker_options(config: &PipelineConfig) -> JsWorkerOptions {
+    JsWorkerOptions {
+        executable: config.js_worker_executable.clone(),
+        timeout: std::time::Duration::from_millis(config.js_worker_timeout_ms),
+        max_stdout_bytes: config.js_worker_output_bytes,
+        max_stderr_bytes: worker::DEFAULT_WORKER_STDERR_BYTES,
+        memory_limit_bytes: config.js_worker_memory_bytes,
+    }
+}
+
+fn containment_report(
+    classic_scripts: usize,
+    module_graph: &modules::ModuleGraph,
+    error: &worker::JsWorkerError,
+) -> JsExecutionReport {
+    let total = classic_scripts.saturating_add(module_graph.root_count);
+    let module_diagnostics = if module_graph.root_count > 0 || !module_graph.diagnostics.is_empty()
+    {
+        Some(modules::ModuleExecutionDiagnostics::from_graph(
+            module_graph,
+        ))
+    } else {
+        None
+    };
+    JsExecutionReport {
+        total,
+        succeeded: 0,
+        failed: total,
+        errors: vec![("<process-containment>".to_string(), error.to_string())],
+        module_diagnostics,
+        containment_failure: Some(error.containment_failure()),
     }
 }
 
@@ -212,6 +265,97 @@ fn serialize_post_js(runtime: &mut JsRuntime) -> Option<String> {
     None
 }
 
+/// Execute network-prepared scripts inside an already isolated worker.
+///
+/// External classic scripts and native module graphs are acquired in the
+/// parent before this boundary so network deadlines remain independently
+/// enforceable. Page-origin fetch/XHR remains available through the existing
+/// security-checked bridge in the worker.
+pub fn run_prepared_page(
+    request: PreparedPageRequest,
+) -> Result<PreparedPageResponse, PipelineError> {
+    let started = Instant::now();
+    let mut effective_html = request.html.clone();
+    let mut runtime = JsRuntime::new(request.runtime_config);
+    if request.inject_fetch_bridge {
+        runtime.inject_fetch_bridge(reqwest::Client::new());
+    }
+    runtime.bootstrap_dom(&request.html, &request.url);
+    runtime.install_webmcp_discovery();
+    wire_dom_bridge(&mut runtime, &request.html);
+    if request.install_timer_shims {
+        install_timer_shims(&mut runtime);
+    }
+
+    let mut js_report = None;
+    if !request.classic_scripts.is_empty()
+        || !request.module_graph.roots.is_empty()
+        || !request.module_graph.diagnostics.is_empty()
+    {
+        let mut report = runtime.execute_page_scripts(&request.classic_scripts);
+        let module_report = runtime.execute_module_graph(&request.module_graph);
+        report.total += module_report.roots;
+        report.succeeded += module_report.roots_evaluated;
+        report.failed += module_report.roots_failed;
+        if module_report.roots > 0 || !module_report.diagnostics.is_empty() {
+            report.module_diagnostics = Some(module_report);
+        }
+        if request.install_timer_shims {
+            drain_timer_queue(&mut runtime);
+        }
+        runtime.pump_microtasks();
+        runtime.fire_dom_content_loaded();
+        runtime.pump_microtasks();
+        if request.timer_drain_ms > 0 {
+            runtime.drain_timers(request.timer_drain_ms);
+            runtime.pump_microtasks();
+        }
+        runtime.fire_load();
+        runtime.pump_microtasks();
+        js_report = Some(report);
+        if let Some(serialized) = serialize_post_js(&mut runtime) {
+            if !serialized.is_empty() && serialized != "undefined" {
+                effective_html = serialized;
+            }
+        }
+    }
+    let runtime_capture = runtime.collect_webmcp_registrations();
+    Ok(PreparedPageResponse {
+        effective_html,
+        js_report,
+        runtime_capture,
+        execution_us: started.elapsed().as_micros().min(u64::MAX as u128) as u64,
+    })
+}
+
+async fn execute_prepared_page(
+    request: PreparedPageRequest,
+    config: &PipelineConfig,
+) -> Result<PreparedPageResponse, worker::JsWorkerError> {
+    // Unit tests exercise the V8 implementation directly. Production async
+    // paths and integration tests cross the real process boundary.
+    if !config.isolate_js || cfg!(test) {
+        return run_prepared_page(request).map_err(|error| worker::JsWorkerError::Worker {
+            code: "page_execution".to_string(),
+            message: error.to_string(),
+        });
+    }
+    worker::execute_page(request, worker_options(config)).await
+}
+
+fn execute_prepared_page_sync(
+    request: PreparedPageRequest,
+    config: &PipelineConfig,
+) -> Result<PreparedPageResponse, worker::JsWorkerError> {
+    if !config.isolate_js || cfg!(test) {
+        return run_prepared_page(request).map_err(|error| worker::JsWorkerError::Worker {
+            code: "page_execution".to_string(),
+            message: error.to_string(),
+        });
+    }
+    worker::execute_page_sync(request, worker_options(config))
+}
+
 /// Process a page through the full pipeline (async version with external script fetching).
 pub async fn process_page_async(
     html: &str,
@@ -264,77 +408,45 @@ pub async fn process_page_async(
             .map(|s| (s.source.clone(), s.label.clone()))
             .collect();
 
-        // Always create runtime to bootstrap DOM, even if no scripts
-        let mut runtime = JsRuntime::new(config.js_config.clone());
-
-        // Inject the fetch bridge for real HTTP requests from JS
-        runtime.inject_fetch_bridge(client.clone());
-
-        // Bootstrap the DOM tree from source HTML
-        runtime.bootstrap_dom(html, url);
-        runtime.install_webmcp_discovery();
-
-        // Wire the DOM bridge: parse HTML with html5ever, register tree in
-        // NodeRegistry, inject into V8 so JS mutations flow to the rcdom tree.
-        wire_dom_bridge(&mut runtime, html);
-
-        if !exec_scripts.is_empty()
-            || !module_graph.roots.is_empty()
-            || !module_graph.diagnostics.is_empty()
-        {
-            // Execute page scripts
-            let mut report = runtime.execute_page_scripts(&exec_scripts);
-            let module_report = runtime.execute_module_graph(&module_graph);
-            report.total += module_report.roots;
-            report.succeeded += module_report.roots_evaluated;
-            report.failed += module_report.roots_failed;
-            if module_report.roots > 0 || !module_report.diagnostics.is_empty() {
-                report.module_diagnostics = Some(module_report);
+        let request = PreparedPageRequest {
+            protocol_version: worker::WORKER_PROTOCOL_VERSION.to_string(),
+            html: html.to_string(),
+            url: url.to_string(),
+            classic_scripts: exec_scripts,
+            module_graph: module_graph.clone(),
+            runtime_config: config.js_config.clone(),
+            timer_drain_ms: config.timer_drain_ms,
+            install_timer_shims: false,
+            inject_fetch_bridge: true,
+        };
+        match execute_prepared_page(request, config).await {
+            Ok(response) => {
+                js_report = response.js_report;
+                effective_html = std::borrow::Cow::Owned(response.effective_html);
+                webmcp_runtime_capture = Some(response.runtime_capture);
+                js_us = t1.elapsed().as_micros();
+                debug!(
+                    external_fetched = resolved
+                        .iter()
+                        .filter(|s| !s.label.starts_with("inline"))
+                        .count(),
+                    js_ms = js_us / 1000,
+                    "isolated JS execution complete"
+                );
             }
-
-            // Pump microtasks after script execution (resolves Promise.then chains)
-            runtime.pump_microtasks();
-
-            // Fire DOMContentLoaded after scripts execute
-            runtime.fire_dom_content_loaded();
-            runtime.pump_microtasks();
-
-            // Drain short timers
-            if config.timer_drain_ms > 0 {
-                runtime.drain_timers(config.timer_drain_ms);
-                runtime.pump_microtasks();
-            }
-
-            // Fire load event
-            runtime.fire_load();
-            runtime.pump_microtasks();
-
-            js_us = t1.elapsed().as_micros();
-
-            debug!(
-                scripts_total = report.total,
-                scripts_ok = report.succeeded,
-                scripts_err = report.failed,
-                external_fetched = resolved
-                    .iter()
-                    .filter(|s| !s.label.starts_with("inline"))
-                    .count(),
-                js_ms = js_us / 1000,
-                "JS execution complete (async)"
-            );
-
-            js_report = Some(report);
-
-            // Try to serialize from the NodeRegistry (captures rcdom mutations),
-            // falling back to V8's JS DOM serialization.
-            let serialized = serialize_post_js(&mut runtime);
-            if let Some(s) = serialized {
-                if !s.is_empty() && s != "undefined" {
-                    effective_html = std::borrow::Cow::Owned(s);
-                }
+            Err(error) => {
+                tracing::warn!(code = error.code(), %error, "isolated JS execution failed; compiling source HTML fallback");
+                js_report = Some(containment_report(
+                    resolved
+                        .iter()
+                        .filter(|script| !script.source.is_empty())
+                        .count(),
+                    &module_graph,
+                    &error,
+                ));
+                js_us = t1.elapsed().as_micros();
             }
         }
-        webmcp_runtime_capture = Some(runtime.collect_webmcp_registrations());
     }
 
     let t2 = Instant::now();
@@ -380,8 +492,9 @@ pub fn process_page(
 
 /// Process a page through the full pipeline with an optional HTTP client.
 ///
-/// When a client is provided, JS fetch() and XMLHttpRequest will make real
-/// HTTP requests. Without a client, they return stub responses.
+/// When a client is provided, the restricted JS fetch()/XMLHttpRequest bridge
+/// is enabled. The bridge intentionally does not copy caller cookies, proxy,
+/// custom TLS, or default headers. Without a client, it returns stub responses.
 pub fn process_page_with_client(
     html: &str,
     url: &str,
@@ -409,75 +522,37 @@ pub fn process_page_with_client(
             .collect();
         let module_graph = modules::inline_module_graph(&scripts, url, &config.module_limits);
 
-        // Phase 2: Bootstrap DOM and execute JS
         let t1 = Instant::now();
-        let mut runtime = JsRuntime::new(config.js_config.clone());
-
-        // Inject the fetch bridge if a client is provided
-        if let Some(c) = client {
-            runtime.inject_fetch_bridge(c.clone());
-        }
-
-        // Bootstrap the DOM tree from source HTML
-        runtime.bootstrap_dom(html, url);
-        runtime.install_webmcp_discovery();
-
-        // Wire the DOM bridge so JS mutations flow to the rcdom tree.
-        wire_dom_bridge(&mut runtime, html);
-
-        if !inline_scripts.is_empty()
-            || !module_graph.roots.is_empty()
-            || !module_graph.diagnostics.is_empty()
-        {
-            // Execute page scripts in the context with the bootstrapped DOM
-            let mut report = runtime.execute_page_scripts(&inline_scripts);
-            let module_report = runtime.execute_module_graph(&module_graph);
-            report.total += module_report.roots;
-            report.succeeded += module_report.roots_evaluated;
-            report.failed += module_report.roots_failed;
-            if module_report.roots > 0 || !module_report.diagnostics.is_empty() {
-                report.module_diagnostics = Some(module_report);
+        let request = PreparedPageRequest {
+            protocol_version: worker::WORKER_PROTOCOL_VERSION.to_string(),
+            html: html.to_string(),
+            url: url.to_string(),
+            classic_scripts: inline_scripts,
+            module_graph: module_graph.clone(),
+            runtime_config: config.js_config.clone(),
+            timer_drain_ms: config.timer_drain_ms,
+            install_timer_shims: false,
+            inject_fetch_bridge: client.is_some(),
+        };
+        match execute_prepared_page_sync(request, config) {
+            Ok(response) => {
+                js_report = response.js_report;
+                effective_html = std::borrow::Cow::Owned(response.effective_html);
+                webmcp_runtime_capture = Some(response.runtime_capture);
             }
-
-            // Pump microtasks after script execution (resolves Promise.then chains)
-            runtime.pump_microtasks();
-
-            // Fire DOMContentLoaded after scripts execute
-            runtime.fire_dom_content_loaded();
-            runtime.pump_microtasks();
-
-            // Drain short timers (many pages use setTimeout(fn, 0) for initialization)
-            if config.timer_drain_ms > 0 {
-                runtime.drain_timers(config.timer_drain_ms);
-                runtime.pump_microtasks();
-            }
-
-            // Fire load event
-            runtime.fire_load();
-            runtime.pump_microtasks();
-
-            js_us = t1.elapsed().as_micros();
-
-            debug!(
-                scripts_total = report.total,
-                scripts_ok = report.succeeded,
-                scripts_err = report.failed,
-                js_ms = js_us / 1000,
-                "JS execution complete"
-            );
-
-            js_report = Some(report);
-
-            // Try to serialize from the NodeRegistry (captures rcdom mutations),
-            // falling back to V8's JS DOM serialization.
-            let serialized = serialize_post_js(&mut runtime);
-            if let Some(s) = serialized {
-                if !s.is_empty() && s != "undefined" {
-                    effective_html = std::borrow::Cow::Owned(s);
-                }
+            Err(error) => {
+                tracing::warn!(code = error.code(), %error, "isolated sync JS execution failed; compiling source HTML fallback");
+                js_report = Some(containment_report(
+                    scripts
+                        .iter()
+                        .filter(|script| script.is_inline && script.kind == ScriptKind::Classic)
+                        .count(),
+                    &module_graph,
+                    &error,
+                ));
             }
         }
-        webmcp_runtime_capture = Some(runtime.collect_webmcp_registrations());
+        js_us = t1.elapsed().as_micros();
     }
 
     let t2 = Instant::now();
@@ -560,49 +635,37 @@ pub async fn process_page_async_with_plugins(
             .map(|s| (s.source.clone(), s.label.clone()))
             .collect();
 
-        let mut runtime = JsRuntime::new(config.js_config.clone());
-        runtime.inject_fetch_bridge(client.clone());
-        runtime.bootstrap_dom(html, url);
-        runtime.install_webmcp_discovery();
-
-        // Wire the DOM bridge so JS mutations flow to the rcdom tree.
-        wire_dom_bridge(&mut runtime, html);
-
-        // Install timer/rAF shims so SPA frameworks can queue deferred callbacks.
-        install_timer_shims(&mut runtime);
-
-        if !exec_scripts.is_empty()
-            || !module_graph.roots.is_empty()
-            || !module_graph.diagnostics.is_empty()
-        {
-            let mut report = runtime.execute_page_scripts(&exec_scripts);
-            let module_report = runtime.execute_module_graph(&module_graph);
-            report.total += module_report.roots;
-            report.succeeded += module_report.roots_evaluated;
-            report.failed += module_report.roots_failed;
-            if module_report.roots > 0 || !module_report.diagnostics.is_empty() {
-                report.module_diagnostics = Some(module_report);
+        let request = PreparedPageRequest {
+            protocol_version: worker::WORKER_PROTOCOL_VERSION.to_string(),
+            html: html.to_string(),
+            url: url.to_string(),
+            classic_scripts: exec_scripts,
+            module_graph: module_graph.clone(),
+            runtime_config: config.js_config.clone(),
+            timer_drain_ms: config.timer_drain_ms,
+            install_timer_shims: true,
+            inject_fetch_bridge: true,
+        };
+        match execute_prepared_page(request, config).await {
+            Ok(response) => {
+                js_report = response.js_report;
+                effective_html = std::borrow::Cow::Owned(response.effective_html);
+                webmcp_runtime_capture = Some(response.runtime_capture);
+                js_us = t1.elapsed().as_micros();
             }
-            drain_timer_queue(&mut runtime);
-            runtime.pump_microtasks();
-            runtime.fire_dom_content_loaded();
-            runtime.pump_microtasks();
-            if config.timer_drain_ms > 0 {
-                runtime.drain_timers(config.timer_drain_ms);
-                runtime.pump_microtasks();
-            }
-            runtime.fire_load();
-            runtime.pump_microtasks();
-            js_us = t1.elapsed().as_micros();
-            js_report = Some(report);
-            let serialized = serialize_post_js(&mut runtime);
-            if let Some(s) = serialized {
-                if !s.is_empty() && s != "undefined" {
-                    effective_html = std::borrow::Cow::Owned(s);
-                }
+            Err(error) => {
+                tracing::warn!(code = error.code(), %error, "isolated plugin JS execution failed; running plugins on source HTML fallback");
+                js_report = Some(containment_report(
+                    resolved
+                        .iter()
+                        .filter(|script| !script.source.is_empty())
+                        .count(),
+                    &module_graph,
+                    &error,
+                ));
+                js_us = t1.elapsed().as_micros();
             }
         }
-        webmcp_runtime_capture = Some(runtime.collect_webmcp_registrations());
     }
 
     // Plugin hook: post_parse (between JS execution and SOM compilation).
@@ -670,48 +733,36 @@ pub fn process_page_with_plugins(
         let module_graph = modules::inline_module_graph(&scripts, url, &config.module_limits);
 
         let t1 = Instant::now();
-        let mut runtime = JsRuntime::new(config.js_config.clone());
-        runtime.bootstrap_dom(html, url);
-        runtime.install_webmcp_discovery();
-
-        // Wire the DOM bridge so JS mutations flow to the rcdom tree.
-        wire_dom_bridge(&mut runtime, html);
-
-        // Install timer/rAF shims so SPA frameworks can queue deferred callbacks.
-        install_timer_shims(&mut runtime);
-
-        if !inline_scripts.is_empty()
-            || !module_graph.roots.is_empty()
-            || !module_graph.diagnostics.is_empty()
-        {
-            let mut report = runtime.execute_page_scripts(&inline_scripts);
-            let module_report = runtime.execute_module_graph(&module_graph);
-            report.total += module_report.roots;
-            report.succeeded += module_report.roots_evaluated;
-            report.failed += module_report.roots_failed;
-            if module_report.roots > 0 || !module_report.diagnostics.is_empty() {
-                report.module_diagnostics = Some(module_report);
+        let request = PreparedPageRequest {
+            protocol_version: worker::WORKER_PROTOCOL_VERSION.to_string(),
+            html: html.to_string(),
+            url: url.to_string(),
+            classic_scripts: inline_scripts,
+            module_graph: module_graph.clone(),
+            runtime_config: config.js_config.clone(),
+            timer_drain_ms: config.timer_drain_ms,
+            install_timer_shims: true,
+            inject_fetch_bridge: false,
+        };
+        match execute_prepared_page_sync(request, config) {
+            Ok(response) => {
+                js_report = response.js_report;
+                effective_html = std::borrow::Cow::Owned(response.effective_html);
+                webmcp_runtime_capture = Some(response.runtime_capture);
             }
-            drain_timer_queue(&mut runtime);
-            runtime.pump_microtasks();
-            runtime.fire_dom_content_loaded();
-            runtime.pump_microtasks();
-            if config.timer_drain_ms > 0 {
-                runtime.drain_timers(config.timer_drain_ms);
-                runtime.pump_microtasks();
-            }
-            runtime.fire_load();
-            runtime.pump_microtasks();
-            js_us = t1.elapsed().as_micros();
-            js_report = Some(report);
-            let serialized = serialize_post_js(&mut runtime);
-            if let Some(s) = serialized {
-                if !s.is_empty() && s != "undefined" {
-                    effective_html = std::borrow::Cow::Owned(s);
-                }
+            Err(error) => {
+                tracing::warn!(code = error.code(), %error, "isolated sync plugin JS execution failed; running plugins on source HTML fallback");
+                js_report = Some(containment_report(
+                    scripts
+                        .iter()
+                        .filter(|script| script.is_inline && script.kind == ScriptKind::Classic)
+                        .count(),
+                    &module_graph,
+                    &error,
+                ));
             }
         }
-        webmcp_runtime_capture = Some(runtime.collect_webmcp_registrations());
+        js_us = t1.elapsed().as_micros();
     }
 
     let effective_html_owned = if plugins.has_hook(crate::plugin::Hook::PostParse) {

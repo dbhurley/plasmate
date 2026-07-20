@@ -634,6 +634,9 @@ async fn run_sample(
             let config = PipelineConfig {
                 execute_js: js_enabled,
                 fetch_external_scripts: false,
+                // JavaScript benchmark tasks already run in the supervised
+                // `__benchmark-worker` process.
+                isolate_js: false,
                 ..Default::default()
             };
             let compiled = if js_enabled {

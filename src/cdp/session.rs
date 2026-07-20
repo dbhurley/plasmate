@@ -10,7 +10,8 @@ use tokio::sync::Mutex;
 
 use crate::cdp::cookies::CookieJar;
 use crate::js::pipeline::PipelineConfig;
-use crate::js::runtime::{JsRuntime, RuntimeConfig};
+use crate::js::runtime::RuntimeConfig;
+use crate::js::worker::{self, EvaluationRequest, JsWorkerOptions};
 use crate::network::fetch;
 use crate::network::intercept::{
     InterceptAction, NetworkInterceptor, ResourceType as InterceptResourceType,
@@ -588,8 +589,8 @@ impl CdpTarget {
 
     /// Evaluate JavaScript expression against the post-navigation DOM.
     ///
-    /// This creates a temporary JsRuntime, bootstraps the DOM from effective_html
-    /// (without re-executing scripts), and evaluates the expression.
+    /// This bootstraps the DOM in a supervised child (without re-executing page
+    /// scripts), so a fatal V8 error or loop cannot terminate the CDP server.
     ///
     /// Returns the result as a serde_json::Value, or an error string.
     pub fn evaluate_js(&self, expression: &str) -> Result<serde_json::Value, String> {
@@ -599,47 +600,12 @@ impl CdpTarget {
             .ok_or_else(|| "No page loaded".to_string())?;
         let url = self.current_url.as_deref().unwrap_or("about:blank");
 
-        // Create a temporary runtime for this evaluation
-        // We use spawn_blocking because V8 is !Send and we're in an async context
-        let html_clone = html.clone();
-        let url_clone = url.to_string();
-        let expression_clone = expression.to_string();
-
-        // Create the runtime and evaluate synchronously
-        // This is safe because we're creating a new isolate just for this evaluation
-        let mut runtime = JsRuntime::new(RuntimeConfig {
-            inject_dom_shim: true,
-            execute_inline_scripts: false, // Don't re-execute scripts
-            ..Default::default()
-        });
-
-        // Bootstrap DOM from effective HTML (scripts won't re-execute because
-        // the DOM shim's bootstrap just parses HTML into the DOM tree)
-        runtime.bootstrap_dom(&html_clone, &url_clone);
-
         // Wrap expression to properly serialize objects/arrays
         let wrapped_expr = format!(
             "(function() {{ var __r = ({}); return typeof __r === 'object' && __r !== null ? JSON.stringify(__r) : __r; }})()",
-            expression_clone
+            expression
         );
-
-        // Evaluate the expression
-        match runtime.eval(&wrapped_expr) {
-            Ok(result) => {
-                // Handle undefined
-                if result == "undefined" || result.is_empty() {
-                    return Ok(serde_json::Value::Null);
-                }
-                // Try to parse as JSON first (for objects/arrays)
-                if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&result) {
-                    Ok(json_val)
-                } else {
-                    // Return as string value
-                    Ok(serde_json::Value::String(result))
-                }
-            }
-            Err(e) => Err(e.to_string()),
-        }
+        self.evaluate_in_worker(html, url, wrapped_expr)
     }
 
     /// Execute a function call against the post-navigation DOM.
@@ -656,17 +622,6 @@ impl CdpTarget {
             .as_ref()
             .ok_or_else(|| "No page loaded".to_string())?;
         let url = self.current_url.as_deref().unwrap_or("about:blank");
-
-        let html_clone = html.clone();
-        let url_clone = url.to_string();
-
-        let mut runtime = JsRuntime::new(RuntimeConfig {
-            inject_dom_shim: true,
-            execute_inline_scripts: false,
-            ..Default::default()
-        });
-
-        runtime.bootstrap_dom(&html_clone, &url_clone);
 
         // Build the call expression: (function).call(null, arg1, arg2, ...)
         // We wrap the result in JSON.stringify to properly serialize objects/arrays
@@ -686,21 +641,43 @@ impl CdpTarget {
             )
         };
 
-        match runtime.eval(&call_expr) {
-            Ok(result) => {
-                // Handle undefined
-                if result == "undefined" || result.is_empty() {
-                    return Ok(serde_json::Value::Null);
-                }
-                // Try to parse as JSON first (for objects/arrays)
-                if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&result) {
-                    Ok(json_val)
-                } else {
-                    // Return as string value
-                    Ok(serde_json::Value::String(result))
-                }
-            }
-            Err(e) => Err(e.to_string()),
+        self.evaluate_in_worker(html, url, call_expr)
+    }
+
+    fn evaluate_in_worker(
+        &self,
+        html: &str,
+        url: &str,
+        expression: String,
+    ) -> Result<serde_json::Value, String> {
+        let options = JsWorkerOptions {
+            timeout: std::time::Duration::from_millis(
+                self.timeout_ms.min(worker::DEFAULT_WORKER_TIMEOUT_MS),
+            ),
+            ..Default::default()
+        };
+        let response = worker::evaluate_sync(
+            EvaluationRequest {
+                protocol_version: worker::WORKER_PROTOCOL_VERSION.to_string(),
+                html: html.to_string(),
+                url: url.to_string(),
+                expression,
+                return_effective_html: false,
+                runtime_config: RuntimeConfig {
+                    inject_dom_shim: true,
+                    execute_inline_scripts: false,
+                    ..Default::default()
+                },
+            },
+            options,
+        )
+        .map_err(|error| format!("JavaScript containment error [{}]: {error}", error.code()))?;
+        if response.result == "undefined" || response.result.is_empty() {
+            Ok(serde_json::Value::Null)
+        } else if let Ok(value) = serde_json::from_str(&response.result) {
+            Ok(value)
+        } else {
+            Ok(serde_json::Value::String(response.result))
         }
     }
 }

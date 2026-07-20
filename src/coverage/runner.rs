@@ -1070,6 +1070,9 @@ async fn cover_single(
         execute_js: opts.execute_js,
         fetch_external_scripts: opts.fetch_external_scripts,
         timer_drain_ms: opts.timer_drain_ms,
+        // `run_worker` is already the one-URL process boundary supervised by
+        // the coverage coordinator; do not create a redundant nested worker.
+        isolate_js: false,
         ..Default::default()
     };
 
