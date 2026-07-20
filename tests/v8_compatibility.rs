@@ -89,3 +89,40 @@ fn required_ci_enforces_the_v8_compatibility_contract() {
         "the required action-manifest job must enforce V8 compatibility drift"
     );
 }
+
+#[test]
+fn required_ci_enforces_real_chrome_rendering_evidence() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ci = std::fs::read_to_string(root.join(".github/workflows/ci.yml"))
+        .expect("read required CI workflow");
+    let test_job = ci
+        .split_once("  test:\n")
+        .and_then(|(_, jobs)| jobs.split_once("  action-manifest:\n"))
+        .map(|(job, _)| job)
+        .expect("test job must precede action-manifest job");
+
+    assert!(
+        test_job.contains("      - name: Resolve Chrome rendering evidence binary\n"),
+        "required CI must resolve a real Chrome/Chromium executable"
+    );
+    assert!(
+        test_job.contains("        id: chrome-evidence-browser\n"),
+        "the evidence step must receive the validated browser path"
+    );
+    assert!(
+        test_job.contains("          timeout 15s \"$chrome_bin\" --version\n"),
+        "browser discovery must prove the resolved executable responds within a hard deadline"
+    );
+    assert!(
+        test_job.contains(
+            "          PLASMATE_CHROME_TEST_BINARY: ${{ steps.chrome-evidence-browser.outputs.binary }}\n          PLASMATE_REQUIRE_CHROME_EVIDENCE: '1'\n"
+        ),
+        "the containment test must use the exact validated binary and fail instead of skipping"
+    );
+    assert!(
+        test_job.contains(
+            "          timeout 2m cargo test --locked --lib\n          screenshot::tests::chromium_boundary_blocks_script_execution_and_cross_file_rendering\n          -- --exact --nocapture\n"
+        ),
+        "required CI must run the non-skipping Chromium containment assertion with a hard deadline"
+    );
+}

@@ -97,6 +97,18 @@ pub enum ScreenshotError {
 
 /// Find Chrome/Chromium binary on the system.
 fn find_chrome() -> Option<String> {
+    // The dedicated rendering-evidence test must exercise the exact browser
+    // binary that CI resolved. Keep this override test-only so production
+    // discovery and user-facing behavior cannot be changed by an environment
+    // variable.
+    #[cfg(test)]
+    if let Some(candidate) = std::env::var_os("PLASMATE_CHROME_TEST_BINARY") {
+        let candidate = std::path::PathBuf::from(candidate);
+        return candidate
+            .is_file()
+            .then(|| candidate.to_string_lossy().into_owned());
+    }
+
     let candidates = [
         // macOS
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -513,6 +525,17 @@ pub fn som_fallback(som: &crate::som::types::Som) -> serde_json::Value {
 mod tests {
     use super::*;
 
+    fn should_skip_optional_chromium_test(
+        chrome_is_available: bool,
+        evidence_is_required: bool,
+    ) -> bool {
+        assert!(
+            chrome_is_available || !evidence_is_required,
+            "PLASMATE_REQUIRE_CHROME_EVIDENCE is set, but the exact Chrome/Chromium test binary is unavailable"
+        );
+        !chrome_is_available
+    }
+
     #[test]
     fn hardened_renderer_configuration_is_explicit_and_has_no_unsafe_file_switches() {
         let directory = std::path::Path::new("/owned-render-dir");
@@ -595,7 +618,8 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn chromium_boundary_blocks_script_execution_and_cross_file_rendering() {
-        if !chrome_available() {
+        let evidence_is_required = std::env::var_os("PLASMATE_REQUIRE_CHROME_EVIDENCE").is_some();
+        if should_skip_optional_chromium_test(chrome_available(), evidence_is_required) {
             return;
         }
 
@@ -649,6 +673,18 @@ mod tests {
             hostile_image, baseline_image,
             "script execution or cross-file rendering changed the pixels"
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "the exact Chrome/Chromium test binary is unavailable")]
+    fn required_chromium_evidence_cannot_silently_skip() {
+        should_skip_optional_chromium_test(false, true);
+    }
+
+    #[test]
+    fn optional_chromium_evidence_may_skip_without_a_browser() {
+        assert!(should_skip_optional_chromium_test(false, false));
+        assert!(!should_skip_optional_chromium_test(true, true));
     }
 
     #[test]
