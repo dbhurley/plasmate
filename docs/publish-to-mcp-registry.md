@@ -84,6 +84,25 @@ Confirm that the returned version, OCI identifier, stdio transport, and `mcp`
 package argument exactly match `server.json`. A valid local schema result does
 not replace this post-publication check.
 
+## Retire invalid legacy records
+
+The public Registry currently retains active `0.1.0` and `0.4.0` Plasmate
+records that describe the npm/PyPI client SDKs as runnable MCP servers. Those
+records are historical metadata errors, not supported installation paths. As
+part of the v0.6.0 Registry publication session, use the authenticated Registry
+status-update workflow to mark both versions `deprecated` (or `deleted` if the
+Registry requires removal for invalid runtime metadata). Do not alter the
+separate `0.4.1` `plasmate-mcp` record: that npm package has a real executable
+server entry point.
+
+After the status update, query the version-list endpoint and retain the JSON as
+release evidence. The corrected v0.6.0 OCI record must be `active`; the invalid
+legacy versions must no longer be presented as active installation choices:
+
+```bash
+curl "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.plasmate-labs%2Fplasmate/versions"
+```
+
 ## Subsequent version bumps
 
 For every Rust engine release:
