@@ -8,6 +8,7 @@ import re
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -30,6 +31,23 @@ def successful_checks(sha: str) -> list[dict[str, object]]:
             "app": {"id": PREFLIGHT.GITHUB_ACTIONS_APP_ID},
         }
         for index, name in enumerate(PREFLIGHT.REQUIRED_CHECKS, start=1)
+    ]
+
+
+def successful_release_evidence(
+    sha: str, now: datetime
+) -> list[dict[str, object]]:
+    return [
+        {
+            "id": 10_000 + index,
+            "name": PREFLIGHT.RELEASE_EVIDENCE_CHECK,
+            "head_sha": sha,
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": (now - timedelta(minutes=index)).isoformat(),
+            "app": {"id": PREFLIGHT.GITHUB_ACTIONS_APP_ID},
+        }
+        for index in range(1, PREFLIGHT.RELEASE_EVIDENCE_RUNS + 1)
     ]
 
 
@@ -109,6 +127,59 @@ class CheckSelectionTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(PREFLIGHT.PreflightError, "missing required check"):
             PREFLIGHT.select_required_checks(checks, self.SHA)
+
+
+class ReleaseEvidenceTests(unittest.TestCase):
+    SHA = "a" * 40
+    NOW = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+
+    def test_accepts_two_fresh_successful_scorecards(self) -> None:
+        selected = PREFLIGHT.select_release_evidence(
+            successful_release_evidence(self.SHA, self.NOW), self.SHA, self.NOW
+        )
+        self.assertEqual(len(selected), PREFLIGHT.RELEASE_EVIDENCE_RUNS)
+
+    def test_requires_two_independent_runs(self) -> None:
+        checks = successful_release_evidence(self.SHA, self.NOW)[:1]
+        with self.assertRaisesRegex(PREFLIGHT.PreflightError, "requires 2 independent"):
+            PREFLIGHT.select_release_evidence(checks, self.SHA, self.NOW)
+
+    def test_newest_failure_fails_closed(self) -> None:
+        checks = successful_release_evidence(self.SHA, self.NOW)
+        checks.append(
+            {
+                "id": 99_999,
+                "name": PREFLIGHT.RELEASE_EVIDENCE_CHECK,
+                "head_sha": self.SHA,
+                "status": "completed",
+                "conclusion": "failure",
+                "completed_at": self.NOW.isoformat(),
+                "app": {"id": PREFLIGHT.GITHUB_ACTIONS_APP_ID},
+            }
+        )
+        with self.assertRaisesRegex(PREFLIGHT.PreflightError, "is not successful"):
+            PREFLIGHT.select_release_evidence(checks, self.SHA, self.NOW)
+
+    def test_stale_or_future_evidence_is_rejected(self) -> None:
+        for completed_at, message in (
+            (
+                self.NOW - PREFLIGHT.RELEASE_EVIDENCE_MAX_AGE - timedelta(seconds=1),
+                "is stale",
+            ),
+            (self.NOW + timedelta(seconds=1), "completed in the future"),
+        ):
+            with self.subTest(message=message):
+                checks = successful_release_evidence(self.SHA, self.NOW)
+                checks[0]["completed_at"] = completed_at.isoformat()
+                with self.assertRaisesRegex(PREFLIGHT.PreflightError, message):
+                    PREFLIGHT.select_release_evidence(checks, self.SHA, self.NOW)
+
+    def test_wrong_sha_or_app_cannot_satisfy_evidence(self) -> None:
+        checks = successful_release_evidence(self.SHA, self.NOW)
+        checks[0]["head_sha"] = "b" * 40
+        checks[1]["app"] = {"id": 1}
+        with self.assertRaisesRegex(PREFLIGHT.PreflightError, "found 0"):
+            PREFLIGHT.select_release_evidence(checks, self.SHA, self.NOW)
 
 
 class RepositoryStateTests(unittest.TestCase):
@@ -228,6 +299,27 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertLess(rust_install, metadata)
         self.assertLess(metadata, package)
         self.assertEqual(preflight.count("GITHUB_TOKEN:"), 1)
+
+
+class ReleaseSessionPolicyTests(unittest.TestCase):
+    def test_repository_has_no_elapsed_time_release_gate(self) -> None:
+        ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        security = (ROOT / ".github/workflows/security.yml").read_text(
+            encoding="utf-8"
+        )
+        execution_plan = (ROOT / "docs/P0-EXECUTION-PLAN.md").read_text(
+            encoding="utf-8"
+        )
+        releasing = (ROOT / "docs/RELEASING.md").read_text(encoding="utf-8")
+
+        self.assertNotIn("  schedule:\n", ci)
+        self.assertIn("cron: '30 7 * * 0'", security)
+        for document in (execution_plan, releasing):
+            self.assertNotIn("168-hour", document)
+            self.assertNotIn("verify-p0-soak.py", document)
+            self.assertNotIn("seven consecutive", document)
+        self.assertFalse((ROOT / "scripts/verify-p0-soak.py").exists())
+        self.assertFalse((ROOT / "scripts/test_verify_p0_soak.py").exists())
 
 
 if __name__ == "__main__":

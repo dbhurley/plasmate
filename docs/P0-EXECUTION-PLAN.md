@@ -160,7 +160,7 @@ Owner branch: `codex/p0-supply-chain`
 4. Update documentation only after integrated behavior is verified.
 5. Integrate supply-chain policy before enabling repository branch protection.
 6. Enable repository branch protection and required checks after the direct P0 integration sequence is complete.
-7. Observe seven consecutive days of green required checks, including one successful weekly JS run, before tagging v0.6.
+7. Complete one exact-SHA release session, including two fresh isolated JS scorecards, before tagging v0.6.
 
 Each integration requires:
 
@@ -171,133 +171,53 @@ Each integration requires:
 - A focused commit message describing behavior and risk, not merely files changed.
 - A clean `master` worktree after integration.
 
-## Operational acceptance: frozen 168-hour soak
+## Operational acceptance: exact-SHA release session
 
-The repository automates the evidence-producing workloads, but it does not and
-cannot encode repository administration state. During P0 acceptance:
+Plasmate does not use an elapsed-time freeze as a release control. Release
+authorization is a single bounded session tied to one immutable candidate SHA:
 
-- `.github/workflows/ci.yml` runs the build/test/manifest suite on pushes,
-  pull requests, a daily schedule, and manual dispatch.
-- `.github/workflows/security.yml` runs the dependency and workflow-trust suite
-  on the same existing push/pull-request triggers, a daily schedule, and manual
-  dispatch. Daily execution is intentional during the soak; restoring a weekly
-  steady-state cadence requires a later reviewed workflow change.
-- Both workflows have read-only default permissions, bounded job deadlines, and
-  serialized per-ref concurrency. A running acceptance check is not cancelled
-  merely because another trigger arrives.
-- `.github/workflows/coverage-js.yml` remains the isolated weekly JS workload
-  and can be dispatched manually. It uploads evidence and cannot write to the
-  repository.
-- `scripts/verify-p0-soak.py` validates exported GitHub run metadata without
-  network access or repository mutation. It requires seven complete UTC dates
-  of successful CI and security runs on one SHA, one successful JS run on that
-  SHA during the window, and a verification time after the full 168 hours. A
-  counted run must also finish before that cutoff and expose a consistent HTTPS
-  Actions URL and run ID.
+- `CI` and `Dependency Security` must be successful on the candidate.
+- Dispatch `Coverage Scorecard (JS)` twice on that exact SHA. Each run builds
+  independently, validates `plasmate.coverage.v2`, and uploads its own artifact.
+- The production preflight requires the two newest `coverage_js` check runs to
+  be successful, issued by GitHub Actions app `15368`, and completed within the
+  preceding 24 hours. A newer failure blocks release.
+- Branch, tag, and release-environment controls remain mandatory external
+  evidence; workflow YAML cannot configure its own trust boundary.
 
-### Start the window
+### Run the session
 
-First integrate all intended P0/P1/P2 code. Then freeze `master`: no merge,
-force-push, or other ref movement is permitted during the window. If `master`
-moves, discard the partial evidence and restart with the new SHA.
+Integrate all intended P0/P1/P2 changes, then select the current `master` SHA.
+Do not combine checks or artifacts from different commits:
 
 ```bash
 git fetch upstream master
-frozen_sha="$(git rev-parse upstream/master)"
-test "$(git rev-parse master)" = "$frozen_sha"
+candidate="$(git rev-parse upstream/master)"
+test "$(git rev-parse HEAD)" = "$candidate"
 
-mkdir -p artifacts/p0-soak
-frozen_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-start_date_utc="$(python3 -c 'from datetime import datetime, timedelta, timezone; print((datetime.now(timezone.utc) + timedelta(days=1)).date())')"
-printf '%s\n' "$frozen_sha" > artifacts/p0-soak/frozen-sha.txt
-printf '%s\n' "$frozen_at" > artifacts/p0-soak/frozen-at.txt
-printf '%s\n' "$start_date_utc" > artifacts/p0-soak/start-date-utc.txt
-```
-
-The first acceptance date is the first full UTC date after the freeze. On that
-date, dispatch all three workflows once; this proves the manual path, supplies
-the first daily runs, and ensures the JS requirement does not depend solely on
-the Sunday schedule:
-
-```bash
-test "$(date -u +%F)" = "$(sed -n '1p' artifacts/p0-soak/start-date-utc.txt)"
-git fetch upstream master
-test "$(git rev-parse upstream/master)" = "$(sed -n '1p' artifacts/p0-soak/frozen-sha.txt)"
 gh workflow run ci.yml --ref master
 gh workflow run security.yml --ref master
 gh workflow run coverage-js.yml --ref master
+gh workflow run coverage-js.yml --ref master
 ```
 
-Only runs whose `startedAt` falls on one of the seven recorded acceptance dates
-count. The schedules then produce one run of CI and security per UTC date.
-GitHub schedules can be delayed; if a scheduled run does not start on a
-required date, manually dispatch it on that same UTC date. Do not backdate
-evidence.
+Wait for all four runs. Download both JS artifacts and validate each with the
+candidate binary. Confirm their `environment.git_commit`, runner `head_sha`,
+corpus digest, outcome partition, and zero infrastructure failures. Ordinary
+site blocks and fetch failures remain observations, not infrastructure success.
 
-### External controls and their evidence
+### Capture external controls
 
-An administrator must configure these controls in GitHub before the window.
-They are operational prerequisites, not effects of merging workflow YAML:
+Retain read-only snapshots of `master` protection, the stable-tag ruleset, the
+`release` environment, its deployment policy, and secret names. Confirm that
+`CARGO_REGISTRY_TOKEN` exists only in the protected environment. Never print a
+secret value. If `master` moves, discard the session evidence and rerun the four
+workflows on the new SHA; there is no waiting period.
 
-1. Protect `master`; require pull requests, strict up-to-date checks, resolved
-   conversations, administrator enforcement, and block force-pushes/deletion.
-2. Require these GitHub Actions checks from app ID `15368`:
-   `Minimum Rust 1.88`, `test (ubuntu-latest)`, `test (macos-latest)`,
-   `action-manifest`, `Workflow trust policy`, `Rust advisory audit`, the five
-   `npm audit (...)` matrix checks, `Python dependency audit`, and
-   `Go vulnerability audit`.
-3. Protect stable `v*` tags against unauthorized creation, update, and deletion.
-4. Configure the `release` environment with the required reviewers/protection
-   rules and keep publisher credentials only in that environment.
-
-Capture the read-only settings snapshots. A classic branch protection response
-and repository rulesets may coexist, so retain both:
-
-```bash
-gh api repos/{owner}/{repo}/branches/master/protection \
-  > artifacts/p0-soak/master-protection.json
-gh api repos/{owner}/{repo}/rulesets \
-  > artifacts/p0-soak/repository-rulesets.json
-gh api repos/{owner}/{repo}/environments/release \
-  > artifacts/p0-soak/release-environment.json
-```
-
-If the classic branch-protection endpoint returns `404`, record that response
-and demonstrate the equivalent `master` controls in the ruleset snapshot; do
-not silently treat a missing classic response as successful configuration.
-
-### Close and verify the window
-
-After the end of the seventh full UTC date, export run metadata. Workflow-level
-`success` is accepted because the frozen workflow definition has no optional
-required jobs: success means every matrix job and required job completed.
-
-```bash
-run_fields='databaseId,attempt,event,workflowName,headSha,startedAt,updatedAt,conclusion,url'
-gh run list --workflow ci.yml --branch master --limit 100 \
-  --json "$run_fields" > artifacts/p0-soak/ci-runs.json
-gh run list --workflow security.yml --branch master --limit 100 \
-  --json "$run_fields" > artifacts/p0-soak/security-runs.json
-gh run list --workflow coverage-js.yml --branch master --limit 100 \
-  --json "$run_fields" > artifacts/p0-soak/coverage-js-runs.json
-
-verified_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-python3 scripts/verify-p0-soak.py \
-  --sha "$(sed -n '1p' artifacts/p0-soak/frozen-sha.txt)" \
-  --frozen-at "$(sed -n '1p' artifacts/p0-soak/frozen-at.txt)" \
-  --start-date "$(sed -n '1p' artifacts/p0-soak/start-date-utc.txt)" \
-  --verified-at "$verified_at" \
-  --ci artifacts/p0-soak/ci-runs.json \
-  --security artifacts/p0-soak/security-runs.json \
-  --js artifacts/p0-soak/coverage-js-runs.json \
-  --output artifacts/p0-soak/verification.json
-```
-
-Retain the run URLs, verifier result, coverage artifact, settings snapshots,
-and exact frozen SHA as the acceptance record. The verifier does not prove
-that settings were active; reviewers must inspect the captured GitHub settings
-and each linked run. No release tag may be created until both evidence classes
-pass review.
+Only after the two fresh JS checks, all 13 required checks, local release
+validation, package dry-run, and external-control review pass should the
+maintainer create the protected annotated tag. `verify-release-preflight.py`
+rechecks those exact-SHA GitHub check runs before any candidate code executes.
 
 ## P0 completion definition
 
@@ -314,7 +234,8 @@ P0 is complete only when all of the following are true:
 - Dependency scans cover every first-party lock or package root, all remote
   Actions are immutable, and scheduled evidence cannot write to `master`.
 - A security policy and threat model are present.
-- The repository remains green for seven days, including the scheduled JS workload.
+- Two fresh isolated JS scorecards and all protected checks pass on one exact
+  release SHA during the same bounded release session.
 
 ## Dependency path into P1 and P2
 

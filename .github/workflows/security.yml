@@ -5,8 +5,9 @@ on:
     branches: [master]
   pull_request:
   schedule:
-    # Daily at 07:30 UTC while P0 operational acceptance is active.
-    - cron: '30 7 * * *'
+    # Weekly on Sundays at 07:30 UTC; release candidates are also dispatched
+    # explicitly during their exact-SHA release session.
+    - cron: '30 7 * * 0'
   workflow_dispatch:
 
 permissions:
@@ -14,8 +15,8 @@ permissions:
 
 concurrency:
   group: dependency-security-${{ github.ref }}
-  # Do not cancel a running acceptance check. GitHub serializes this group, so
-  # the expensive multi-ecosystem audit remains resource-bounded.
+  # Do not cancel a running release-session check. GitHub serializes this group,
+  # so the expensive multi-ecosystem audit remains resource-bounded.
   cancel-in-progress: false
 
 jobs:

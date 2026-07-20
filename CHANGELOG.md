@@ -14,6 +14,9 @@
 - Added read-only Rust, npm, Python, Go, and GitHub Actions supply-chain gates,
   immutable Action pins, restrained Dependabot coverage, and artifact-only
   scheduled coverage evidence.
+- Replaced the elapsed-time release soak with a bounded exact-SHA release
+  session: production preflight now requires all protected checks plus the two
+  newest isolated JS scorecards to have succeeded within 24 hours.
 - Added a Vercel AI dependency lock and migrated its MCP client to supported AI
   SDK 6 APIs; refreshed vulnerable npm transitive dependencies to clean audits.
 - Updated the optional Wasmtime runtime to the patched 36.x line with a minimal
