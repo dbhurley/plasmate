@@ -33,7 +33,9 @@ There's no way to say: "Yes, you can read my content, and here's a better way to
 
 ## The Proposal: SOM Directives
 
-We propose extending robots.txt with directives that let websites advertise **semantic representations** of their content - structured, token-efficient formats that AI agents can consume directly instead of parsing raw HTML.
+We propose extending robots.txt with directives that let websites advertise
+**semantic representations** of their content: structured formats that AI
+agents can consume directly instead of parsing raw HTML.
 
 ### New Directives
 
@@ -70,7 +72,8 @@ SOM-Freshness: 3600
    GET https://cache.example.com/v1/som?url=https://example.com/article/ai-future
    ```
 5. It receives a clean, structured SOM response (~3,000 tokens)
-6. Both the website and the agent benefit: less bandwidth, fewer tokens, better extraction quality
+6. Both the website and the agent can measure bandwidth, token, and extraction
+   effects on the same declared representation
 
 ### Full Example
 
@@ -125,11 +128,18 @@ Sitemap: https://example.com/sitemap.xml
 
 ### For AI Agent Developers
 
-**Fewer tokens, lower costs.** The Semantic Object Model compresses web content by 10-16x compared to raw HTML. At GPT-4 rates ($30/1M tokens), processing 1M pages drops from ~$1M to ~$60K.
+**Measurable representation size.** A semantic endpoint lets a publisher and
+agent compare raw-response bytes, serialized semantic bytes, tokens under a
+named tokenizer, and downstream task quality. Plasmate's retained historical
+evidence is scoped in the [claim
+registry](../claims/evidence.v1.json); it does not establish universal token or
+cost savings.
 
 **Better extraction quality.** Instead of hoping your HTML parser correctly identifies the main content, you get a structured representation where the website owner has already made that determination.
 
-**Faster processing.** No need to spin up a headless browser, wait for JavaScript execution, and parse the DOM. A SOM fetch is a single HTTP request returning clean JSON.
+**Direct retrieval.** A publisher-hosted SOM can be fetched as JSON without
+requiring the consumer to derive that representation locally. Latency still
+depends on the endpoint, network, cache, page state, and consumer.
 
 **Respect for publishers.** Agents that honor SOM directives demonstrate good citizenship. They consume content through the channel the publisher provides, rather than scraping the raw HTML.
 
@@ -158,7 +168,8 @@ An alternative delivery mechanism would be HTTP `Link` headers with a `rel="sema
 ## Implementation Status
 
 ### Available Today
-- **Plasmate SOM Cache** ([cache.plasmate.app](https://cache.plasmate.app)) can serve as the SOM endpoint for any website
+- **A publisher-operated or authorized SOM endpoint** can serve a declared
+  semantic representation for sites where it is deployed and permitted
 - **Plasmate engine** ([plasmate.app](https://plasmate.app)) can generate SOM representations on demand
 - The W3C Community Group is actively incubating the SOM and AWP specifications
 

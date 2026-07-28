@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "plasmate"
 version = "0.4.1"
-description = "Browser engine for AI agents. 10-100x fewer tokens than raw HTML. Web scraping with structured output for LLMs, RAG pipelines, and autonomous agents."
+description = "Client SDK for Plasmate, a browser engine with structured SOM output and native MCP/AWP plus a supported CDP subset."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.9"

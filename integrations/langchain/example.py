@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Example: LangChain agent browsing Hacker News with Plasmate.
 
-Demonstrates how Plasmate's SOM output saves ~10x tokens compared to raw HTML
+Demonstrates how to measure raw HTML and Plasmate SOM with a simple estimate.
 while giving the agent everything it needs to understand and interact with pages.
 
 Prerequisites:
@@ -21,9 +21,9 @@ from langchain_plasmate import PlasmateFetchTool, PlasmateSOMLoader, get_plasmat
 
 
 def main() -> None:
-    # --- 1. Token efficiency demo -------------------------------------------
+    # --- 1. Input-specific size estimate ------------------------------------
     print("=" * 60)
-    print("Token efficiency: PlasmateSOMLoader vs raw HTML")
+    print("Input-specific estimate: PlasmateSOMLoader vs raw HTML")
     print("=" * 60)
 
     loader = PlasmateSOMLoader(["https://news.ycombinator.com"])
@@ -38,7 +38,7 @@ def main() -> None:
     print(f"  HTML size:  {html_bytes:>8,} bytes  (~{html_tokens:,} tokens)")
     print(f"  SOM size:   {som_bytes:>8,} bytes")
     print(f"  SOM text:   {len(doc.page_content):>8,} chars  (~{som_tokens:,} tokens)")
-    print(f"  Savings:    ~{html_tokens / max(som_tokens, 1):.0f}x fewer tokens")
+    print(f"  Est. ratio: ~{html_tokens / max(som_tokens, 1):.0f}x for this page")
     print(f"  Elements:   {doc.metadata['element_count']} total, "
           f"{doc.metadata['interactive_count']} interactive")
     print()

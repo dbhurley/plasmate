@@ -9,7 +9,7 @@ Plasmate is a Rust-based headless browser engine purpose-built for AI agents. In
 Traditional headless browsers (Chrome, Playwright, Lightpanda) output raw HTML or DOM snapshots. For AI agents, this means:
 - Thousands of wasted tokens on boilerplate, scripts, styles
 - No semantic structure (what's a nav? what's the main content?)
-- Heavy resource usage (Chrome uses 200MB+ per page)
+- A full visual-browser process when the workflow needs Chrome behavior
 
 Plasmate solves this with the Semantic Object Model: a compact, structured representation that preserves meaning while discarding noise.
 
@@ -22,6 +22,9 @@ a 9.32x median over 82 successful JavaScript inputs, from 98 attempted URLs in
 each run. These are observational byte ratios, not universal token, cost,
 latency, or task-success claims. See `docs/BENCHMARKING.md` and retain exact
 denominators and provenance when citing a report.
+
+Allowed wording, retired claims, and externally controlled surfaces are listed
+in `claims/evidence.v1.json` and at https://docs.plasmate.app/claims.
 
 ## Install
 
@@ -82,7 +85,9 @@ Options:
 - --port <port> (default: 9222)
 - --host <host> (default: 127.0.0.1)
 
-Exposes a WebSocket endpoint compatible with Puppeteer and Playwright.
+Exposes a WebSocket endpoint implementing Plasmate's documented CDP subset for
+supported Puppeteer/CDP workflows. It is not full Puppeteer, Playwright, CDP,
+Chromium, or web-platform compatibility.
 
 ### bench - Benchmark against URL list
 

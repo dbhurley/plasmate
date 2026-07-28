@@ -31,6 +31,6 @@ Type "plasmate fetch https://linear.app | wc -c"
 Enter
 Sleep 2s
 
-Type "# Up to 16x smaller - fewer tokens, lower cost!"
+Type "# Measure serialized bytes and model tokens on your workload"
 Enter
 Sleep 2s

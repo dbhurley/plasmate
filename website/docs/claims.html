@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Quick Start - Plasmate Docs | The Better Browser for AI Agents</title>
-  <meta name="description" content="Quick Start - Plasmate documentation. The better browser for AI agents, built on the Semantic Object Model (SOM). W3C Community Group member." />
-  <meta name="keywords" content="Plasmate, browser for AI agents, SOM, semantic object model, agent web protocol, AWP, W3C, quick start" />
-  <link rel="canonical" href="https://docs.plasmate.app/quickstart" />
+  <title>Public Claim & Evidence Registry - Plasmate Docs | The Better Browser for AI Agents</title>
+  <meta name="description" content="Public Claim & Evidence Registry - Plasmate documentation. The better browser for AI agents, built on the Semantic Object Model (SOM). W3C Community Group member." />
+  <meta name="keywords" content="Plasmate, browser for AI agents, SOM, semantic object model, agent web protocol, AWP, W3C, public claim & evidence registry" />
+  <link rel="canonical" href="https://docs.plasmate.app/claims" />
   <link rel="alternate" type="application/som+json" href="/.well-known/som.json" title="SOM (Plasmate)" />
 
   <link rel="icon" href="/favicon.ico" sizes="any" />
@@ -399,7 +399,7 @@
     <nav class="sidebar" aria-label="Documentation navigation">
       <a class="sidebar-brand" href="https://plasmate.app"><img src="/brand/plasmate-mark.png" alt="" width="22" height="22" style="vertical-align: -3px;" />Plasmate</a>
       <a href=".">Overview</a>
-          <a href="quickstart" class="active">Quick Start</a>
+          <a href="quickstart">Quick Start</a>
           <a href="quickstart-mcp">30-Second Install</a>
           <a href="spec">Product Spec</a>
           <a href="prd">PRD</a>
@@ -432,7 +432,7 @@
           <div class="section-label">Tools</div>
           <a href="tools">Auditing & CI/CD</a>
           <div class="section-label">Coverage & Benchmarks</div>
-          <a href="claims">Claim & Evidence Registry</a>
+          <a href="claims" class="active">Claim & Evidence Registry</a>
           <a href="coverage">Coverage (HTML)</a>
           <a href="coverage-js">Coverage (JS)</a>
           <a href="benchmark-cost">Archived Cost Analysis</a>
@@ -457,166 +457,62 @@
       </div>
     </nav>
     <main class="content">
-      <h1 id="quick-start">Quick Start</h1><p>Get Plasmate running and produce your first SOM output in under 60 seconds.</p>
-<h2 id="install">Install</h2><h3 id="from-the-install-script">From the install script</h3><pre><code class="language-sh">curl -fsSL https://plasmate.app/install.sh | sh
-</code></pre>
-<h3 id="from-github-releases">From GitHub Releases</h3><p>Download the binary for your platform from <a href="https://github.com/plasmate-labs/plasmate/releases">GitHub Releases</a>:</p>
-<ul>
-<li><code>plasmate-aarch64-macos</code> (Apple Silicon)</li>
-<li><code>plasmate-x86_64-macos</code> (Intel Mac)</li>
-<li><code>plasmate-x86_64-linux</code> (Linux x86_64)</li>
-<li><code>plasmate-aarch64-linux</code> (Linux ARM64)</li>
+      <h1 id="public-claim-evidence-registry">Public Claim & Evidence Registry</h1><p>Plasmate separates product facts, historical observations, compatibility
+scope, and ecosystem directory entries. Quantitative claims are allowed only
+when a retained artifact supports the exact metric, denominator, provenance,
+and limitations.</p>
+<p>The machine-readable source of truth is
+<a href="https://github.com/plasmate-labs/plasmate/blob/master/claims/evidence.v1.json"><code>claims/evidence.v1.json</code></a>.
+The governing methodology is
+<a href="https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md"><code>docs/BENCHMARKING.md</code></a>.</p>
+<h2 id="currently-allowed-quantitative-wording">Currently allowed quantitative wording</h2><ul>
+<li><strong>Non-JavaScript historical snapshot:</strong> The retained v0.5.1 public-web
+snapshot generated July 19, 2026 recorded a 9.98x median serialized-byte
+ratio over 83 successful inputs from 98 attempted URLs.</li>
+<li><strong>JavaScript-enabled historical snapshot:</strong> The retained v0.5.1 public-web
+snapshot generated June 7, 2026 recorded a 9.32x median serialized-byte ratio
+over 82 successful inputs from 98 attempted URLs.</li>
 </ul>
-<p>Make it executable and move it to your PATH:</p>
-<pre><code class="language-sh">chmod +x plasmate-aarch64-macos
-mv plasmate-aarch64-macos /usr/local/bin/plasmate
-</code></pre>
-<h3 id="from-docker">From Docker</h3><pre><code class="language-sh">docker run -p 9222:9222 plasmate/browser
-</code></pre>
-<h3 id="from-source">From Source</h3><pre><code class="language-sh">git clone https://github.com/plasmate-labs/plasmate.git
-cd plasmate
-cargo build --release
-./target/release/plasmate --help
-</code></pre>
-<h2 id="usage">Usage</h2><h3 id="one-shot-fetch-cli">One-shot fetch (CLI)</h3><p>Fetch a page and output its SOM representation:</p>
-<pre><code class="language-sh">plasmate fetch https://news.ycombinator.com
-</code></pre>
-<p>This prints the Semantic Object Model to stdout: title, regions, elements, compression ratio, and timing.</p>
-<h3 id="persistent-server-awp">Persistent server (AWP)</h3><p>Start the AWP WebSocket server:</p>
-<pre><code class="language-sh">plasmate serve --protocol awp
-</code></pre>
-<p>Connect on <code>ws://127.0.0.1:9222</code>. The server accepts AWP messages (JSON over WebSocket).</p>
-<h3 id="persistent-server-cdp-compatibility">Persistent server (CDP compatibility)</h3><p>Start the documented CDP compatibility subset for a supported Puppeteer/CDP
-workflow:</p>
-<pre><code class="language-sh">plasmate serve --protocol cdp
-</code></pre>
-<p>Connect with Puppeteer:</p>
-<pre><code class="language-js">import puppeteer from &#39;puppeteer-core&#39;;
-
-const browser = await puppeteer.connect({
-  browserWSEndpoint: &#39;ws://127.0.0.1:9222/devtools/browser/plasmate&#39;,
-  protocolTimeout: 10000,
-});
-
-const page = await browser.newPage();
-await page.goto(&#39;https://news.ycombinator.com&#39;);
-console.log(await page.title());
-</code></pre>
-<h3 id="benchmark-mode">Benchmark mode</h3><p>Run the built-in throughput benchmark against a set of local pages:</p>
-<pre><code class="language-sh">plasmate throughput-bench --base-url http://localhost:8765 --pages 100
-</code></pre>
-<h2 id="awp-protocol-quick-reference">AWP Protocol (Quick Reference)</h2><p>AWP&#39;s foundational v0.1 core has seven methods. The current native handler also
-exposes session-listing, network-interception, plugin, cookie, and proxy-pool
-extensions:</p>
-<table>
-<thead>
-<tr>
-<th>Method</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>awp.hello</code></td>
-<td>Handshake and capability negotiation</td>
-</tr>
-<tr>
-<td><code>session.create</code></td>
-<td>Create a new browsing session</td>
-</tr>
-<tr>
-<td><code>session.close</code></td>
-<td>Close and clean up a session</td>
-</tr>
-<tr>
-<td><code>page.navigate</code></td>
-<td>Navigate to a URL, returns SOM</td>
-</tr>
-<tr>
-<td><code>page.observe</code></td>
-<td>Get the current SOM snapshot</td>
-</tr>
-<tr>
-<td><code>page.act</code></td>
-<td>Perform an action (click, type)</td>
-</tr>
-<tr>
-<td><code>page.extract</code></td>
-<td>Extract structured data, interactive elements, or specific fields</td>
-</tr>
-</tbody></table>
-<p>Click, type, select, scroll, toggle, and clear are actions carried by
-<code>page.act</code>, not separate AWP wire methods.</p>
-<h3 id="example-awp-session-python-pseudocode">Example AWP session (Python pseudocode)</h3><pre><code class="language-python">import asyncio, websockets, json
-
-async def main():
-    async with websockets.connect(&quot;ws://127.0.0.1:9222&quot;) as ws:
-        # Handshake
-        await ws.send(json.dumps({
-            &quot;id&quot;: 1,
-            &quot;method&quot;: &quot;awp.hello&quot;,
-            &quot;params&quot;: {&quot;client&quot;: &quot;my-agent&quot;, &quot;version&quot;: &quot;0.1&quot;}
-        }))
-        print(await ws.recv())
-
-        # Create session
-        await ws.send(json.dumps({
-            &quot;id&quot;: 2,
-            &quot;method&quot;: &quot;session.create&quot;,
-            &quot;params&quot;: {&quot;user_agent&quot;: &quot;MyAgent/1.0&quot;}
-        }))
-        resp = json.loads(await ws.recv())
-        session_id = resp[&quot;result&quot;][&quot;session_id&quot;]
-
-        # Navigate
-        await ws.send(json.dumps({
-            &quot;id&quot;: 3,
-            &quot;method&quot;: &quot;page.navigate&quot;,
-            &quot;params&quot;: {&quot;session_id&quot;: session_id, &quot;url&quot;: &quot;https://news.ycombinator.com&quot;}
-        }))
-        nav = json.loads(await ws.recv())
-        print(f&quot;Title: {nav[&#39;result&#39;][&#39;title&#39;]}&quot;)
-        print(f&quot;Regions: {len(nav[&#39;result&#39;][&#39;som&#39;][&#39;regions&#39;])}&quot;)
-
-asyncio.run(main())
-</code></pre>
-<h2 id="som-output-structure">SOM Output Structure</h2><p>A SOM snapshot contains:</p>
-<pre><code class="language-json">{
-  &quot;version&quot;: &quot;0.1&quot;,
-  &quot;url&quot;: &quot;https://news.ycombinator.com&quot;,
-  &quot;title&quot;: &quot;Hacker News&quot;,
-  &quot;meta&quot;: {
-    &quot;html_bytes&quot;: 34430,
-    &quot;som_bytes&quot;: 5200,
-    &quot;element_count&quot;: 45,
-    &quot;compression_ratio&quot;: 6.6
-  },
-  &quot;regions&quot;: [
-    {
-      &quot;id&quot;: &quot;r_navigation&quot;,
-      &quot;role&quot;: &quot;Navigation&quot;,
-      &quot;elements&quot;: [
-        {
-          &quot;id&quot;: &quot;e_a1b2c3d4e5f6&quot;,
-          &quot;role&quot;: &quot;link&quot;,
-          &quot;name&quot;: &quot;Hacker News&quot;,
-          &quot;href&quot;: &quot;https://news.ycombinator.com&quot;
-        }
-      ]
-    },
-    {
-      &quot;id&quot;: &quot;r_main&quot;,
-      &quot;role&quot;: &quot;Main&quot;,
-      &quot;elements&quot;: [...]
-    }
-  ]
-}
-</code></pre>
-<p>Element IDs are deterministic: <code>e_</code> + first 12 hex chars of <code>sha256(origin|role|name|dom_path)</code>.</p>
-<h2 id="whats-next">What's Next</h2><ul>
-<li>Read the full <a href="spec">Product Spec</a> for architecture details</li>
-<li>Read the <a href="awp">AWP Protocol</a> specification</li>
-<li>Check the <a href="roadmap">Roadmap</a> for what&#39;s coming in v0.2</li>
-</ul>
+<p>Both are historical observational results. They lack the commit, corpus digest,
+and runner provenance required of current evidence. They measure raw HTML bytes
+divided by serialized SOM bytes over successful inputs. They do not establish
+token savings, model cost, latency, memory, information equivalence, or task
+success. Blocked and failed inputs remain in each 98-URL attempted denominator.</p>
+<h2 id="compatibility-wording">Compatibility wording</h2><p>Use:</p>
+<blockquote>
+<p>Plasmate provides a CDP compatibility layer for the supported Puppeteer/CDP
+workflows and methods documented in the README.</p>
+</blockquote>
+<p>Do not imply full CDP, Puppeteer, Playwright, Chromium, or web-platform
+compatibility. A benchmark-fixture pass validates that fixture and its listed
+assertions, not an entire ecosystem.</p>
+<h2 id="ecosystem-wording">Ecosystem wording</h2><p>The README and documentation provide an integration directory. Inclusion does
+not establish current maintenance, end-to-end testing, or compatibility with
+every upstream version. Plasmate does not publish a numeric integration count
+until a dated manifest defines inclusion and verification criteria.</p>
+<h2 id="retired-claims">Retired claims</h2><p>Do not publish universal claims such as “10x token compression,” “17x average
+token reduction,” “10–100x fewer tokens,” “50x faster than Chrome,” fixed
+cross-product memory comparisons, or universal cost savings. Those claims
+require a named tokenizer or model, comparable workload, build and runner
+metadata, cache state, complete outcomes, and retained evidence.</p>
+<h2 id="how-to-add-a-claim">How to add a claim</h2><ol>
+<li>Retain the report or conformance artifact in a stable public location.</li>
+<li>Record the exact metric and all attempted, successful, blocked, failed,
+crashed, and timed-out denominators.</li>
+<li>Record version, commit, dirty state, corpus digest, configuration, build
+profile, runner, cache state, and measurement date.</li>
+<li>Add allowed wording and limitations to the machine-readable registry.</li>
+<li>Run the release validation and relevant benchmark validator before
+publishing.</li>
+</ol>
+<h2 id="externally-controlled-surfaces">Externally controlled surfaces</h2><p>As checked on July 28, 2026, the live GitHub repository description still says
+“10x token compression,” and the repository topics include
+<code>token-compression</code>. Those settings are not changed by a source commit. Replace
+the description with the wording in the machine-readable registry and replace
+that topic with <code>structured-output</code> or <code>semantic-browser</code>.</p>
+<p>The live crates.io, npm, and PyPI summaries did not contain the retired numeric
+claims at review time. Future source-metadata improvements reach those
+registries only through normal versioned package releases.</p>
 
     </main>
   </div>

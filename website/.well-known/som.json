@@ -213,7 +213,7 @@
         {
           "id": "e_064dd1d5a6ff",
           "role": "paragraph",
-          "text": "Plasmate compiles HTML into a Semantic Object Model, a structured representation that LLMs can reason about directly. 50x faster than Chrome. 10x fewer tokens."
+          "text": "Plasmate compiles supported web pages into a Semantic Object Model, a structured representation with typed regions, content, and supported actions. Output size and performance depend on the workload."
         },
         {
           "id": "e_9efc18a25469",
@@ -271,7 +271,7 @@
         {
           "id": "e_c378bb85cbf5",
           "role": "heading",
-          "text": "7 methods. That's the protocol.",
+          "text": "AWP defines a seven-method foundational core plus capability-negotiated extensions.",
           "attrs": {
             "level": 2
           }
@@ -371,7 +371,7 @@
           "name": "Plasmate Labs",
           "url": "https://plasmate.app"
         },
-        "description": "Plasmate is a browser engine purpose-built for AI agents. It compiles HTML into a Semantic Object Model (SOM), delivering 50x faster performance and 10x fewer tokens than Chrome-based solutions.",
+        "description": "Plasmate is a browser engine for AI agents. It compiles supported web pages into a structured Semantic Object Model and exposes native MCP and AWP with a documented CDP compatibility subset.",
         "license": "https://www.apache.org/licenses/LICENSE-2.0",
         "name": "Plasmate",
         "offers": {
@@ -394,7 +394,7 @@
       }
     ],
     "open_graph": {
-      "og:description": "The better browser for AI agents. HTML in, Semantic Object Model out. 50x faster, 10x fewer tokens. W3C Community Group member. Apache 2.0.",
+      "og:description": "HTML in, structured Semantic Object Model out. Native MCP and AWP with a documented CDP compatibility subset. Apache 2.0.",
       "og:type": "website",
       "og:url": "https://plasmate.app",
       "og:title": "Plasmate - The Better Browser for AI Agents",
@@ -404,12 +404,12 @@
       "twitter:card": "summary_large_image",
       "twitter:site": "@plasmate_labs",
       "twitter:title": "Plasmate - The Better Browser for AI Agents",
-      "twitter:description": "HTML in, Semantic Object Model out. 50x faster than Chrome, 10x fewer tokens. W3C Community Group member."
+      "twitter:description": "HTML in, structured Semantic Object Model out. Native MCP and AWP with a documented CDP compatibility subset."
     },
     "meta": {
       "keywords": "browser for AI agents, semantic object model, SOM, agent web protocol, AWP, headless browser, AI browser, web scraping, browser automation, W3C, better browser for agents, Plasmate",
       "charset": "utf-8",
-      "description": "Plasmate is the better browser for AI agents. Compiles HTML into a Semantic Object Model (SOM) - 50x faster than Chrome, 10x fewer tokens. W3C Community Group member. Apache 2.0. One binary.",
+      "description": "Plasmate is a browser engine for AI agents. It compiles supported web pages into a structured Semantic Object Model, with native MCP and AWP plus a documented CDP compatibility subset. Apache 2.0.",
       "viewport": "width=device-width,initial-scale=1"
     },
     "links": [

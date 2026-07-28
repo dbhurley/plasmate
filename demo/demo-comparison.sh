@@ -92,9 +92,10 @@ if [ "${CHROME_TOKENS:-0}" -gt 0 ] && [ "${PLASMATE_TOKENS:-0}" -gt 0 ]; then
   printf "  %-12s %10s tokens   %6ss\n" "Chrome:" "$CHROME_TOKENS" "$CHROME_TIME"
   printf "  %-12s %10s tokens   %6ss\n" "Plasmate:" "$PLASMATE_TOKENS" "$PLASMATE_TIME"
   echo ""
-  echo -e "  ${BOLD}Token compression:  ${CYAN}${RATIO}x fewer tokens${NC}"
-  echo -e "  ${BOLD}Token savings:      ${CYAN}${SAVINGS}%${NC}"
-  echo -e "  ${BOLD}Speed improvement:  ${CYAN}${SPEED}x faster${NC}"
+  echo -e "  ${BOLD}Serialized-byte ratio for this input: ${CYAN}${RATIO}x${NC}"
+  echo -e "  ${BOLD}Byte reduction for this input:        ${CYAN}${SAVINGS}%${NC}"
+  echo -e "  ${BOLD}Observed wall-time ratio in this run: ${CYAN}${SPEED}x${NC}"
+  echo -e "  ${DIM}Input-specific observations; not universal token, cost, or speed claims.${NC}"
 
   GPT4_CHROME=$(python3 -c "print(f'{int($CHROME_TOKENS) * 30 / 1000000:.4f}')")
   GPT4_PLASMATE=$(python3 -c "print(f'{int($PLASMATE_TOKENS) * 30 / 1000000:.4f}')")

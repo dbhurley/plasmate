@@ -124,7 +124,9 @@ Your agent can now browse X.com as you. Here is what to know going forward:
 
 ### It Works for Other Sites Too
 
-The same process works for any website. Want your agent to browse GitHub? LinkedIn? Reddit? Just:
+The same process can be tested on other supported sites. Want your agent to
+browse GitHub, LinkedIn, or Reddit? Verify the current site's authentication,
+robots, rendering, and interaction requirements, then:
 
 1. Log into that site in Chrome
 2. Click the Plasmate extension

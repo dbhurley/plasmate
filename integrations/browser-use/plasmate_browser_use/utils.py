@@ -14,7 +14,7 @@ def token_count_comparison(
 ) -> dict[str, Any]:
     """Compare token counts between raw HTML and SOM representation.
 
-    Useful for benchmarking and demonstrating the token savings Plasmate
+    Useful for input-specific estimates of the token-size change Plasmate
     provides over traditional browser backends.
 
     Args:

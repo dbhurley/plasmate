@@ -6,7 +6,7 @@ from plasmate_browser_use import PlasmateExtractor
 async def main():
     extractor = PlasmateExtractor()
 
-    # Get SOM-formatted page context (10x fewer tokens than raw HTML)
+    # Get SOM-formatted page context; measure tokens with the model's tokenizer.
     context = extractor.get_page_context("https://news.ycombinator.com")
     print(context)
 

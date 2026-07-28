@@ -1,6 +1,7 @@
 # Using Plasmate with Claude Desktop
 
-Add Plasmate to your Claude Desktop MCP configuration for token-efficient web browsing.
+Add Plasmate to your Claude Desktop MCP configuration for structured web
+browsing with page-dependent output size.
 
 ## Quick Setup
 

@@ -147,3 +147,8 @@ single-pass latencies with `benchmark-v1` cold/warm measurements.
 ## Benchmark claims
 
 Marketing and release notes may cite a benchmark only when the report is retained as a build artifact and the exact metric denominator is stated. Preferred claims describe task-contract pass rate, total-input availability, latency distribution, peak memory, and crash rate. Compression is supporting evidence, not the product-quality headline.
+
+The machine-readable [public claim and evidence
+registry](../claims/evidence.v1.json) records allowed wording, evidence paths,
+limitations, retired claims, and externally controlled surfaces. A new public
+claim must update that registry in the same change.

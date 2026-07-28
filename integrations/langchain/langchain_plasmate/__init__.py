@@ -1,7 +1,7 @@
 """LangChain integration for Plasmate — agent-native headless browser.
 
 Provides LangChain tools and a document loader that return SOM (Semantic
-Object Model) output instead of raw HTML, saving ~10x tokens.
+Object Model) output instead of raw HTML. Output size is workload-dependent.
 
 Quick start::
 

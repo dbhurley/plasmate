@@ -4,7 +4,14 @@ This file is for AI coding agents (Cursor, Devin, Claude Code, Copilot, etc.). I
 
 ## What Plasmate is
 
-Plasmate is a headless browser engine that compiles web pages into a **Semantic Object Model (SOM)** — structured JSON optimised for LLM consumption — instead of returning raw HTML. 17x average token reduction. No API key, no cloud.
+Plasmate is a headless browser engine that compiles web pages into a
+**Semantic Object Model (SOM)** — structured JSON optimised for LLM consumption
+— instead of returning raw HTML. Output size is page-, configuration-, corpus-,
+and serialization-dependent. Retained v0.5.1 public-web snapshots measured
+median serialized-byte ratios of 9.98x over 83 successful non-JavaScript inputs
+and 9.32x over 82 successful JavaScript inputs, each from 98 attempted URLs.
+Those historical observations are not universal token, cost, latency, or task
+success claims. No API key, no cloud.
 
 It runs as a CLI, a persistent daemon, an MCP server, and a CDP server.
 
@@ -26,7 +33,8 @@ Requires Rust 1.88+ (including `--all-features`). No system dependencies beyond 
 RUST_LOG=debug ~/.cargo/bin/cargo test -- --nocapture  # with logging
 ```
 
-There are 224+ tests. All must pass before a PR.
+Run the suite rather than citing a hard-coded test count; the count changes as
+the repository evolves. All tests must pass before a PR.
 
 ## Key directories
 
@@ -69,7 +77,8 @@ Tool descriptions are read by LLMs (Claude, GPT-4, etc.) to decide which tool to
 - State WHAT it returns concretely
 - State WHEN to use it vs alternatives
 - Include any token-saving tips (`selector='main'`)
-- Avoid vague phrases like "token-efficient" without numbers
+- Describe SOM as structured or compact; cite a numeric output-size result only
+  with its metric, denominator, retained evidence, date/version, and limitations
 
 ## SOM selector syntax
 

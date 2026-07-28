@@ -2,7 +2,10 @@
 
 Plasmate is an open-source, agent-native headless browser engine written in Rust.
 
-It compiles HTML into a **Semantic Object Model (SOM)** - a structured, token-efficient representation that AI agents can reason about directly. It replaces CDP with a purpose-built **Agent Web Protocol (AWP)**.
+It compiles HTML into a **Semantic Object Model (SOM)**: a structured
+representation that AI agents can reason about directly. Its native protocol is
+the purpose-built **Agent Web Protocol (AWP)**; a documented CDP subset remains
+available as a compatibility layer.
 
 ## Quick Links
 

@@ -432,9 +432,10 @@
           <div class="section-label">Tools</div>
           <a href="tools">Auditing & CI/CD</a>
           <div class="section-label">Coverage & Benchmarks</div>
+          <a href="claims">Claim & Evidence Registry</a>
           <a href="coverage">Coverage (HTML)</a>
           <a href="coverage-js">Coverage (JS)</a>
-          <a href="benchmark-cost">Cost Analysis</a>
+          <a href="benchmark-cost">Archived Cost Analysis</a>
           <a href="roadmap">Roadmap</a>
           <div class="section-label">User Guides</div>
           <a href="guide-agent-browses-twitter">Your Agent on X/Twitter</a>
@@ -495,7 +496,8 @@ estimates; use your model&#39;s tokenizer when evaluating an OpenClaw workflow.<
 }
 </code></pre>
 <p>Available MCP tools: <code>fetch_page</code>, <code>extract_text</code>, <code>extract_links</code>, <code>cache_status</code>, <code>session_status</code>, <code>screenshot_page</code>, <code>open_page</code>, <code>navigate_to</code>, <code>click</code>, <code>type_text</code>, <code>select_option</code>, <code>scroll</code>, <code>toggle</code>, <code>clear</code>, <code>evaluate</code>, <code>close_page</code>, <code>get_cookies</code>, <code>set_cookies</code>, <code>clear_cookies</code>.</p>
-<h2 id="cdp-mode-puppeteer-compatible">CDP Mode (Puppeteer-compatible)</h2><p>Run Plasmate as a CDP server to replace Chrome in existing Puppeteer/Playwright workflows:</p>
+<h2 id="cdp-mode-puppeteer-compatible">CDP Mode (Puppeteer-compatible)</h2><p>Run Plasmate&#39;s CDP compatibility server for workflows that use its documented
+supported Puppeteer/CDP subset:</p>
 <pre><code class="language-bash">plasmate serve --protocol cdp --port 9222
 export BROWSER_WS_ENDPOINT=&quot;ws://127.0.0.1:9222&quot;
 </code></pre>

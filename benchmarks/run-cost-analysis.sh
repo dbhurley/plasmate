@@ -1,6 +1,6 @@
 #!/bin/bash
-# SOM Cost Analysis Benchmark
-# Reproducible benchmark comparing HTML vs SOM token costs
+# Legacy public-web serialized-byte observation helper
+# This does not measure tokens, model cost, task quality, or comparable engines.
 # Run: ./benchmarks/run-cost-analysis.sh
 # Requires: plasmate binary in PATH or target/release/plasmate
 
@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 URLS_FILE="$SCRIPT_DIR/urls.txt"
 OUTPUT="$SCRIPT_DIR/results-$(date +%Y-%m-%d).json"
 
-echo "SOM Cost Analysis Benchmark"
+echo "SOM Serialized-Byte Observation"
 echo "Plasmate: $($PLASMATE --version 2>/dev/null || echo 'unknown')"
 echo "Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "URLs: $(wc -l < "$URLS_FILE" | tr -d ' ')"
@@ -44,9 +44,7 @@ try:
     'url': sys.argv[1],
     'html_bytes': html,
     'som_bytes': som,
-    'html_tokens': html//4,
-    'som_tokens': som//4,
-    'ratio': round(ratio,1),
+    'serialized_byte_ratio': round(ratio,1),
     'elements': m.get('element_count',0),
     'interactive': m.get('interactive_count',0)
   }))
@@ -55,7 +53,7 @@ except:
 " "$url" 2>/dev/null)
 
   if echo "$result" | python3 -c "import sys,json; d=json.load(sys.stdin); exit(0 if 'error' not in d else 1)" 2>/dev/null; then
-    ratio=$(echo "$result" | python3 -c "import sys,json; print(json.load(sys.stdin)['ratio'])")
+    ratio=$(echo "$result" | python3 -c "import sys,json; print(json.load(sys.stdin)['serialized_byte_ratio'])")
     echo "  OK  ${ratio}x  $url"
     success=$((success + 1))
   else
@@ -84,21 +82,17 @@ if not valid:
     print('No valid results')
     sys.exit(1)
 
-total_html = sum(d['html_tokens'] for d in valid)
-total_som = sum(d['som_tokens'] for d in valid)
-ratios = sorted([d['ratio'] for d in valid])
+total_html = sum(d['html_bytes'] for d in valid)
+total_som = sum(d['som_bytes'] for d in valid)
+ratios = sorted([d['serialized_byte_ratio'] for d in valid])
 median = ratios[len(ratios)//2]
 
-print(f'Sites analyzed: {len(valid)}')
-print(f'Total HTML tokens: {total_html:,}')
-print(f'Total SOM tokens:  {total_som:,}')
-print(f'Overall compression: {total_html/total_som:.1f}x')
-print(f'Median compression:  {median:.1f}x')
-print(f'Token savings:       {(1-total_som/total_html)*100:.0f}%')
-print()
-savings_per_page = (total_html - total_som) / len(valid) * 2.50 / 1_000_000
-print(f'Cost savings at GPT-4o (\$2.50/M input tokens):')
-print(f'  Per page:    \${savings_per_page:.4f}')
-print(f'  Per 1K pages: \${savings_per_page*1000:.2f}')
-print(f'  Per 1M pages: \${savings_per_page*1e6:.0f}')
+print(f'Attempted inputs:     {len(data)}')
+print(f'Successful inputs:    {len(valid)}')
+print(f'Failed inputs:        {len(data) - len(valid)}')
+print(f'Total HTML bytes:     {total_html:,}')
+print(f'Total SOM bytes:      {total_som:,}')
+print(f'Aggregate byte ratio: {total_html/total_som:.1f}x')
+print(f'Median byte ratio:    {median:.1f}x')
+print('These are workload-specific serialized-byte observations, not token, cost, latency, or task-success claims.')
 " "$OUTPUT"

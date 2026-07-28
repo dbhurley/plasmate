@@ -1033,11 +1033,21 @@ mod tests {
     fn active_public_truth_surfaces_reject_obsolete_links_and_universal_claims() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut paths = [
+            "AGENTS.md",
+            "Cargo.toml",
             "README.md",
+            "MCP-SPEC.md",
             "server.json",
+            ".claude/skills/plasmate/SKILL.md",
             "docs/claude-desktop-config.md",
+            "integrations/browser-use/README.md",
+            "integrations/browser-use/pyproject.toml",
+            "integrations/langchain/README.md",
+            "sdk/node/package.json",
+            "sdk/python/pyproject.toml",
             "website/index.html",
             "website/compare.html",
+            "website/.well-known/som.json",
             "website/docs/executive-guide.html",
             "website/docs/log.html",
             "website/docs/openclaw-guide.html",
@@ -1056,6 +1066,8 @@ mod tests {
             "github.com/nicepkg/plasmate",
             "10-800x",
             "10–800x",
+            "10-100x fewer tokens",
+            "10–100x fewer tokens",
             "17x fewer tokens",
             "17x token compression",
             "17.5x average token compression",
@@ -1064,8 +1076,14 @@ mod tests {
             "10x faster",
             "compress web pages 10x",
             "50x faster",
+            "25x faster",
             "94% reduction in token",
             "94% token savings",
+            "60+ integrations",
+            "230 tests",
+            "98.9% site coverage",
+            "94/98 top sites",
+            "first browser tool",
             "13 mcp tools",
             "26 tools are available",
             "7 methods. that's the protocol",
@@ -1073,6 +1091,11 @@ mod tests {
             "awp (native, 7 methods)",
         ];
         for path in paths {
+            // The registry must name prohibited wording so automated and human
+            // reviewers can distinguish retired claims from allowed claims.
+            if path.ends_with("website/docs/src/claims.md") {
+                continue;
+            }
             let content = fs::read_to_string(&path).unwrap_or_else(|error| {
                 panic!(
                     "read active public truth surface {}: {error}",
@@ -1087,6 +1110,65 @@ mod tests {
                     path.display()
                 );
             }
+        }
+    }
+
+    #[test]
+    fn public_claim_registry_matches_retained_coverage_evidence() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let registry: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(root.join("claims/evidence.v1.json")).expect("read claim registry"),
+        )
+        .expect("parse claim registry");
+        assert_eq!(
+            registry["schema_version"], "plasmate.claim-evidence.v1",
+            "claim registry schema"
+        );
+
+        let coverage_cases = [
+            (
+                "public-web-output-size-html-v051",
+                "website/docs/coverage.json",
+            ),
+            (
+                "public-web-output-size-js-v051",
+                "website/docs/coverage-js.json",
+            ),
+        ];
+        let claims = registry["claims"]
+            .as_array()
+            .expect("claim registry claims array");
+        for (claim_id, evidence_path) in coverage_cases {
+            let claim = claims
+                .iter()
+                .find(|claim| claim["id"] == claim_id)
+                .unwrap_or_else(|| panic!("claim registry contains {claim_id}"));
+            let evidence: serde_json::Value = serde_json::from_str(
+                &fs::read_to_string(root.join(evidence_path))
+                    .unwrap_or_else(|error| panic!("read {evidence_path}: {error}")),
+            )
+            .unwrap_or_else(|error| panic!("parse {evidence_path}: {error}"));
+
+            assert_eq!(
+                claim["metric"]["value"], evidence["summary"]["median_ratio"],
+                "{claim_id} median ratio"
+            );
+            assert_eq!(
+                claim["metric"]["successful_inputs"], evidence["summary"]["ok"],
+                "{claim_id} successful denominator"
+            );
+            assert_eq!(
+                claim["metric"]["attempted_inputs"], evidence["summary"]["urls_total"],
+                "{claim_id} attempted denominator"
+            );
+            assert_eq!(
+                claim["metric"]["blocked_inputs"], evidence["summary"]["blocked"],
+                "{claim_id} blocked denominator"
+            );
+            assert_eq!(
+                claim["metric"]["failed_inputs"], evidence["summary"]["failed"],
+                "{claim_id} failed denominator"
+            );
         }
     }
 

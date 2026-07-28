@@ -65,7 +65,8 @@ Connect on `ws://127.0.0.1:9222`. The server accepts AWP messages (JSON over Web
 
 ### Persistent server (CDP compatibility)
 
-Start with Chrome DevTools Protocol compatibility for Puppeteer and Playwright:
+Start the documented CDP compatibility subset for a supported Puppeteer/CDP
+workflow:
 
 ```sh
 plasmate serve --protocol cdp

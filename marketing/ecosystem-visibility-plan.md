@@ -8,7 +8,7 @@
 ## Visibility Assets (In Progress)
 
 ### Blog Post
-- [x] "60+ Integrations: The Plasmate Ecosystem" on blog.plasmate.app (`website/blog/ecosystem-60-integrations.md`)
+- [x] "The Plasmate Integration Directory" on blog.plasmate.app (`website/blog/ecosystem-60-integrations.md`)
 - Target: Developer audience, SEO for "LangChain web scraping", "AI agent browser", etc.
 
 ### Social Media
@@ -24,7 +24,7 @@
 ## Distribution Channels
 
 ### Developer Communities
-1. **Hacker News** - "Show HN: Plasmate - 60+ integrations for AI agent web browsing"
+1. **Hacker News** - "Show HN: Plasmate's integration directory for structured agent browsing"
 2. **Reddit** - r/MachineLearning, r/LocalLLaMA, r/programming
 3. **Discord/Slack** - LangChain, LlamaIndex, CrewAI community servers
 4. **Dev.to** - Cross-post blog content
@@ -40,7 +40,7 @@
 1. **Keywords to target:**
    - "AI agent web scraping"
    - "LangChain web browser"
-   - "token compression web scraping"
+   - "structured browser output"
    - "headless browser for LLMs"
    - "MCP web browsing tool"
 
@@ -70,7 +70,7 @@
 - Week 4: Hacker News launch, Reddit posts
 
 ## Quick Wins
-1. [x] Add "60+ integrations" badge to main README
+1. [x] Add a documented-integrations badge to the main README
 2. [ ] Pin awesome-plasmate in GitHub org
 3. [ ] Update plasmate.app homepage with ecosystem section
 4. [ ] Cross-link all integration READMEs back to main repo (script: `scripts/crosslink-integrations.sh`)

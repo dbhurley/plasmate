@@ -1227,7 +1227,7 @@ identifiers instead of forcing every app to scan compact menus.
 
 ```
                     +-----------------------+
-                    |     CDP Gateway       |  <-- Puppeteer/Playwright compatible
+                    |     CDP Gateway       |  <-- documented supported CDP subset
                     |  (Chrome DevTools     |
                     |   Protocol subset)    |
                     +----------+------------+

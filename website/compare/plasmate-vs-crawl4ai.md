@@ -161,7 +161,8 @@ plasmate fetch https://example.com --text
 **Plasmate** supports multiple integration protocols:
 
 - **MCP** (Model Context Protocol): First-class support for Claude Code, Cursor, Windsurf
-- **CDP** (Chrome DevTools Protocol): Drop-in for Puppeteer/Playwright workflows
+- **CDP** (Chrome DevTools Protocol): Compatibility layer for Plasmate's
+  documented supported Puppeteer/CDP workflows
 - **AWP** (Agent Web Protocol): WebSocket protocol for real-time agent control
 
 ```bash

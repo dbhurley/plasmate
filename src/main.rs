@@ -171,7 +171,7 @@ enum Commands {
         /// Port to listen on
         #[arg(long, default_value = "9222")]
         port: u16,
-        /// Protocol: awp (default), cdp (Puppeteer/Playwright compatible), or both
+        /// Protocol: awp (default), cdp (supported CDP/Puppeteer subset), or both
         #[arg(long, default_value = "cdp")]
         protocol: String,
         /// Load cookies from stored auth profile(s) (comma-separated domain names)
@@ -616,7 +616,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     awp::server::start(&host, port, plugins).await?;
                 }
                 "cdp" => {
-                    info!("Starting CDP-compatible server (Puppeteer/Playwright ready)");
+                    info!("Starting server with Plasmate's supported CDP subset");
                     info!("  Custom domain: Plasmate.getSom, Plasmate.getStructuredData, Plasmate.getInteractiveElements, Plasmate.getMarkdown");
                     cdp::server::start(&host, port, plugins).await?;
                 }
@@ -624,7 +624,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // CDP on main port, AWP on main port + 1
                     let awp_port = port + 1;
                     info!("Starting dual-protocol server");
-                    info!("  CDP (Puppeteer/Playwright): ws://{}:{}", host, port);
+                    info!("  CDP compatibility endpoint: ws://{}:{}", host, port);
                     info!("  AWP (native):               ws://{}:{}", host, awp_port);
                     let host_awp = host.clone();
                     let awp_plugins = plugins.clone();
@@ -1889,7 +1889,7 @@ async fn cmd_screenshot(
             eprintln!("  plasmate fetch {}", url);
             eprintln!();
             eprintln!("This returns the Semantic Object Model (SOM) — a structured,");
-            eprintln!("token-efficient representation of the page content.");
+            eprintln!("structured representation of the supported page content.");
             std::process::exit(1);
         }
         Err(e) => {

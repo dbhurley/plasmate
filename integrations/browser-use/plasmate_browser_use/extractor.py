@@ -236,7 +236,7 @@ def _format_action_plan_item(item: dict[str, object]) -> str:
 class PlasmateExtractor:
     """Extract web page content using Plasmate's SOM format.
 
-    Use this alongside Browser Use to get structured, token-efficient
+    Use this alongside Browser Use to get structured, page-dependent
     page representations instead of raw DOM serialization.
     """
 
@@ -406,7 +406,7 @@ class PlasmateExtractor:
         return find_action_targets_by_action(som, action, enabled_only=enabled_only)
 
     def get_page_context(self, url: str) -> str:
-        """Get a token-efficient page context string for LLM consumption.
+        """Get a structured page context string for LLM consumption.
 
         Returns a formatted string with:
         - Page title and URL
