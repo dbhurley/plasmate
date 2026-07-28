@@ -432,9 +432,10 @@
           <div class="section-label">Tools</div>
           <a href="tools">Auditing & CI/CD</a>
           <div class="section-label">Coverage & Benchmarks</div>
+          <a href="claims">Claim & Evidence Registry</a>
           <a href="coverage">Coverage (HTML)</a>
           <a href="coverage-js">Coverage (JS)</a>
-          <a href="benchmark-cost">Cost Analysis</a>
+          <a href="benchmark-cost">Archived Cost Analysis</a>
           <a href="roadmap">Roadmap</a>
           <div class="section-label">User Guides</div>
           <a href="guide-agent-browses-twitter">Your Agent on X/Twitter</a>
@@ -477,7 +478,9 @@
 <p>The result: agents that are slow, brittle, expensive (in tokens), easily detected, and fundamentally limited by an architecture that was never designed for them.</p>
 <p>Plasmate is a headless browser engine built from scratch in Rust, purpose-designed for AI agents. It introduces three foundational technologies:</p>
 <ol>
-<li><p><strong>The Semantic Object Model (SOM)</strong> - A new way to represent web pages that drops visual rendering entirely and outputs a clean, deterministic, token-efficient structure that LLMs can directly reason about.</p>
+<li><p><strong>The Semantic Object Model (SOM)</strong> - A representation for supported web
+content that omits visual rendering and outputs a clean, deterministic
+structure for LLM workflows. Output size remains workload-dependent.</p>
 </li>
 <li><p><strong>The Agent Web Protocol (AWP)</strong> - A new communication standard between agents and browsers that replaces CDP&#39;s coordinate-based commands with intent-based actions.</p>
 </li>
@@ -514,8 +517,8 @@
 </tr>
 <tr>
 <td>Memory consumption</td>
-<td>Each Chrome tab uses 50-300MB RAM</td>
-<td>Fleet of 1,000 agents = 50-300GB RAM</td>
+<td>Depends on page, browser, features, and concurrency</td>
+<td>Profile the target workload and runner</td>
 </tr>
 <tr>
 <td>Session fragility</td>
@@ -1332,12 +1335,11 @@ let context = v8::Context::new(&amp;mut isolate);
 // Session-scoped: destroyed when session ends
 // No cross-session memory leaks
 </code></pre>
-<p><strong>Memory budget per session: 64MB</strong> (vs Chrome&#39;s 150-300MB per tab)</p>
-<p>At 64MB per session:</p>
-<ul>
-<li>1 server with 32GB RAM = <strong>500 concurrent agent sessions</strong></li>
-<li>1 server with 128GB RAM = <strong>2,000 concurrent agent sessions</strong></li>
-</ul>
+<p>The example sets a 64MB V8 heap ceiling for one context. That configuration
+limit is not total process RSS, a measured session footprint, a Chrome
+comparison, or a concurrency guarantee. Network buffers, parsed documents,
+caches, native allocations, and workload behavior also consume memory. Measure
+peak RSS and failure behavior under the intended concurrency.</p>
 <h3 id="4-script-classification">8.4 Script Classification</h3><p>Plasmate classifies scripts before execution:</p>
 <table>
 <thead>

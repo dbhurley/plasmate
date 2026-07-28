@@ -1,9 +1,9 @@
 //! CDP (Chrome DevTools Protocol) compatibility layer.
 //!
-//! This module implements enough of CDP that Puppeteer and Playwright can connect
-//! to Plasmate and work. Under the hood, all page processing goes through
-//! our SOM pipeline - agents get the same speed and token efficiency benefits
-//! whether they connect via CDP or AWP.
+//! This module implements Plasmate's documented CDP subset for supported client
+//! workflows. It is not full Puppeteer, Playwright, CDP, Chromium, or
+//! web-platform compatibility. Under the hood, page processing goes through
+//! the SOM pipeline.
 //!
 //! We also expose a custom `Plasmate` CDP domain with SOM-native commands,
 //! similar to Lightpanda's `LP` domain but with full SOM support.

@@ -54,12 +54,14 @@ Docker:
 
 Fetch a URL and return its Semantic Object Model.
 
-**When to use**: Getting structured content from any web page. Best for reading articles, documentation, product pages, search results. Returns 10x fewer tokens than raw HTML.
+**When to use**: Getting structured content from a supported web page. Best for
+reading articles, documentation, product pages, and search results. Output size
+depends on the page, configuration, serialization, selector, and tokenizer.
 
 ```json
 {
   "name": "fetch_page",
-  "description": "Fetch a web page and return its Semantic Object Model (SOM) - a structured, token-efficient representation of the page content. Use this instead of raw HTML fetching for 10x token savings.",
+  "description": "Fetch a web page and return its Semantic Object Model (SOM), a structured representation whose size depends on the page, configuration, serialization, and selector.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -375,7 +377,7 @@ For Anthropic MCP Registry and Smithery:
 
 ```yaml
 name: plasmate
-description: Agent-native headless browser. Fetch web pages as structured Semantic Object Models with 10x token compression. Browse, interact, and extract data from any website.
+description: Agent-native headless browser. Fetch supported web pages as structured Semantic Object Models, browse, interact, and extract data.
 category: web-browsing
 tags:
   - browser

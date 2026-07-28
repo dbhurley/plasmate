@@ -15,7 +15,9 @@
       <hr />
 
       <h2><span class="version-tag">v0.3.0</span> <span class="date-tag">2026-03-22</span></h2>
-      <p>SPA rendering, interaction APIs, plugin system, and multi-session support. ~25K lines Rust, 200+ tests passing.</p>
+      <p>SPA rendering, interaction APIs, plugin system, and multi-session
+      support. Run the current repository suite rather than citing a historical
+      line or test count.</p>
       <ul>
         <li><span class="change-type feat">feat</span> <strong>Network request interception</strong> - block, modify, or mock responses.</li>
         <li><span class="change-type feat">feat</span> <strong>TLS configuration</strong> - cipher suite and fingerprint tuning.</li>
@@ -84,10 +86,11 @@
       <h2><span class="version-tag">v0.1.0</span> <span class="date-tag">2026-03-01</span></h2>
       <p>Initial public release. The browser engine for agents.</p>
       <ul>
-        <li><span class="change-type feat">feat</span> <strong>Semantic Object Model (SOM)</strong> compiler: HTML to structured, token-efficient representation.</li>
+        <li><span class="change-type feat">feat</span> <strong>Semantic Object Model (SOM)</strong> compiler: HTML to structured representation.</li>
         <li><span class="change-type feat">feat</span> <strong>Agent Web Protocol (AWP)</strong>: shipped the historical seven-method foundational v0.1 core. The current handler also includes extension groups; primitive interactions are <code>page.act</code> actions.</li>
         <li><span class="change-type feat">feat</span> <strong>V8 JavaScript runtime</strong> with DOM shim for JS-rendered pages.</li>
-        <li><span class="change-type feat">feat</span> <strong>CDP compatibility layer</strong> for Puppeteer/Playwright drop-in usage.</li>
+        <li><span class="change-type feat">feat</span> <strong>CDP compatibility
+        layer</strong> for the documented supported client workflows.</li>
         <li><span class="change-type feat">feat</span> <strong>MCP server mode</strong> (<code>plasmate mcp</code>) with stateful tools: open_page, evaluate, click, close_page.</li>
         <li><span class="change-type feat">feat</span> <strong>Cookie-based auth profiles</strong> with AES-256-GCM encryption at rest.</li>
         <li><span class="change-type feat">feat</span> <strong>Chrome extension bridge</strong> for importing auth sessions from a real browser.</li>
@@ -99,7 +102,7 @@
 
       <h3>Architecture</h3>
       <ul>
-        <li><strong>Language:</strong> Rust (16,740 lines at launch, 171 tests)</li>
+        <li><strong>Language:</strong> Rust</li>
         <li><strong>Binary:</strong> 43 MB single file, no dependencies</li>
         <li><strong>License:</strong> Apache 2.0</li>
       </ul>

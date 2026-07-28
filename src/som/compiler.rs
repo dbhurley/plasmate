@@ -391,7 +391,7 @@ fn extract_regions(
 
 /// Summarize elements by enforcing per-region budgets.
 ///
-/// v0.1 goal: preserve intent-relevant structure while staying token-efficient.
+/// v0.1 goal: preserve supported intent-relevant structure within output budgets.
 /// This function:
 /// - deduplicates links by href (same URL = keep only first occurrence)
 /// - limits paragraphs, links, and total element counts

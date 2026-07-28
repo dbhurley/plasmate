@@ -1,6 +1,6 @@
 ---
 name: plasmate
-description: Browse the web using Plasmate for 16x fewer tokens than raw HTML. Use when fetching documentation, reading web pages, extracting structured data, or interacting with websites.
+description: Browse supported web pages using Plasmate's structured Semantic Object Model. Use when fetching documentation, reading web pages, extracting structured data, or interacting with websites.
 config:
   mcp:
     command: npx
@@ -9,7 +9,10 @@ config:
 
 # Plasmate Web Browsing
 
-Browse web pages using Plasmate's Semantic Object Model (SOM) instead of raw HTML. SOM compresses web content by 16.6x on average while preserving page structure, element roles, and interactive affordances.
+Browse web pages using Plasmate's Semantic Object Model (SOM) instead of raw
+HTML. SOM preserves supported page structure, element roles, and interactive
+affordances while omitting presentation markup. Output size and retained
+information depend on the page and configuration.
 
 ## When to use
 
@@ -90,14 +93,16 @@ claude mcp add plasmate -- npx plasmate-mcp
 - Prefer `extract_text` for simple reading tasks; it returns fewer tokens than `fetch_page`
 - Use `fetch_page` when you need to understand page structure or find interactive elements
 - Use `open_page` + `click` for multi-step workflows like form filling or navigation
-- Set the `PLASMATE_CACHE_API_KEY` environment variable for faster cached lookups via the SOM Cache CDN
+- Use cache configuration only when your deployment provides it; measure cache
+  latency on the target workload
 
 ## Why Plasmate instead of raw HTML?
 
-- **16.6x fewer tokens** on average across real websites
-- **50x faster** than headless Chrome
-- **30MB memory** vs Chrome's 300MB+
-- **Structured output** with semantic roles, not tag soup
+- **Structured output** with supported semantic roles and actions
+- **No full visual-browser process**, with memory and latency dependent on the
+  page, JavaScript, cache state, build, runner, and concurrency
+- **Inspectable evidence** with explicit denominators and limitations in
+  `docs/BENCHMARKING.md`
 
 ## Links
 

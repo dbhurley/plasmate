@@ -432,9 +432,10 @@
           <div class="section-label">Tools</div>
           <a href="tools">Auditing & CI/CD</a>
           <div class="section-label">Coverage & Benchmarks</div>
+          <a href="claims">Claim & Evidence Registry</a>
           <a href="coverage">Coverage (HTML)</a>
           <a href="coverage-js">Coverage (JS)</a>
-          <a href="benchmark-cost">Cost Analysis</a>
+          <a href="benchmark-cost">Archived Cost Analysis</a>
           <a href="roadmap">Roadmap</a>
           <div class="section-label">User Guides</div>
           <a href="guide-agent-browses-twitter">Your Agent on X/Twitter</a>
@@ -461,7 +462,7 @@
 <p>AWP is designed as a replacement for the Chrome DevTools Protocol (CDP) in agentic environments. CDP is a debugging interface optimized for human developers and pixel-oriented automation. AWP is optimized for:</p>
 <ul>
 <li>Semantic interaction, not coordinate clicking</li>
-<li>Token efficiency, not visual fidelity</li>
+<li>Structured, bounded observations rather than visual fidelity</li>
 <li>Massive concurrency, not single-user tabs</li>
 <li>Determinism, not rendering</li>
 <li>Extensibility via WebAssembly skills</li>
@@ -501,7 +502,7 @@
 <hr>
 <h2 id="goals-and-non-goals">Goals and Non-Goals</h2><h3 id="goals">Goals</h3><ol>
 <li><strong>Intent-first</strong>: agents issue semantic actions, not pixels.</li>
-<li><strong>Token efficiency</strong>: primary observation output is the Semantic Object Model (SOM), not screenshots.</li>
+<li><strong>Structured observations</strong>: primary observation output is the Semantic Object Model (SOM), not screenshots.</li>
 <li><strong>Deterministic references</strong>: stable element addressing across SPA mutations.</li>
 <li><strong>Massive concurrency</strong>: protocol supports thousands of sessions with strict resource limits.</li>
 <li><strong>Robustness</strong>: sessions survive reconnects, and operations are idempotent when practical.</li>
@@ -524,7 +525,7 @@
 <li><strong>Session</strong>: A durable context including cookies, storage, proxy settings, and optional persistence.</li>
 <li><strong>Page</strong>: A browsing context within a Session, analogous to a tab.</li>
 <li><strong>Frame</strong>: An iframe or sub-document within a Page.</li>
-<li><strong>SOM</strong>: Semantic Object Model. A token-efficient representation of interactive and meaningful content.</li>
+<li><strong>SOM</strong>: Semantic Object Model. A structured representation of supported interactive and meaningful content.</li>
 <li><strong>SOM Snapshot</strong>: Full SOM document at a point in time.</li>
 <li><strong>SOM Mutation</strong>: Incremental changes to the SOM using JSON Patch semantics.</li>
 <li><strong>Intent</strong>: A semantic operation request (for example, <code>add_to_cart</code>).</li>
@@ -1097,7 +1098,8 @@
 <li>proxy rotation</li>
 <li>Wasm skills</li>
 </ul>
-<p>This PoC proves the thesis: SOM is token-efficient and deterministic.</p>
+<p>This PoC demonstrates deterministic SOM serialization for its checked
+fixtures. Output size and model effects require separate measurement.</p>
 <hr>
 <p><em>End of AWP Draft v0.1</em></p>
 

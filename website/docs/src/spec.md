@@ -29,7 +29,9 @@ The result: agents that are slow, brittle, expensive (in tokens), easily detecte
 
 Plasmate is a headless browser engine built from scratch in Rust, purpose-designed for AI agents. It introduces three foundational technologies:
 
-1. **The Semantic Object Model (SOM)** - A new way to represent web pages that drops visual rendering entirely and outputs a clean, deterministic, token-efficient structure that LLMs can directly reason about.
+1. **The Semantic Object Model (SOM)** - A representation for supported web
+   content that omits visual rendering and outputs a clean, deterministic
+   structure for LLM workflows. Output size remains workload-dependent.
 
 2. **The Agent Web Protocol (AWP)** - A new communication standard between agents and browsers that replaces CDP's coordinate-based commands with intent-based actions.
 
@@ -54,7 +56,7 @@ The Chrome DevTools Protocol was created in 2011 for one purpose: letting develo
 | Pixel-level commands | CDP operates on screen coordinates (`click(x:342, y:891)`) | Agents must understand visual layout to interact with pages |
 | DOM verbosity | Returns full DOM trees with styling, attributes, event listeners | A simple page can produce 500KB+ of DOM data, consuming thousands of LLM tokens |
 | Visual rendering overhead | Chrome renders CSS, computes layout, paints pixels, composites layers | 80-90% of compute is wasted on visual output no agent needs |
-| Memory consumption | Each Chrome tab uses 50-300MB RAM | Fleet of 1,000 agents = 50-300GB RAM |
+| Memory consumption | Depends on page, browser, features, and concurrency | Profile the target workload and runner |
 | Session fragility | CDP WebSocket connections drop, state is lost, recovery is manual | Agents fail silently mid-task |
 | Detection surface | Headless Chrome has dozens of detectable fingerprints | Bot detection services block agents within seconds |
 | No native concurrency | Chrome was designed for one human user | Running 100+ sessions requires complex orchestration |
@@ -596,11 +598,11 @@ let context = v8::Context::new(&mut isolate);
 // No cross-session memory leaks
 ```
 
-**Memory budget per session: 64MB** (vs Chrome's 150-300MB per tab)
-
-At 64MB per session:
-- 1 server with 32GB RAM = **500 concurrent agent sessions**
-- 1 server with 128GB RAM = **2,000 concurrent agent sessions**
+The example sets a 64MB V8 heap ceiling for one context. That configuration
+limit is not total process RSS, a measured session footprint, a Chrome
+comparison, or a concurrency guarantee. Network buffers, parsed documents,
+caches, native allocations, and workload behavior also consume memory. Measure
+peak RSS and failure behavior under the intended concurrency.
 
 ### 8.4 Script Classification
 

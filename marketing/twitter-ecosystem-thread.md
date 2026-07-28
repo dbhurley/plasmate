@@ -1,10 +1,15 @@
-# Plasmate Ecosystem Growth - Twitter Thread
+# Plasmate Integration Directory - Draft Thread
+
+> Evidence review: 2026-07-28. This draft intentionally makes no numeric
+> integration, token, cost, speed, memory, or compatibility claim. Verify every
+> linked adapter and package before publishing.
 
 ## Tweet 1 (Hook)
 
-Plasmate now has 60+ integrations across the AI ecosystem.
+Plasmate has a growing directory of adapters and examples across the AI
+ecosystem.
 
-The browser engine built for agents is becoming the default way to give LLMs web access.
+The common contract is structured SOM output for agent web access.
 
 Here's what the ecosystem looks like (thread)
 
@@ -16,23 +21,21 @@ Here's what the ecosystem looks like (thread)
 
 Why does this matter?
 
-Raw HTML is destroying your token budgets:
-- Wikipedia homepage: 47,000 tokens
-- Google login page: ~300,000 tokens
+Raw HTML can contain runtime and presentation markup that a given agent task
+does not need. SOM makes the retained semantic structure explicit.
 
-Plasmate's SOM output:
-- Wikipedia: 4,500 tokens (10x smaller)
-- Google login: 350 tokens (864x smaller)
-
-Same information. Fraction of the cost.
+The retained v0.5.1 non-JavaScript snapshot measured a 9.98x median
+serialized-byte ratio over 83 successful inputs from 98 attempts. That is
+historical byte evidence—not token, cost, latency, information-equivalence, or
+task-success evidence.
 
 ---
 
 ## Tweet 3 (AI Frameworks)
 
-AI Frameworks (8 integrations):
+AI framework adapters and examples include:
 
-- LangChain - drop-in document loaders and tools
+- LangChain - document loaders and tools to evaluate
 - LlamaIndex - native data connectors
 - CrewAI - web browsing for agent crews
 - AutoGen - multi-agent web research
@@ -47,20 +50,21 @@ All use the same SOM output format. Learn once, use everywhere.
 
 ## Tweet 4 (Browser Automation)
 
-Browser Automation (4 integrations):
+Browser automation adapters and examples include:
 
-- browser-use: 10x token reduction vs default DOM serializer
+- Browser Use: structured SOM context alongside Browser Use
 - Scrapy: spider middleware for SOM extraction
 - Crawl4AI: structured scraping at scale
-- Firecrawl: drop-in replacement for web research
+- Firecrawl: adapter for web-research workflows
 
-The browser-use integration is a one-line change that cuts your Claude/GPT costs by 90%.
+Measure configured Browser Use and SOM workflows on the same pages, tokenizer,
+model, and tasks before making a cost or quality comparison.
 
 ---
 
 ## Tweet 5 (No-Code/Low-Code)
 
-No-code & Automation (7 integrations):
+No-code and automation directory entries include:
 
 - n8n - native Plasmate node
 - Zapier - web parsing actions
@@ -78,14 +82,15 @@ Build web-aware AI workflows without writing code.
 
 ## Tweet 6 (Developer Tools)
 
-Developer Tools (4 integrations):
+Developer-tool directory entries include:
 
 - VS Code extension
 - Cursor integration
 - Raycast commands
 - GitHub Copilot extension
 
-MCP support means Claude Desktop, Cursor, Windsurf, and VS Code Copilot all work out of the box.
+Native MCP can connect to clients that support the same transport and server
+configuration. Verify client-specific support.
 
 One config line:
 ```
@@ -96,7 +101,7 @@ One config line:
 
 ## Tweet 7 (SDKs)
 
-Official SDKs in every major language:
+SDKs and clients include:
 
 - Node.js (npm install plasmate)
 - Python (pip install plasmate)
@@ -111,15 +116,9 @@ All SDKs spawn `plasmate mcp` and communicate via JSON-RPC over stdio. Zero netw
 
 ## Tweet 8 (Performance)
 
-Performance that makes this practical:
-
-- 4-5ms per page (vs 252ms Chrome)
-- 30MB memory for 100 pages (vs 20GB Chrome)
-- 43MB binary (vs 300-500MB Chrome)
-
-You can run this in Lambda, in containers, on a $5 VPS.
-
-No Chrome. No Playwright. No headaches.
+Plasmate runs without installing a full visual browser. Latency, memory,
+throughput, binary size, and deployment fit depend on the build, page,
+JavaScript, cache, runner, and concurrency. Profile the intended workload.
 
 ---
 
@@ -134,7 +133,7 @@ plasmate fetch https://news.ycombinator.com | jq
 
 Star the repo: github.com/plasmate-labs/plasmate
 
-Full integration list: github.com/plasmate-labs/awesome-plasmate
+Community integration directory: github.com/plasmate-labs/awesome-plasmate
 
 We're building the browser engine for the agentic web. Join us.
 

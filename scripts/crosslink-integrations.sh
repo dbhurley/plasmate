@@ -9,7 +9,7 @@ FOOTER='
 
 ---
 
-**Part of the [Plasmate Ecosystem](https://github.com/plasmate-labs/plasmate)** - The browser engine for AI agents. 60+ integrations available.
+**Part of the [Plasmate Ecosystem](https://github.com/plasmate-labs/plasmate)** - The browser engine for AI agents. See the documented integration directory and verify the adapter's supported versions.
 '
 
 # List of integration repos to update

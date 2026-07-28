@@ -28,7 +28,8 @@ SOM addresses this by compiling HTML into a structured JSON representation that 
 2. **Conformance Test Suite** - Develop a reproducible benchmark suite that:
    - Tests SOM output against a reference set of URLs
    - Validates schema conformance
-   - Measures compression ratios and token savings
+   - Measures serialized-byte ratios and, separately, tokens under named
+     tokenizers with complete denominators
    - Ensures interoperability between implementations
 
 3. **Best Practices** - Document guidelines for:

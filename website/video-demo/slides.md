@@ -34,7 +34,7 @@ Use these slides as visual breaks or overlays during the video.
 
 ## Slide 3: Real Results
 
-**Title:** 105x compression on Linear.app
+**Title:** One captured-input serialized-byte measurement
 
 | Metric | Raw HTML | Plasmate SOM |
 |--------|----------|--------------|

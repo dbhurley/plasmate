@@ -1,0 +1,146 @@
+{
+  "schema_version": "plasmate.claim-evidence.v1",
+  "last_reviewed": "2026-07-28",
+  "policy": {
+    "document": "docs/BENCHMARKING.md",
+    "rule": "Quantitative public claims require retained evidence, an exact metric and denominator, provenance, and limitations.",
+    "classes": [
+      "product_fact",
+      "historical_observation",
+      "compatibility_scope",
+      "directory_entry",
+      "retired"
+    ]
+  },
+  "claims": [
+    {
+      "id": "som-structured-output",
+      "class": "product_fact",
+      "status": "allowed",
+      "allowed_wording": "Plasmate compiles supported web pages into a structured Semantic Object Model (SOM).",
+      "evidence": [
+        "src/som",
+        "specs/SOM-SPEC-v1.0.md"
+      ],
+      "limitations": [
+        "SOM intentionally omits presentation detail.",
+        "Retained content and supported behavior depend on the page and configuration."
+      ]
+    },
+    {
+      "id": "public-web-output-size-html-v051",
+      "class": "historical_observation",
+      "status": "allowed_with_exact_denominator",
+      "allowed_wording": "The retained v0.5.1 non-JavaScript public-web snapshot, generated 2026-07-19, recorded a 9.98x median serialized-byte ratio over 83 successful inputs from 98 attempted URLs.",
+      "metric": {
+        "name": "median_html_bytes_divided_by_serialized_som_bytes",
+        "value": 9.977115012290891,
+        "successful_inputs": 83,
+        "attempted_inputs": 98,
+        "blocked_inputs": 12,
+        "failed_inputs": 3
+      },
+      "evidence": [
+        "website/docs/coverage.json",
+        "website/docs/src/coverage.md"
+      ],
+      "version": "0.5.1",
+      "generated_at": "2026-07-19T08:36:11Z",
+      "limitations": [
+        "Historical observational public-web snapshot.",
+        "Legacy artifact without current commit, corpus-digest, or runner provenance.",
+        "Serialized-byte ratio, not a token, cost, latency, memory, or task-success result.",
+        "Statistic is over successful inputs; blocked and failed inputs remain in the attempted-input denominator."
+      ]
+    },
+    {
+      "id": "public-web-output-size-js-v051",
+      "class": "historical_observation",
+      "status": "allowed_with_exact_denominator",
+      "allowed_wording": "The retained v0.5.1 JavaScript-enabled public-web snapshot, generated 2026-06-07, recorded a 9.32x median serialized-byte ratio over 82 successful inputs from 98 attempted URLs.",
+      "metric": {
+        "name": "median_html_bytes_divided_by_serialized_som_bytes",
+        "value": 9.32040088999183,
+        "successful_inputs": 82,
+        "attempted_inputs": 98,
+        "blocked_inputs": 14,
+        "failed_inputs": 2
+      },
+      "evidence": [
+        "website/docs/coverage-js.json",
+        "website/docs/src/coverage-js.md"
+      ],
+      "version": "0.5.1",
+      "generated_at": "2026-06-07T09:53:46Z",
+      "limitations": [
+        "Historical observational public-web snapshot.",
+        "Legacy artifact without current commit, corpus-digest, or runner provenance.",
+        "Serialized-byte ratio, not a token, cost, latency, memory, or task-success result.",
+        "Statistic is over successful inputs; blocked and failed inputs remain in the attempted-input denominator."
+      ]
+    },
+    {
+      "id": "cdp-compatibility",
+      "class": "compatibility_scope",
+      "status": "allowed_with_scope",
+      "allowed_wording": "Plasmate provides a CDP compatibility layer for the supported Puppeteer/CDP workflows and methods documented in the README.",
+      "evidence": [
+        "src/cdp",
+        "tests",
+        "website/docs/src/benchmark-latest.md"
+      ],
+      "limitations": [
+        "Not full CDP, Puppeteer, Playwright, Chromium, or web-platform compatibility.",
+        "The historical campfire-commerce pass validates one fixture and its listed assertions."
+      ]
+    },
+    {
+      "id": "ecosystem-directory",
+      "class": "directory_entry",
+      "status": "allowed_without_count",
+      "allowed_wording": "Plasmate documents integrations across AI and developer tools.",
+      "evidence": [
+        "README.md#ecosystem",
+        "integrations",
+        "website/docs/src"
+      ],
+      "limitations": [
+        "Directory inclusion does not establish current maintenance, end-to-end testing, or compatibility with every upstream version.",
+        "Do not publish a numeric integration count without a dated manifest defining inclusion and verification criteria."
+      ]
+    },
+    {
+      "id": "universal-token-cost-speed-memory",
+      "class": "retired",
+      "status": "prohibited",
+      "prohibited_wording_examples": [
+        "10x token compression",
+        "17x average token reduction",
+        "10-100x fewer tokens",
+        "50x faster than Chrome",
+        "30MB versus Chrome's 300MB",
+        "95% lower token cost"
+      ],
+      "reason": "The retained evidence does not establish universal token, cost, speed, or memory results. Measure those outcomes with a named tokenizer/model, comparable workload, build, runner, cache state, and complete denominator."
+    }
+  ],
+  "externally_controlled_surfaces": [
+    {
+      "surface": "GitHub repository description",
+      "owner": "plasmate-labs/plasmate repository settings",
+      "required_wording": "Browser engine for agents. HTML in, structured Semantic Object Model out. Native MCP and AWP with a supported CDP subset. Apache-2.0.",
+      "reason": "The captured public-web evidence shows that the current GitHub description still contains a universal token-compression claim."
+    },
+    {
+      "surface": "GitHub repository topics",
+      "owner": "plasmate-labs/plasmate repository settings",
+      "required_action": "Replace the token-compression topic with structured-output or semantic-browser.",
+      "reason": "Repository topics are externally controlled discovery metadata and should describe the product category without implying a universal metric."
+    },
+    {
+      "surface": "Published crates.io, npm, and PyPI metadata",
+      "owner": "package registries",
+      "required_action": "Publish a normal versioned release when the updated source metadata is intended to replace the already-safe registry summaries; registry descriptions do not update from the repository alone."
+    }
+  ]
+}

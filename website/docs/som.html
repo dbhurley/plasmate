@@ -432,9 +432,10 @@
           <div class="section-label">Tools</div>
           <a href="tools">Auditing & CI/CD</a>
           <div class="section-label">Coverage & Benchmarks</div>
+          <a href="claims">Claim & Evidence Registry</a>
           <a href="coverage">Coverage (HTML)</a>
           <a href="coverage-js">Coverage (JS)</a>
-          <a href="benchmark-cost">Cost Analysis</a>
+          <a href="benchmark-cost">Archived Cost Analysis</a>
           <a href="roadmap">Roadmap</a>
           <div class="section-label">User Guides</div>
           <a href="guide-agent-browses-twitter">Your Agent on X/Twitter</a>
@@ -459,7 +460,9 @@
       <h1 id="semantic-object-model-som-reference">Semantic Object Model (SOM) Reference</h1><h2 id="overview">Overview</h2><p>The Semantic Object Model is Plasmate&#39;s core output format. It replaces the DOM as the interface between browser and agent.</p>
 <p>Where the DOM is a faithful representation of every tag, attribute, and style in an HTML document, SOM is a compressed, budgeted, semantic representation designed for LLM consumption.</p>
 <h2 id="design-principles">Design Principles</h2><ol>
-<li><p><strong>Token efficiency over fidelity.</strong> SOM drops anything an agent does not need: inline styles, class names (except for hint inference), script tags, empty elements, decorative markup.</p>
+<li><p><strong>Task-oriented structure over visual fidelity.</strong> SOM omits inline styles,
+most class names, script tags, empty elements, and decorative markup. Verify
+that the retained representation is sufficient for the target task.</p>
 </li>
 <li><p><strong>Deterministic IDs.</strong> Every element gets a stable ID derived from its semantic identity, not its position in a mutable tree. The same button on the same page always has the same ID.</p>
 </li>
@@ -683,7 +686,9 @@
 <li>Tables with proper <code>&lt;thead&gt;</code>, <code>&lt;th&gt;</code> elements are data tables</li>
 </ul>
 <p>Layout tables are decomposed into their semantic child elements rather than preserved as table structures.</p>
-<h2 id="link-deduplication">Link Deduplication</h2><p>SOM normalizes URLs and deduplicates links across the entire page. On Wikipedia, this removes ~839 duplicate links, significantly improving token efficiency.</p>
+<h2 id="link-deduplication">Link Deduplication</h2><p>SOM normalizes URLs and deduplicates links across the entire page. The exact
+change in serialized bytes or model tokens depends on the captured input and
+tokenizer.</p>
 <p>Normalization: lowercase scheme and host, remove trailing slashes, remove default ports, sort query parameters.</p>
 <h2 id="js-dom-mutations">JS DOM Mutations</h2><p>When JavaScript modifies the DOM (via <code>document.write()</code>, <code>appendChild</code>, etc.), Plasmate&#39;s V8 runtime captures these mutations and feeds them back into the SOM compiler. The final SOM reflects the page as it appears after script execution.</p>
 <h2 id="structured-data-extraction">Structured Data Extraction</h2><p>SOM extracts structured metadata from:</p>

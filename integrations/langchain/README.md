@@ -1,8 +1,15 @@
 # langchain-plasmate
 
-LangChain integration for [Plasmate](https://github.com/nicepkg/plasmate) — an agent-native headless browser that returns **SOM (Semantic Object Model)** output instead of raw HTML.
+LangChain integration for [Plasmate](https://github.com/plasmate-labs/plasmate)
+— an agent-native headless browser that returns **SOM (Semantic Object Model)**
+output instead of raw HTML.
 
-SOM compiles web pages into compact, structured representations that preserve interactive elements, content hierarchy, and navigation landmarks while stripping scripts, styles, and layout noise. This typically saves **~10x tokens** compared to raw HTML.
+SOM compiles web pages into compact, structured representations that preserve
+supported interactive elements, content hierarchy, and navigation landmarks
+while stripping scripts, styles, and layout noise. Output size and tokenization
+depend on the page, configuration, serializer, and model tokenizer. Plasmate's
+retained v0.5.1 public-web evidence measures serialized bytes, not LangChain
+token use; see the [benchmark policy](../../docs/BENCHMARKING.md).
 
 ## Installation
 

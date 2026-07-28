@@ -1,7 +1,7 @@
 {
   "name": "plasmate",
   "version": "0.4.0",
-  "description": "Browser engine for AI agents. 10-100x fewer tokens than raw HTML. Web scraping with structured output for LLMs, RAG, and autonomous agents. Puppeteer/CDP compatible.",
+  "description": "Client SDK for Plasmate, a browser engine with structured SOM output and native MCP/AWP plus a supported CDP subset.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {

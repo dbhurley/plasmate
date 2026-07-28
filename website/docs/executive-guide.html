@@ -262,31 +262,39 @@ a:hover { text-decoration: underline; }
 <!-- HOW IT WORKS (non-technical) -->
 <div class="page">
   <div class="section-label">How It Works</div>
-  <h1>Drop-in replacement. No rewrite required.</h1>
-  <p class="lead">Plasmate is designed to work with your existing agent infrastructure. Your team doesn't need to learn a new framework or rewrite their automation.</p>
+  <h1>Integration paths with explicit compatibility scope</h1>
+  <p class="lead">Plasmate exposes several integration surfaces. Evaluate the
+  relevant protocol, SDK, or adapter against your existing agent
+  infrastructure.</p>
 
   <h2>Three integration paths</h2>
 
   <div class="scenario-grid">
     <div class="scenario">
       <div class="icon">🔌</div>
-      <h4>Puppeteer / Playwright compatible</h4>
-      <p>If your agents already use supported Puppeteer/CDP operations, they can connect to Plasmate with limited configuration changes. Verify required method compatibility and performance.</p>
+      <h4>Documented CDP subset</h4>
+      <p>Agents using the documented supported Puppeteer/CDP operations can
+      evaluate Plasmate. This is not full Puppeteer, Playwright, CDP, Chromium,
+      or web-platform compatibility.</p>
     </div>
     <div class="scenario">
       <div class="icon">🧠</div>
       <h4>MCP Server for AI assistants</h4>
-      <p>MCP-compatible AI assistants can use the native Plasmate server directly for structured web access.</p>
+      <p>AI assistants that support the same MCP transport and configuration can
+      evaluate the native Plasmate server for structured web access.</p>
     </div>
     <div class="scenario">
       <div class="icon">📦</div>
       <h4>SDKs for Node.js, Python, Go, Rust</h4>
-      <p>Native SDKs with full type safety. Your engineering team can integrate Plasmate into any stack in under an hour.</p>
+      <p>Published SDKs cover several languages. Verify each package version,
+      supported operations, and release status before adoption.</p>
     </div>
   </div>
 
   <h2>Already integrated with</h2>
-  <p><strong>Browser Use</strong> and <strong>LangChain</strong> have published integration guides. If your team uses either framework, Plasmate is a drop-in addition.</p>
+  <p><strong>Browser Use</strong> and <strong>LangChain</strong> have published
+  integration guides. Validate the adapter, supported versions, and target
+  workflow.</p>
 
   <div class="quote">
     <p>The output format (SOM) is an open specification with JSON Schema validation. You're not locked in. If you ever want to switch engines, your downstream code keeps working.</p>
@@ -362,7 +370,9 @@ a:hover { text-decoration: underline; }
     <li>Single binary install (curl, cargo, npm, pip, or Docker)</li>
     <li>No Chrome or browser dependencies required</li>
     <li>Works alongside existing Puppeteer/Playwright setups</li>
-    <li>Open source with full test suite (230 tests, 98.9% site coverage)</li>
+    <li>Open source with repository tests and retained coverage artifacts; run
+    the current suite and inspect complete denominators rather than citing a
+    hard-coded count or “site coverage” percentage</li>
     <li>Published on crates.io, npm, and PyPI</li>
     <li>Docker image available for containerized deployments</li>
   </ul>
@@ -373,7 +383,7 @@ a:hover { text-decoration: underline; }
   <div class="footer-links">
     <a href="https://plasmate.app">Website</a>
     <a href="https://docs.plasmate.app">Documentation</a>
-    <a href="https://docs.plasmate.app/benchmark-cost">Cost Analysis</a>
+    <a href="https://docs.plasmate.app/claims">Claim &amp; Evidence Registry</a>
     <a href="https://docs.plasmate.app/coverage-js">Coverage Scorecard</a>
     <a href="https://docs.plasmate.app/why-som">Why SOM</a>
     <a href="https://docs.plasmate.app/roadmap">Roadmap</a>
@@ -382,7 +392,7 @@ a:hover { text-decoration: underline; }
 
   <div class="divider"></div>
 
-  <p style="color: var(--ash); font-size: 0.82rem;">Plasmate is built by <a href="https://dbhurley.com/plasmate">David Hurley</a>. Apache-2.0 licensed. All benchmark data is reproducible and publicly available.</p>
+  <p style="color: var(--ash); font-size: 0.82rem;">Plasmate is built by <a href="https://dbhurley.com/plasmate">David Hurley</a>. Apache-2.0 licensed. Current claims identify retained evidence and limitations; legacy reports that do not meet the current standard are explicitly retired.</p>
 </div>
 
 </body>

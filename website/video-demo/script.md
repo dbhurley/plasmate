@@ -1,4 +1,4 @@
-# Plasmate Video Demo Script
+# Plasmate Measurement Demo Script
 
 **Duration:** 60-90 seconds  
 **Style:** Screen recording with voiceover  
@@ -10,7 +10,7 @@
 
 **[Screen: Terminal, dark theme]**
 
-> "What if your AI agent could read the web 25x faster... and cost 25x less?"
+> "What does your AI agent actually need from a web page?"
 
 **[Type command: `plasmate fetch https://linear.app`]**
 
@@ -24,11 +24,10 @@
 
 **[Show: Wall of HTML tags scrolling]**
 
-> "2.2 megabytes of divs, spans, and styling garbage. That's over 500,000 tokens - burned on navigation menus, tracking scripts, and CSS classes your agent doesn't need."
+> "Raw HTML contains rendering and runtime markup. Some agent workflows need
+> only the supported semantic content and actions."
 
-**[Show: Dollar counter: $0.75 per page read]**
-
-> "At GPT-4 pricing, that's 75 cents just to read ONE webpage."
+**[Show: raw bytes, serialized SOM bytes, and the exact command used]**
 
 ---
 
@@ -36,19 +35,22 @@
 
 **[Screen: Terminal]**
 
-> "Plasmate changes everything."
+> "Plasmate compiles the page into a Semantic Object Model."
 
 **[Run: `curl -s https://linear.app | wc -c` showing ~2.2MB]**
 
-> "Here's Linear.app - 2.2 megabytes of raw HTML."
+> "First measure the raw response for this captured input."
 
 **[Run: `plasmate fetch https://linear.app | wc -c` showing ~21KB]**
 
-> "And here's what Plasmate sees: 21 kilobytes. Same page. Same information. 105x smaller."
+> "Then measure serialized SOM from the same captured input. This is a byte
+> comparison for one page state, not proof of equal information or model
+> performance."
 
 **[Run: `plasmate fetch https://linear.app | head -30`]**
 
-> "Clean, structured JSON. Headlines, links, content - exactly what your agent needs. Nothing it doesn't."
+> "The output exposes supported headlines, links, content, and actions. Test
+> whether it retains what your task needs."
 
 ---
 
@@ -58,9 +60,11 @@
 
 > "We call it the Semantic Object Model - SOM for short. It's like a DOM, but built for AI."
 
-**[Show stats: 2.2MB to 21KB, 105x compression, ~$0.007 per page]**
+**[Show: input URL or fixture digest, version/commit, JavaScript and cache
+settings, raw bytes, serialized SOM bytes, and task assertions]**
 
-> "Your agents read faster, your token costs drop 95%, and your context window goes 25 times further."
+> "Bytes are only supporting evidence. Measure tokens with your model's
+> tokenizer, latency on your runner, and task success with complete outcomes."
 
 ---
 

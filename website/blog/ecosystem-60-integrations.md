@@ -1,12 +1,12 @@
 ---
-title: "60+ Integrations: The Plasmate Ecosystem"
+title: "The Plasmate Integration Directory"
 date: 2026-04-15
 author: Plasmate Team
 description: "Plasmate integrates with tools across AI frameworks, visual builders, automation platforms, and more. Learn how to add structured SOM browsing to LangChain, Vercel AI, and other tools."
-keywords: ["AI agent web scraping", "LangChain web browser", "token compression", "MCP web browsing tool"]
+keywords: ["AI agent web scraping", "LangChain web browser", "structured browser output", "MCP web browsing tool"]
 ---
 
-# 60+ Integrations: The Plasmate Ecosystem
+# The Plasmate Integration Directory
 
 Building AI agents that browse the web? Raw HTML can include verbose markup,
 scripts, styles, and other material that a particular agent workflow may not need.
@@ -18,24 +18,32 @@ ratio was 9.98x across 83 successful non-JavaScript inputs out of 98 attempted
 and 9.32x across 82 successful JavaScript inputs out of 98 attempted. These are
 byte ratios, not universal token, cost, latency, or task-success guarantees.
 
-Today, we are excited to announce a major milestone: **Plasmate now integrates with 60+ tools across 7 categories**, making it easier than ever to add intelligent web browsing to your AI stack.
+The directory below maps Plasmate adapters, examples, and community projects
+across several tool categories. Inclusion is not a claim of current
+maintenance, end-to-end testing, or compatibility with every upstream version.
+Check the linked repository and supported versions before adoption.
 
 ## The Ecosystem at a Glance
 
-Whether you are building with Python frameworks, visual workflow builders, or self-hosted LLMs, there is a Plasmate integration ready for you.
+Whether you are building with Python frameworks, visual workflow builders, or
+self-hosted LLMs, use this directory to identify an adapter to evaluate.
 
 ### AI Frameworks
 
 The backbone of most agent architectures. Plasmate plugs directly into the frameworks you already use, giving your agents efficient web access without changing your existing code patterns.
 
-- **[LangChain](https://github.com/nicholasquirk/plasmate-langchain)** - Drop-in tool for agents and chains. Use `PlasmateLoader` for document loading or `PlasmateTool` for agent browsing.
+- **[LangChain](https://github.com/nicholasquirk/plasmate-langchain)** -
+  Document loader and agent-tool adapter. Verify its current package, supported
+  versions, and tests.
 - **[LlamaIndex](https://github.com/nicholasquirk/plasmate-llamaindex)** - Native reader integration for RAG pipelines. Index web content with automatic SOM transformation.
 - **[CrewAI](https://github.com/nicholasquirk/plasmate-crewai)** - Equip your AI crews with web research capabilities. Perfect for multi-agent research tasks.
 - **[AutoGen](https://github.com/nicholasquirk/plasmate-autogen)** - Microsoft's multi-agent framework gets efficient web browsing. Ideal for collaborative agent systems.
 - **[Haystack](https://github.com/nicholasquirk/plasmate-haystack)** - Custom component for deepset's NLP framework. Build search and QA pipelines with web data.
 - **[DSPy](https://github.com/nicholasquirk/plasmate-dspy)** - Programmatic LLM pipelines with web retrieval. Great for structured extraction tasks.
 - **[Semantic Kernel](https://github.com/nicholasquirk/plasmate-semantic-kernel)** - Microsoft's SDK for AI orchestration. Native plugin architecture support.
-- **[Vercel AI SDK](https://github.com/nicholasquirk/plasmate/tree/main/integrations/vercel-ai)** - First-class TypeScript support for Next.js and React applications. Stream web content directly into your UI.
+- **[Vercel AI SDK](https://github.com/nicholasquirk/plasmate/tree/main/integrations/vercel-ai)** -
+  TypeScript adapter for supported Vercel AI SDK workflows. Verify the current
+  package version and peer-dependency range.
 
 ### Visual Builders
 

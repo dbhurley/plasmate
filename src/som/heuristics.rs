@@ -2,8 +2,8 @@ use markup5ever_rcdom::{Handle, NodeData};
 
 /// Configuration for content summarization thresholds.
 ///
-/// These defaults are tuned for token efficiency. The goal of the v0.1 PoC is to
-/// preserve intent-relevant structure, not to reproduce full article text.
+/// These defaults bound output size. The goal of the v0.1 PoC is to preserve
+/// supported intent-relevant structure, not to reproduce full article text.
 pub struct ContentConfig {
     /// Max characters for the first paragraph in main content.
     pub first_para_max: usize,

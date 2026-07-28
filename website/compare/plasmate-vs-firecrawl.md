@@ -105,7 +105,8 @@ service. End-to-end latency depends on both the service and the target site.
 
 **Plasmate** supports multiple protocols:
 - **MCP** (Model Context Protocol): First-class integration with Claude Code, Cursor, and other MCP clients
-- **CDP** (Chrome DevTools Protocol): Drop-in replacement for Puppeteer/Playwright workflows
+- **CDP** (Chrome DevTools Protocol): Compatibility layer for Plasmate's
+  documented supported Puppeteer/CDP workflows
 - **AWP** (Agent Web Protocol): Purpose-built WebSocket protocol for agents
 
 **Firecrawl** exposes a hosted API and integrations. Check its current

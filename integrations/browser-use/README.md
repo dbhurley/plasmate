@@ -1,8 +1,14 @@
 # plasmate-browser-use
 
-SOM-based content extraction for [Browser Use](https://github.com/browser-use/browser-use). Drop-in alternative to Browser Use's default DOM serializer that uses Plasmate's Semantic Object Model (SOM) to reduce token costs by 10x or more.
+SOM-based content extraction for [Browser Use](https://github.com/browser-use/browser-use).
+It uses Plasmate's Semantic Object Model (SOM) to provide structured page
+context as an alternative to Browser Use's configured page representation.
 
-Instead of sending the full DOM tree to your LLM, Plasmate compresses web pages into a compact semantic representation. Same information, 90% fewer tokens, lower costs, faster responses.
+Instead of sending raw markup, Plasmate emits a compact semantic
+representation. Output size, tokenization, retained information, cost, latency,
+and task quality depend on the page and workflow. Retained v0.5.1 Plasmate
+snapshots measured serialized bytes, not Browser Use token usage; see the
+[benchmark policy](../../docs/BENCHMARKING.md) before citing a result.
 
 ## Install
 
@@ -156,12 +162,12 @@ extractor = PlasmateExtractor()
 # Get compact page context instead of full DOM
 context = extractor.get_page_context("https://example.com/products")
 
-# Feed to your Browser Use agent with 10x fewer tokens
+# Feed structured SOM context to your Browser Use agent
 agent = Agent(task="Find the cheapest product", page_context=context)
 result = await agent.run()
 ```
 
-### Token savings comparison
+### Input-specific size estimate
 
 ```python
 from plasmate_browser_use import PlasmateExtractor, token_count_comparison
@@ -172,34 +178,36 @@ stats = token_count_comparison(som)
 
 print(f"HTML tokens: ~{stats['html_tokens_est']:,}")
 print(f"SOM tokens:  ~{stats['som_tokens_est']:,}")
-print(f"Savings:     {stats['token_savings_pct']}%")
-print(f"Ratio:       {stats['token_ratio']}x fewer tokens")
+print(f"Est. change: {stats['token_savings_pct']}%")
+print(f"Estimated token ratio for this input: {stats['token_ratio']}x")
 ```
 
-## Typical token savings
+## Measure your workload
 
-| Site | HTML tokens | SOM tokens | Reduction |
+The helper uses an approximate byte-to-token conversion; it is not a named
+model tokenizer or a benchmark result. For publishable token evidence, use the
+target model's tokenizer and retain every attempted input.
+
+| Input | HTML tokens | SOM tokens | Ratio |
 |------|------------|------------|-----------|
-| Hacker News | ~22,000 | ~1,200 | 18x |
-| Wikipedia article | ~85,000 | ~8,500 | 10x |
-| Amazon product page | ~120,000 | ~6,000 | 20x |
-| Google search results | ~45,000 | ~3,500 | 13x |
+| Your measured page | Measure | Measure | Compute for the selected tokenizer |
 
-Numbers vary by page. The more complex the page (ads, trackers, layout noise), the bigger the savings.
+Results vary by page, configuration, serialization, selector, and tokenizer.
 
 ## How it works
 
 1. Plasmate fetches the page and parses the HTML
 2. The DOM is compiled into a Semantic Object Model (SOM) that preserves meaning while stripping layout noise
 3. The SOM is serialized into a compact format with tagged interactive elements
-4. Your LLM agent sees the same page information in 10x fewer tokens
+4. Your LLM agent sees structured page context whose size and retained
+   information you should evaluate on the target workflow
 
 ## Links
 
 - [Plasmate](https://plasmate.app) -- the SOM engine
 - [SOM Spec](https://plasmate.app/docs/som-spec) -- Semantic Object Model specification
 - [Browser Use](https://github.com/browser-use/browser-use) -- AI agent browser framework
-- [Token cost analysis](https://plasmate.app/docs/cost-analysis) -- detailed benchmarks
+- [Claim and evidence registry](https://docs.plasmate.app/claims) -- allowed wording and retained evidence
 
 ## License
 

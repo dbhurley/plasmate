@@ -1,8 +1,9 @@
 //! CDP domain handlers.
 //!
 //! Each function handles one CDP method, translating it to our SOM pipeline.
-//! The goal: Puppeteer/Playwright connect and work. Under the hood, everything
-//! goes through Plasmate's engine - agents get speed + token efficiency for free.
+//! The goal is to support the documented client workflows and CDP methods.
+//! Under the hood, operations go through Plasmate's engine; performance and
+//! output size remain workload-dependent.
 
 use std::collections::HashMap;
 

@@ -1,6 +1,7 @@
 # Scrapy Integration
 
-Use Plasmate as a drop-in downloader middleware for Scrapy, the most popular Python web scraping framework.
+Use Plasmate through a downloader middleware for supported Scrapy workflows.
+Verify the adapter's current package, Scrapy version range, and tests.
 
 ## Install
 

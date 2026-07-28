@@ -8,7 +8,9 @@ Where the DOM is a faithful representation of every tag, attribute, and style in
 
 ## Design Principles
 
-1. **Token efficiency over fidelity.** SOM drops anything an agent does not need: inline styles, class names (except for hint inference), script tags, empty elements, decorative markup.
+1. **Task-oriented structure over visual fidelity.** SOM omits inline styles,
+   most class names, script tags, empty elements, and decorative markup. Verify
+   that the retained representation is sufficient for the target task.
 
 2. **Deterministic IDs.** Every element gets a stable ID derived from its semantic identity, not its position in a mutable tree. The same button on the same page always has the same ID.
 
@@ -165,7 +167,9 @@ Layout tables are decomposed into their semantic child elements rather than pres
 
 ## Link Deduplication
 
-SOM normalizes URLs and deduplicates links across the entire page. On Wikipedia, this removes ~839 duplicate links, significantly improving token efficiency.
+SOM normalizes URLs and deduplicates links across the entire page. The exact
+change in serialized bytes or model tokens depends on the captured input and
+tokenizer.
 
 Normalization: lowercase scheme and host, remove trailing slashes, remove default ports, sort query parameters.
 

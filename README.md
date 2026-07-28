@@ -22,7 +22,7 @@
   <img src="https://github.com/plasmate-labs/plasmate/actions/workflows/release.yml/badge.svg" alt="CI" />
   <img src="https://img.shields.io/crates/v/plasmate" alt="crates.io" />
   <img src="https://img.shields.io/npm/v/plasmate" alt="npm" />
-  <img src="https://img.shields.io/badge/integrations-60%2B-brightgreen" alt="60+ Integrations" />
+  <img src="https://img.shields.io/badge/integrations-documented-brightgreen" alt="Documented integrations" />
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" />
 </p>
 
@@ -31,7 +31,11 @@
 Dependency and CI trust policy, local audit commands, and scorecard promotion
 rules are documented in [Supply-chain policy](docs/SUPPLY-CHAIN.md).
 
-Plasmate compiles HTML into a **Semantic Object Model (SOM)**, a structured representation that LLMs can reason about directly. It runs JavaScript via V8 and supports Puppeteer through its CDP compatibility layer. SOM output removes presentation and runtime markup, but the byte and token reduction is page-, configuration-, and corpus-dependent.
+Plasmate compiles HTML into a **Semantic Object Model (SOM)**, a structured
+representation that LLMs can reason about directly. It runs JavaScript via V8
+and implements a documented CDP subset for supported Puppeteer workflows. SOM
+output removes presentation and runtime markup; output size and tokenization are
+page-, configuration-, serialization-, and tokenizer-dependent.
 
 | | Plasmate | Lightpanda | Chrome |
 |---|---|---|---|
@@ -341,7 +345,8 @@ and 9.32x over 82 successful JavaScript inputs, respectively, from 98 attempted
 URLs in each run. These are historical, observational byte ratios—not universal
 token savings, cost savings, latency, or task-success claims. Blocked and failed
 inputs remain in the denominator. See [the benchmarking policy](docs/BENCHMARKING.md)
-before comparing or citing results.
+and [public claim registry](claims/evidence.v1.json) before comparing or citing
+results.
 
 ## JavaScript Support
 
@@ -358,7 +363,12 @@ The JS pipeline runs during `plasmate fetch` and CDP `page.goto()`. The resultin
 
 ## CDP Compatibility
 
-Plasmate passes [Lightpanda's Puppeteer benchmark](https://github.com/lightpanda-io/demo) (campfire-commerce). Supported CDP methods:
+In the historical campfire-commerce fixture from
+[Lightpanda's Puppeteer benchmark](https://github.com/lightpanda-io/demo),
+Plasmate passed the assertions described in the
+[March 2026 exploratory report](website/docs/src/benchmark-latest.md). That
+single fixture is evidence for the listed workflow, not full Puppeteer,
+Playwright, CDP, or web-platform compatibility. Supported CDP methods include:
 
 - `page.goto()`, `page.content()`, `page.title()`
 - `page.evaluate()`, `page.waitForFunction()`
@@ -404,7 +414,7 @@ HTML → Network (reqwest) → HTML Parser (html5ever)
 - **JS Runtime**: V8 with DOM shim (80+ methods), blocking fetch bridge
 - **SOM Compiler**: semantic region detection, element ID generation, interactive element preservation, smart truncation, deduplication
 - **Protocols**: AWP (seven foundational core methods plus current extensions)
-  and CDP (Puppeteer compatibility)
+  and a CDP compatibility layer for supported Puppeteer workflows
 
 ## Build from Source
 
@@ -488,7 +498,10 @@ See [docs.plasmate.app/roadmap](https://docs.plasmate.app/roadmap) for the full 
 
 ## Ecosystem
 
-Plasmate has **60+ integrations** across the AI and developer ecosystem:
+Plasmate documents integrations across the AI and developer ecosystem. The
+links below are an ecosystem directory, not a count of currently tested or
+maintained compatibility contracts. Verify each integration's repository,
+version support, and test status before adopting it:
 
 | Category | Integrations |
 |----------|--------------|
@@ -500,7 +513,8 @@ Plasmate has **60+ integrations** across the AI and developer ecosystem:
 | **Developer Tools** | [VS Code](https://github.com/plasmate-labs/vscode-plasmate), [Cursor](https://github.com/plasmate-labs/cursor-plasmate), [Raycast](https://github.com/plasmate-labs/raycast-plasmate), [GitHub Copilot](https://github.com/plasmate-labs/copilot-plasmate) |
 | **Self-Hosted LLMs** | [Open WebUI](https://github.com/plasmate-labs/openwebui-plasmate), [OpenAI GPT Actions](https://github.com/plasmate-labs/openai-gpt-plasmate) |
 
-See [awesome-plasmate](https://github.com/plasmate-labs/awesome-plasmate) for the full list.
+See [awesome-plasmate](https://github.com/plasmate-labs/awesome-plasmate) for
+the broader community-maintained directory.
 
 ## License
 

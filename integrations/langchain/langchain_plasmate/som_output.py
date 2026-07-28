@@ -9,9 +9,10 @@ from typing import Any
 def som_to_text(som: dict[str, Any]) -> str:
     """Convert a SOM dict to a concise text representation for LLM context.
 
-    The output format is designed to be token-efficient while preserving all
-    information an agent needs: page structure, interactive elements with IDs,
-    and content summaries. A typical page produces under 2000 tokens.
+    The output format is designed to be compact while preserving supported
+    page structure, interactive elements with IDs, and content summaries.
+    Measure output tokens with the target model's tokenizer; size varies by
+    page, configuration, and selected content.
 
     Args:
         som: A SOM document dict (as returned by Plasmate).

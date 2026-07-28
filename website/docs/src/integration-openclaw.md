@@ -76,7 +76,8 @@ Available MCP tools: `fetch_page`, `extract_text`, `extract_links`, `cache_statu
 
 ## CDP Mode (Puppeteer-compatible)
 
-Run Plasmate as a CDP server to replace Chrome in existing Puppeteer/Playwright workflows:
+Run Plasmate's CDP compatibility server for workflows that use its documented
+supported Puppeteer/CDP subset:
 
 ```bash
 plasmate serve --protocol cdp --port 9222

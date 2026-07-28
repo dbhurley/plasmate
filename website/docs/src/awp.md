@@ -16,7 +16,7 @@ The Agent Web Protocol (AWP) is a purpose-built, intent-forward protocol for con
 AWP is designed as a replacement for the Chrome DevTools Protocol (CDP) in agentic environments. CDP is a debugging interface optimized for human developers and pixel-oriented automation. AWP is optimized for:
 
 - Semantic interaction, not coordinate clicking
-- Token efficiency, not visual fidelity
+- Structured, bounded observations rather than visual fidelity
 - Massive concurrency, not single-user tabs
 - Determinism, not rendering
 - Extensibility via WebAssembly skills
@@ -64,7 +64,7 @@ This is a draft for discussion and implementation planning. It is intentionally 
 ### Goals
 
 1. **Intent-first**: agents issue semantic actions, not pixels.
-2. **Token efficiency**: primary observation output is the Semantic Object Model (SOM), not screenshots.
+2. **Structured observations**: primary observation output is the Semantic Object Model (SOM), not screenshots.
 3. **Deterministic references**: stable element addressing across SPA mutations.
 4. **Massive concurrency**: protocol supports thousands of sessions with strict resource limits.
 5. **Robustness**: sessions survive reconnects, and operations are idempotent when practical.
@@ -90,7 +90,7 @@ This is a draft for discussion and implementation planning. It is intentionally 
 - **Session**: A durable context including cookies, storage, proxy settings, and optional persistence.
 - **Page**: A browsing context within a Session, analogous to a tab.
 - **Frame**: An iframe or sub-document within a Page.
-- **SOM**: Semantic Object Model. A token-efficient representation of interactive and meaningful content.
+- **SOM**: Semantic Object Model. A structured representation of supported interactive and meaningful content.
 - **SOM Snapshot**: Full SOM document at a point in time.
 - **SOM Mutation**: Incremental changes to the SOM using JSON Patch semantics.
 - **Intent**: A semantic operation request (for example, `add_to_cart`).
@@ -814,7 +814,8 @@ And defer:
 - proxy rotation
 - Wasm skills
 
-This PoC proves the thesis: SOM is token-efficient and deterministic.
+This PoC demonstrates deterministic SOM serialization for its checked
+fixtures. Output size and model effects require separate measurement.
 
 ---
 

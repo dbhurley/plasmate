@@ -84,5 +84,7 @@ Native MCP configuration:
 - GitHub: https://github.com/plasmate-labs/plasmate
 - Docs: https://docs.plasmate.app
 - Benchmark policy: https://github.com/plasmate-labs/plasmate/blob/master/docs/BENCHMARKING.md
+- Claim and evidence registry: https://docs.plasmate.app/claims
+- Machine-readable claim manifest: https://github.com/plasmate-labs/plasmate/blob/master/claims/evidence.v1.json
 - MCP Registry: https://registry.modelcontextprotocol.io
 - crates.io: https://crates.io/crates/plasmate
