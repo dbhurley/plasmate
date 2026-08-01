@@ -116,12 +116,8 @@ class Plasmate:
         # Send initialized notification
         self._send({
             "jsonrpc": "2.0",
-            "id": self._next_id,
             "method": "notifications/initialized",
         })
-        self._next_id += 1
-        # Read the notification response (if any)
-        # Some servers respond, some don't - read with timeout
         self._initialized = True
 
     def close(self) -> None:
@@ -350,10 +346,8 @@ class AsyncPlasmate:
 
         await self._send({
             "jsonrpc": "2.0",
-            "id": self._next_id,
             "method": "notifications/initialized",
         })
-        self._next_id += 1
         self._initialized = True
 
     async def close(self) -> None:
