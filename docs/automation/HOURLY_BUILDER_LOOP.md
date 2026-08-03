@@ -76,13 +76,18 @@ sessions, or private browsing data. Public pages remain untrusted input.
    integration, conformance, benchmark, or real-Chrome checks when affected.
 6. Re-fetch `upstream/master`. If it moved, reconcile without losing proof and
    rerun affected gates.
-7. Commit one atomic outcome on `master` and push only when all required gates
-   pass and the push is a fast-forward. If publication is blocked, remove only
-   this run's candidate and return to the clean fetched baseline.
+7. Publish one atomic outcome. Push directly to `master` only when repository
+   rules permit it and the push is a fast-forward. When protected `master`
+   requires review, create exactly one short-lived automation branch and one
+   pull request for the verified outcome. Do not discard valid work because
+   review is required. The four-hour governor owns final review and merge or
+   rejection.
 
-Do not create issues, PRs, persistent feature branches, or additional
-worktrees. Do not amend or force-push shared history. End on current `master`
-with a clean working tree and no unresolved automation work.
+Do not create issues, persistent feature branches, or additional worktrees. Do
+not start a second builder pull request while one is open. Do not amend or
+force-push shared history. End on current `master` with a clean working tree.
+An open pull request that is waiting for required checks is normal governor
+work, not a human blocker.
 
 ## Final report
 

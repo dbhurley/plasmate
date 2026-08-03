@@ -94,7 +94,7 @@ export interface PlasmateOptions {
 
 interface JsonRpcRequest {
   jsonrpc: '2.0';
-  id: number;
+  id?: number;
   method: string;
   params?: unknown;
 }
@@ -194,7 +194,6 @@ export class Plasmate extends EventEmitter {
     // Send initialized notification (no response expected)
     this.send({
       jsonrpc: '2.0',
-      id: this.nextId++,
       method: 'notifications/initialized',
     });
 
