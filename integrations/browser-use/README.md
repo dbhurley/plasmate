@@ -56,6 +56,12 @@ The `get_page_context()` method returns a formatted string optimized for LLM con
 ```python
 context = extractor.get_page_context("https://example.com")
 print(context)
+
+# Ask Plasmate for only the semantic region needed by the agent.
+interactive_context = extractor.get_page_context(
+    "https://example.com/settings",
+    selector="interactive",
+)
 ```
 
 Output:

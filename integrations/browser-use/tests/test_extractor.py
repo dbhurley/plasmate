@@ -1,5 +1,8 @@
+import asyncio
 import json
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from plasmate_browser_use.extractor import PlasmateExtractor
 
@@ -22,6 +25,65 @@ def load_action_availability_fixture():
 
 def load_action_availability_expectations():
     return json.loads(EXPECTATIONS_PATH.read_text())["action_targets"]
+
+
+def test_page_context_forwards_selector_to_cli():
+    extractor = PlasmateExtractor.__new__(PlasmateExtractor)
+    extractor.plasmate_bin = "plasmate"
+    som = load_action_availability_fixture()
+    completed = SimpleNamespace(
+        returncode=0,
+        stdout=json.dumps(som),
+        stderr="",
+    )
+
+    with patch(
+        "plasmate_browser_use.extractor.subprocess.run",
+        return_value=completed,
+    ) as run:
+        context = extractor.get_page_context("fixture", selector="interactive")
+
+    assert "## Interactive Elements" in context
+    run.assert_called_once_with(
+        ["plasmate", "fetch", "fixture", "--selector", "interactive"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+def test_async_page_context_forwards_selector_to_cli():
+    extractor = PlasmateExtractor.__new__(PlasmateExtractor)
+    extractor.plasmate_bin = "plasmate"
+    som = load_action_availability_fixture()
+    calls = []
+
+    class FakeProcess:
+        returncode = 0
+
+        async def communicate(self):
+            return json.dumps(som).encode(), b""
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        calls.append((args, kwargs))
+        return FakeProcess()
+
+    with patch(
+        "plasmate_browser_use.extractor.asyncio.create_subprocess_exec",
+        new=fake_create_subprocess_exec,
+    ):
+        context = asyncio.run(
+            extractor.get_page_context_async("fixture", selector="interactive")
+        )
+
+    assert "## Interactive Elements" in context
+    assert calls[0][0] == (
+        "plasmate",
+        "fetch",
+        "fixture",
+        "--selector",
+        "interactive",
+    )
 
 
 def test_build_context_surfaces_action_availability():
