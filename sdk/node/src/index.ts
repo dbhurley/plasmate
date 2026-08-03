@@ -266,10 +266,12 @@ export class Plasmate extends EventEmitter {
    * @param url - URL to fetch
    * @param options.budget - Maximum output tokens (SOM will be truncated)
    * @param options.javascript - Enable JS execution (default: true)
+   * @param options.selector - Optional SOM region, role, action, or element-id filter
    */
   async som(url: string, options?: {
     budget?: number;
     javascript?: boolean;
+    selector?: string;
   }): Promise<Som> {
     return this.fetchPage(url, options);
   }
@@ -280,14 +282,17 @@ export class Plasmate extends EventEmitter {
    * @param url - URL to fetch
    * @param options.budget - Maximum output tokens (SOM will be truncated)
    * @param options.javascript - Enable JS execution (default: true)
+   * @param options.selector - Optional SOM region, role, action, or element-id filter
    */
   async fetchPage(url: string, options?: {
     budget?: number;
     javascript?: boolean;
+    selector?: string;
   }): Promise<Som> {
     const args: Record<string, unknown> = { url };
     if (options?.budget != null) args.budget = options.budget;
     if (options?.javascript != null) args.javascript = options.javascript;
+    if (options?.selector != null) args.selector = options.selector;
     return await this.callTool('fetch_page', args) as Som;
   }
 
@@ -296,12 +301,15 @@ export class Plasmate extends EventEmitter {
    *
    * @param url - URL to fetch
    * @param options.maxChars - Maximum characters to return
+   * @param options.selector - Optional SOM region, role, action, or element-id filter
    */
   async extractText(url: string, options?: {
     maxChars?: number;
+    selector?: string;
   }): Promise<string> {
     const args: Record<string, unknown> = { url };
     if (options?.maxChars != null) args.max_chars = options.maxChars;
+    if (options?.selector != null) args.selector = options.selector;
     return await this.callTool('extract_text', args) as string;
   }
 

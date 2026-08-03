@@ -204,6 +204,7 @@ class Plasmate:
         *,
         budget: Optional[int] = None,
         javascript: bool = True,
+        selector: Optional[str] = None,
     ) -> dict:
         """
         Fetch a page and return its Semantic Object Model.
@@ -212,6 +213,7 @@ class Plasmate:
             url: URL to fetch
             budget: Maximum output tokens (SOM will be truncated)
             javascript: Enable JS execution (default: True)
+            selector: Optional SOM region, role, action, or element-id filter
 
         Returns:
             SOM dict with title, url, regions, and meta
@@ -221,6 +223,8 @@ class Plasmate:
             args["budget"] = budget
         if not javascript:
             args["javascript"] = False
+        if selector is not None:
+            args["selector"] = selector
         return self._call_tool("fetch_page", args)
 
     def extract_text(
@@ -228,6 +232,7 @@ class Plasmate:
         url: str,
         *,
         max_chars: Optional[int] = None,
+        selector: Optional[str] = None,
     ) -> str:
         """
         Fetch a page and return clean, readable text only.
@@ -235,6 +240,7 @@ class Plasmate:
         Args:
             url: URL to fetch
             max_chars: Maximum characters to return
+            selector: Optional SOM region, role, action, or element-id filter
 
         Returns:
             Clean text content
@@ -242,6 +248,8 @@ class Plasmate:
         args: dict[str, Any] = {"url": url}
         if max_chars is not None:
             args["max_chars"] = max_chars
+        if selector is not None:
+            args["selector"] = selector
         return self._call_tool("extract_text", args)
 
     # ---- Stateful Tools ----
@@ -415,20 +423,37 @@ class AsyncPlasmate:
 
         return _extract_last_json(text)
 
-    async def fetch_page(self, url: str, *, budget: Optional[int] = None, javascript: bool = True) -> dict:
+    async def fetch_page(
+        self,
+        url: str,
+        *,
+        budget: Optional[int] = None,
+        javascript: bool = True,
+        selector: Optional[str] = None,
+    ) -> dict:
         """Fetch a page and return its Semantic Object Model."""
         args: dict[str, Any] = {"url": url}
         if budget is not None:
             args["budget"] = budget
         if not javascript:
             args["javascript"] = False
+        if selector is not None:
+            args["selector"] = selector
         return await self._call_tool("fetch_page", args)
 
-    async def extract_text(self, url: str, *, max_chars: Optional[int] = None) -> str:
+    async def extract_text(
+        self,
+        url: str,
+        *,
+        max_chars: Optional[int] = None,
+        selector: Optional[str] = None,
+    ) -> str:
         """Fetch a page and return clean, readable text only."""
         args: dict[str, Any] = {"url": url}
         if max_chars is not None:
             args["max_chars"] = max_chars
+        if selector is not None:
+            args["selector"] = selector
         return await self._call_tool("extract_text", args)
 
     async def open_page(self, url: str) -> dict:
