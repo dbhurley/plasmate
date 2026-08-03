@@ -15,11 +15,13 @@ correction when that is safer than allowing the next hourly run to continue.
 
 ## Start gate and evidence
 
-Require one clean `master` checkout synchronized with `upstream/master`, no
-active automation/merge/release, no open automation PR or issue, and no
-automation-created branch or worktree. Inspect recent commits/diffs, CI and
-deployment state, hourly reports, reverted work, repeated files and lanes, and
-available benchmark/conformance evidence. Record the reviewed SHA window.
+Require one clean `master` checkout synchronized with `upstream/master` and no
+active automation, merge, or release. Allow one open hourly-builder pull
+request. Treat it as governed work that this run must resolve. Do not allow an
+additional automation pull request, issue, stale branch, or worktree. Inspect
+recent commits and diffs, required checks, deployment state, hourly reports,
+reverted work, repeated files and lanes, and available benchmark or conformance
+evidence. Record the reviewed SHA window.
 
 Never use private pages, credentials, sessions, raw measurement URLs/content,
 or unreviewed public claims as governor evidence.
@@ -59,11 +61,15 @@ containment, cache persistence, secrets, releases, package publishing, CI policy
 DNS, or universal performance/security claims. It may pause and request review.
 
 For `CORRECT`, require a focused regression proof plus the complete `AGENTS.md`
-gate. Commit and push directly to current `master` only if all checks pass and
-the remote has not moved. Otherwise remove only the governor candidate.
+gate. Publish the correction through the protected review path when `master`
+requires it.
 
-Do not create issues, PRs, persistent branches, or worktrees. End on current
-`master` with a clean tree and no unresolved automation work.
+First resolve any open automation pull request. Review its diff and proof.
+Wait for required checks. Merge it when it is safe and green. Close it and
+remove its branch when it is invalid or unsafe. Required review is not a human
+blocker. Do not create issues, additional pull requests, persistent branches,
+or worktrees. End on synchronized `master` with a clean tree and no stale
+automation pull request or branch.
 
 ## Final report
 

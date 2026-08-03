@@ -149,5 +149,8 @@ Recurring work must follow
 and
 [`docs/automation/FOUR_HOUR_GOVERNOR_LOOP.md`](docs/automation/FOUR_HOUR_GOVERNOR_LOOP.md).
 The clock creates an opportunity to ship, never an obligation to commit. Each
-run must finish on `master` with a clean tree and no automation-created PR,
-issue, persistent branch, or worktree.
+run must finish on `master` with a clean tree. Protected `master` uses one
+short-lived automation pull request. The hourly builder opens it after all
+local checks pass. The four-hour governor reviews and merges or rejects it.
+Required review is not a human blocker. Do not leave a stale automation pull
+request, issue, branch, or worktree.
