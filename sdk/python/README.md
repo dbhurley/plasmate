@@ -70,8 +70,8 @@ with Plasmate() as browser:
 
 ### Stateless (one-shot)
 
-- **`fetch_page(url, *, budget=None, javascript=True)`** - Returns SOM dict
-- **`extract_text(url, *, max_chars=None)`** - Returns clean text string
+- **`fetch_page(url, *, budget=None, javascript=True, selector=None)`** - Returns SOM dict; optionally scopes the result to a region, role, action, or element ID
+- **`extract_text(url, *, max_chars=None, selector=None)`** - Returns clean text string; optionally scopes extraction before text collection
 
 ### Stateful (interactive sessions)
 
