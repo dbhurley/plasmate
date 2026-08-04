@@ -259,13 +259,17 @@ class PlasmateExtractor:
                 "Or: curl -fsSL https://plasmate.app/install.sh | sh"
             )
 
-    def extract(self, url: str) -> dict:
+    def extract(self, url: str, *, selector: Optional[str] = None) -> dict:
         """Fetch a URL and return parsed SOM output.
 
-        Returns the full SOM dict with regions, elements, meta, etc.
+        ``selector`` may scope the result to a SOM region, role, action, or
+        element id. Without it, returns the full SOM dict.
         """
+        command = [self.plasmate_bin, "fetch", url]
+        if selector is not None:
+            command.extend(["--selector", selector])
         result = subprocess.run(
-            [self.plasmate_bin, "fetch", url],
+            command,
             capture_output=True, text=True, timeout=30
         )
         if result.returncode != 0:
@@ -277,10 +281,15 @@ class PlasmateExtractor:
             )
         return som
 
-    async def extract_async(self, url: str) -> dict:
+    async def extract_async(
+        self, url: str, *, selector: Optional[str] = None
+    ) -> dict:
         """Async version of extract."""
+        command = [self.plasmate_bin, "fetch", url]
+        if selector is not None:
+            command.extend(["--selector", selector])
         proc = await asyncio.create_subprocess_exec(
-            self.plasmate_bin, "fetch", url,
+            *command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -405,7 +414,7 @@ class PlasmateExtractor:
         som = parse_som(som_data)
         return find_action_targets_by_action(som, action, enabled_only=enabled_only)
 
-    def get_page_context(self, url: str) -> str:
+    def get_page_context(self, url: str, *, selector: Optional[str] = None) -> str:
         """Get a structured page context string for LLM consumption.
 
         Returns a formatted string with:
@@ -413,13 +422,26 @@ class PlasmateExtractor:
         - Interactive elements (what the agent can do)
         - Content summary
         - Compression stats
+
+        ``selector`` may scope the context to a SOM region, role, action, or
+        element id before it is formatted.
         """
-        som_data = self.extract(url)
+        som_data = (
+            self.extract(url, selector=selector)
+            if selector is not None
+            else self.extract(url)
+        )
         return self._build_context(som_data)
 
-    async def get_page_context_async(self, url: str) -> str:
+    async def get_page_context_async(
+        self, url: str, *, selector: Optional[str] = None
+    ) -> str:
         """Async version of get_page_context."""
-        som_data = await self.extract_async(url)
+        som_data = (
+            await self.extract_async(url, selector=selector)
+            if selector is not None
+            else await self.extract_async(url)
+        )
         return self._build_context(som_data)
 
     def _build_context(self, som_data: dict) -> str:
