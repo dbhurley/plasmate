@@ -29,6 +29,13 @@ from langchain_plasmate import PlasmateFetchTool
 fetch = PlasmateFetchTool()
 result = fetch.invoke("https://news.ycombinator.com")
 print(result)
+
+# Ask the agent for only the interactive action surface when it does not need
+# the rest of the page.
+result = fetch.invoke({
+    "url": "https://news.ycombinator.com",
+    "selector": "interactive",
+})
 ```
 
 Output:
@@ -165,7 +172,7 @@ Stateless page fetch — returns SOM text for a single URL.
 | Field | Value |
 |-------|-------|
 | Name | `plasmate_fetch` |
-| Input | `url` (string) |
+| Input | `url` (string), optional `selector` (string) |
 | Output | SOM text with element IDs |
 
 ### `PlasmateNavigateTool`
@@ -225,6 +232,7 @@ PlasmateSOMLoader(
     urls=["https://example.com"],
     budget=2000,          # optional token budget per page
     javascript=True,      # enable JS execution (default)
+    selector="main",     # optional SOM scope for each page
     client=None,          # optional Plasmate instance
 )
 ```

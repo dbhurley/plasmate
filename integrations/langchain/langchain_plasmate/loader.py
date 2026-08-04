@@ -24,6 +24,7 @@ class PlasmateSOMLoader(BaseLoader):
         client: An existing Plasmate client. If ``None``, one is created.
         budget: Optional per-page SOM token budget.
         javascript: Whether to execute JavaScript (default ``True``).
+        selector: Optional SOM region, role, action, or element-id filter.
 
     Example::
 
@@ -40,11 +41,13 @@ class PlasmateSOMLoader(BaseLoader):
         client: Optional[Plasmate] = None,
         budget: Optional[int] = None,
         javascript: bool = True,
+        selector: Optional[str] = None,
     ):
         self.urls = list(urls)
         self.client = client or Plasmate()
         self.budget = budget
         self.javascript = javascript
+        self.selector = selector
 
     def lazy_load(self) -> Iterator[Document]:
         """Lazily load URLs one at a time, yielding Documents."""
@@ -54,6 +57,8 @@ class PlasmateSOMLoader(BaseLoader):
                 kwargs["budget"] = self.budget
             if not self.javascript:
                 kwargs["javascript"] = False
+            if self.selector is not None:
+                kwargs["selector"] = self.selector
 
             som = self.client.fetch_page(url, **kwargs)
             text = som_to_text(som)

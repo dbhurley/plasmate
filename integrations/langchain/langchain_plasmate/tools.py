@@ -94,6 +94,14 @@ class _ClickInput(BaseModel):
     element_id: str = Field(description="The SOM element ID to click (e.g. 'e_a1b2c3d4e5f6').")
 
 
+class _FetchInput(BaseModel):
+    url: str = Field(description="The URL to fetch.")
+    selector: Optional[str] = Field(
+        default=None,
+        description="Optional SOM region, role, action, or element-id filter.",
+    )
+
+
 class _TypeInput(BaseModel):
     element_id: str = Field(description="The SOM element ID of the input field.")
     text: str = Field(description="The text to type into the element.")
@@ -118,8 +126,10 @@ class PlasmateFetchTool(BaseTool):
         "(navigation, content, forms, interactive elements). "
         "Returns a compact text representation with element IDs "
         "that can be referenced by other tools. "
-        "Input: the URL to fetch."
+        "Input: the URL to fetch, with an optional SOM selector such as "
+        "'main' or 'interactive'."
     )
+    args_schema: Type[BaseModel] = _FetchInput
     client: Any = None  # Plasmate instance
 
     model_config = {"arbitrary_types_allowed": True}
@@ -128,12 +138,15 @@ class PlasmateFetchTool(BaseTool):
         super().__init__(**kwargs)
         self.client = client or Plasmate()
 
-    def _run(self, url: str) -> str:
-        som = self.client.fetch_page(url)
+    def _run(self, url: str, selector: Optional[str] = None) -> str:
+        kwargs: dict[str, Any] = {}
+        if selector is not None:
+            kwargs["selector"] = selector
+        som = self.client.fetch_page(url, **kwargs)
         return som_to_text(som)
 
-    async def _arun(self, url: str) -> str:
-        return self._run(url)
+    async def _arun(self, url: str, selector: Optional[str] = None) -> str:
+        return self._run(url, selector)
 
 
 class PlasmateNavigateTool(BaseTool):
